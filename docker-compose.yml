@@ -1,0 +1,75 @@
+version: "3.9"
+
+# Document Control system — local/dev environment.
+# Separate from the Testing Floor/MES stack by design (see CLAUDE.md).
+# This file is a starting point, not final production config — production
+# should add resource limits, restart policies tuned for the real server,
+# and TLS termination at the reverse proxy.
+
+services:
+  postgres:
+    image: postgres:16
+    container_name: doccontrol-postgres
+    restart: unless-stopped
+    environment:
+      POSTGRES_DB: doccontrol
+      POSTGRES_USER: doccontrol
+      POSTGRES_PASSWORD: changeme_in_env_file
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U doccontrol"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  minio:
+    image: minio/minio:latest
+    container_name: doccontrol-minio
+    restart: unless-stopped
+    command: server /data --console-address ":9001"
+    environment:
+      MINIO_ROOT_USER: doccontrol
+      MINIO_ROOT_PASSWORD: changeme_in_env_file
+    ports:
+      - "9000:9000"   # S3 API
+      - "9001:9001"   # Web console
+    volumes:
+      - minio_data:/data
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:9000/minio/health/live"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  # api:
+  #   build: ./api            # Spring Boot app — uncomment once the
+  #   container_name: doccontrol-api        # project skeleton exists
+  #   restart: unless-stopped
+  #   depends_on:
+  #     postgres:
+  #       condition: service_healthy
+  #     minio:
+  #       condition: service_healthy
+  #   environment:
+  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/doccontrol
+  #     SPRING_DATASOURCE_USERNAME: doccontrol
+  #     SPRING_DATASOURCE_PASSWORD: changeme_in_env_file
+  #     MINIO_ENDPOINT: http://minio:9000
+  #   ports:
+  #     - "8080:8080"
+
+  # web:
+  #   build: ./web            # React app
+  #   container_name: doccontrol-web
+  #   restart: unless-stopped
+  #   depends_on:
+  #     - api
+  #   ports:
+  #     - "3000:80"
+
+volumes:
+  postgres_data:
+  minio_data:

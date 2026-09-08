@@ -1,0 +1,24 @@
+spring:
+  application:
+    name: doc-control-api
+
+  datasource:
+    # Defaults mirror docker-compose.yml (postgres service). When running inside
+    # compose, the SPRING_DATASOURCE_* env vars override these; when running on a
+    # dev machine against a local cluster, override them on the command line.
+    url: ${SPRING_DATASOURCE_URL:jdbc:postgresql://localhost:5432/doccontrol}
+    username: ${SPRING_DATASOURCE_USERNAME:doccontrol}
+    password: ${SPRING_DATASOURCE_PASSWORD:changeme_in_env_file}
+
+  jpa:
+    hibernate:
+      # Schema is owned by Flyway; Hibernate must never alter it, only verify
+      # that the entity mappings match it.
+      ddl-auto: validate
+    open-in-view: false
+
+  flyway:
+    enabled: true
+
+server:
+  port: 8080

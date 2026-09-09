@@ -1,6 +1,7 @@
 package com.doccontrol.document;
 
 import com.doccontrol.auth.dto.LoginRequest;
+import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
@@ -25,6 +26,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.util.Map;
 
+import static org.assertj.core.api.Assertions.assertThat;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
@@ -75,6 +77,9 @@ class DocumentEndpointTests {
 
     @Autowired
     DocumentRepository documentRepository;
+
+    @Autowired
+    AuditLogRepository auditLogRepository;
 
     @Test
     void createGeneratesDocumentNumberFromCounter() throws Exception {
@@ -231,6 +236,86 @@ class DocumentEndpointTests {
 
         // invalid status value → 400
         mockMvc.perform(get("/documents").session(session).param("status", "bogus"))
+                .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void adminStatusOverrideMakesDocumentPublicAndIsAudited() throws Exception {
+        Department dept = tempDepartment("S");
+        createUser("soauthor@doccontrol.test", "User");
+        createUser("sooutsider@doccontrol.test", "User");
+        MockHttpSession authorSession = loginAs("soauthor@doccontrol.test");
+        MockHttpSession outsiderSession = loginAs("sooutsider@doccontrol.test");
+
+        Integer documentId = createDocument(authorSession, dept.getId(), "Stopgap Release");
+
+        // outsider cannot see the draft
+        mockMvc.perform(get("/documents/" + documentId).session(outsiderSession))
+                .andExpect(status().isNotFound());
+
+        // admin overrides status — the Sprint 1 stopgap
+        mockMvc.perform(patch("/documents/" + documentId).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("released"));
+
+        // the visibility rule now lets every authenticated user see it
+        mockMvc.perform(get("/documents/" + documentId).session(outsiderSession))
+                .andExpect(status().isOk());
+        mockMvc.perform(get("/documents").session(outsiderSession))
+                .andExpect(jsonPath("$.content[?(@.id == " + documentId + ")]").exists());
+
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "document".equals(entry.getEntityType())
+                        && "status_changed".equals(entry.getAction())
+                        && Map.of("status", "draft").equals(entry.getDetails().get("before"))
+                        && Map.of("status", "released").equals(entry.getDetails().get("after")));
+    }
+
+    @Test
+    void onlyAdminsCanChangeStatus() throws Exception {
+        Department dept = tempDepartment("N");
+        createUser("ownera@doccontrol.test", "User");
+        createUser("outsidern@doccontrol.test", "User");
+        MockHttpSession ownerSession = loginAs("ownera@doccontrol.test");
+        MockHttpSession outsiderSession = loginAs("outsidern@doccontrol.test");
+
+        Integer documentId = createDocument(ownerSession, dept.getId(), "Owner Only");
+
+        // even the owner is rejected when sending status — explicitly, not silently
+        mockMvc.perform(patch("/documents/" + documentId).session(ownerSession)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                .andExpect(status().isForbidden());
+
+        // the owner can still patch ordinary metadata
+        mockMvc.perform(patch("/documents/" + documentId).session(ownerSession)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("name", "Owner Renamed"))))
+                .andExpect(status().isOk());
+
+        // a non-admin who can merely see the document (released) is rejected too
+        Document document = documentRepository.findById(documentId).orElseThrow();
+        document.setStatus(DocumentStatus.RELEASED);
+        entityManager.flush();
+
+        mockMvc.perform(patch("/documents/" + documentId).session(outsiderSession)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "obsolete"))))
+                .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void invalidStatusValueIsRejected() throws Exception {
+        Department dept = tempDepartment("I");
+        createUser("invalid@doccontrol.test", "User");
+        MockHttpSession session = loginAs("invalid@doccontrol.test");
+        Integer documentId = createDocument(session, dept.getId(), "Bad Status");
+
+        mockMvc.perform(patch("/documents/" + documentId).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "bogus"))))
                 .andExpect(status().isBadRequest());
     }
 

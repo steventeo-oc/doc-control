@@ -147,6 +147,15 @@ deployment, even if they don't block Sprint 1 development itself:
 - [ ] **CSRF is currently disabled** (`SecurityConfig`, Sprint 1) — fine for
   now with `SameSite=Lax` cookies and no frontend yet, but revisit once the
   React frontend lands and is making real cross-origin-capable requests.
+- [ ] **Admin status override is a Sprint 1 stopgap** — `PATCH /documents/{id}`
+  accepts an optional `status` field (admin-only, audited as
+  `status_changed`) so documents can reach approved/released before the
+  workflow engine exists and the visibility rule is exercised by real API
+  traffic. When Sprint 3 lands, status changes become workflow-driven and
+  this override must be **removed or narrowed to a deliberate break-glass
+  action** — an auditor asking "who can release a document without going
+  through approval?" must get the answer "no one", not "an undocumented
+  bypass nobody removed".
 - [ ] **File upload limits & storage config are dev defaults** —
   `spring.servlet.multipart.*` in `application.yml` allows 50MB files for
   local development; confirm production-appropriate limits, and confirm

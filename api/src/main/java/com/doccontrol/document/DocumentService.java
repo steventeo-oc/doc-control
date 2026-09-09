@@ -1,6 +1,7 @@
 package com.doccontrol.document;
 
 import com.doccontrol.audit.AuditService;
+import com.doccontrol.common.domain.PersistentEnums;
 import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
@@ -154,6 +155,16 @@ public class DocumentService {
         Document document = findVisible(id);
         requireCanModify(document);
 
+        // Status override is admin-only and rejected explicitly — never
+        // silently dropped (Sprint 1 stopgap, see CLAUDE.md checklist).
+        DocumentStatus newStatus = null;
+        if (request.status() != null) {
+            if (!currentUserProvider.isAdmin()) {
+                throw new ForbiddenException("Only admins can change document status.");
+            }
+            newStatus = PersistentEnums.fromValue(DocumentStatus.class, request.status());
+        }
+
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
 
@@ -173,6 +184,14 @@ public class DocumentService {
 
         if (!after.isEmpty()) {
             auditService.record("document", id, "updated", Map.of("before", before, "after", after));
+        }
+
+        if (newStatus != null && newStatus != document.getStatus()) {
+            DocumentStatus previous = document.getStatus();
+            document.setStatus(newStatus);
+            auditService.record("document", id, "status_changed", Map.of(
+                    "before", Map.of("status", previous == null ? "unknown" : previous.getValue()),
+                    "after", Map.of("status", newStatus.getValue())));
         }
         return DocumentDto.from(document);
     }

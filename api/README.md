@@ -25,8 +25,10 @@ src/main/java/com/doccontrol/
 ## Running locally
 
 The deployment target is `docker-compose.yml` at the repo root (postgres on
-5432). For local development without Docker, any PostgreSQL instance works —
-point the app at it with environment overrides:
+5432, MinIO on 9000). For local development without Docker:
+
+**PostgreSQL** — any instance works; point the app at it with environment
+overrides:
 
 ```bash
 SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5434/doccontrol" \
@@ -35,6 +37,19 @@ mvn spring-boot:run
 
 Defaults (used inside compose and by any local cluster that mirrors it):
 `jdbc:postgresql://localhost:5432/doccontrol`, user `doccontrol`.
+
+**MinIO** — file storage for document versions. Either `docker compose up
+minio`, or run the standalone binary:
+
+```bash
+mkdir -p ~/.doccontrol-dev/minio-data
+MINIO_ROOT_USER=doccontrol MINIO_ROOT_PASSWORD=changeme_in_env_file \
+  ~/.doccontrol-dev/minio.exe server ~/.doccontrol-dev/minio-data \
+  --address ":9000" --console-address ":9001"
+```
+
+The app creates the `doccontrol` bucket on startup if missing (best effort —
+it starts even if MinIO is down; uploads then fail with a clear error).
 
 ## Verifying
 
@@ -45,6 +60,9 @@ the actual schema. It needs a reachable database:
 ```bash
 SPRING_DATASOURCE_URL="jdbc:postgresql://localhost:5434/doccontrol" mvn test
 ```
+
+The version-endpoint tests (`DocumentVersionEndpointTests`) additionally
+need MinIO on localhost:9000 — they upload real files and download them back.
 
 ## Notes
 

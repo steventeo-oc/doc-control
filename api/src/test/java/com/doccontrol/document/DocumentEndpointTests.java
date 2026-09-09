@@ -27,6 +27,7 @@ import java.util.Map;
 
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -80,24 +81,20 @@ class DocumentEndpointTests {
         Department dept = tempDepartment("D1");
         MockHttpSession session = loginAs(createUser("creator@doccontrol.test", "User"));
 
-        mockMvc.perform(post("/documents").session(session)
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "documentTypeId", sopTypeId(),
-                                "departmentId", dept.getId(),
-                                "name", "Incoming Inspection Procedure"))))
+        mockMvc.perform(multipart("/documents").session(session)
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Incoming Inspection Procedure"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.documentNumber").value("SOP-" + dept.getCode() + "-0001"))
                 .andExpect(jsonPath("$.status").value("draft"))
                 .andExpect(jsonPath("$.sequenceNumber").value(1))
                 .andExpect(jsonPath("$.currentVersionId").doesNotExist());
 
-        mockMvc.perform(post("/documents").session(session)
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "documentTypeId", sopTypeId(),
-                                "departmentId", dept.getId(),
-                                "name", "Second Document"))))
+        mockMvc.perform(multipart("/documents").session(session)
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Second Document"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.documentNumber").value("SOP-" + dept.getCode() + "-0002"));
     }
@@ -110,12 +107,10 @@ class DocumentEndpointTests {
         MockHttpSession authorSession = loginAs("author@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("outsider@doccontrol.test");
 
-        MvcResult created = mockMvc.perform(post("/documents").session(authorSession)
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "documentTypeId", sopTypeId(),
-                                "departmentId", dept.getId(),
-                                "name", "Secret Draft"))))
+        MvcResult created = mockMvc.perform(multipart("/documents").session(authorSession)
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Secret Draft"))
                 .andExpect(status().isCreated())
                 .andReturn();
         Integer documentId = objectMapper.readValue(created.getResponse().getContentAsString(), DocumentDto.class).id();
@@ -255,12 +250,10 @@ class DocumentEndpointTests {
     }
 
     private Integer createDocument(MockHttpSession session, Integer departmentId, String name) throws Exception {
-        MvcResult result = mockMvc.perform(post("/documents").session(session)
-                        .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of(
-                                "documentTypeId", sopTypeId(),
-                                "departmentId", departmentId,
-                                "name", name))))
+        MvcResult result = mockMvc.perform(multipart("/documents").session(session)
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(departmentId))
+                        .param("name", name))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsString(), DocumentDto.class).id();

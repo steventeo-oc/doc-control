@@ -147,3 +147,9 @@ deployment, even if they don't block Sprint 1 development itself:
 - [ ] **CSRF is currently disabled** (`SecurityConfig`, Sprint 1) — fine for
   now with `SameSite=Lax` cookies and no frontend yet, but revisit once the
   React frontend lands and is making real cross-origin-capable requests.
+- [ ] **File upload limits & storage config are dev defaults** —
+  `spring.servlet.multipart.*` in `application.yml` allows 50MB files for
+  local development; confirm production-appropriate limits, and confirm
+  MinIO credentials/bucket policy (`doccontrol.storage.*` /
+  `MINIO_ROOT_*`) are overridden from the checked-in dev defaults at real
+  deployment time.

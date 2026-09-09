@@ -65,9 +65,9 @@ public class DocumentService {
     }
 
     @Transactional
-    public DocumentDto create(CreateDocumentRequest request) {
-        DocumentType type = requireActiveType(request.documentTypeId());
-        Department department = requireActiveDepartment(request.departmentId());
+    public DocumentDto create(Integer documentTypeId, Integer departmentId, String name) {
+        DocumentType type = requireActiveType(documentTypeId);
+        Department department = requireActiveDepartment(departmentId);
 
         // The number allocation and the document insert share one transaction:
         // the counter row lock guarantees distinct numbers under concurrency,
@@ -80,7 +80,7 @@ public class DocumentService {
         document.setDocumentType(type);
         document.setDepartment(department);
         document.setSequenceNumber(allocated.sequenceNumber());
-        document.setName(request.name());
+        document.setName(name);
         document.setStatus(DocumentStatus.DRAFT);
         document.setOwner(currentUserProvider.getCurrentUser());
         documentRepository.save(document);
@@ -92,6 +92,19 @@ public class DocumentService {
                 "department", department.getCode()));
 
         return DocumentDto.from(document);
+    }
+
+    /** The visible-document gate shared with the version endpoints. */
+    public Document requireVisible(Integer id) {
+        return findVisible(id);
+    }
+
+    /** Owner-or-admin gate shared with the version endpoints. */
+    public void requireCanModify(Document document) {
+        boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
+        if (!isOwner && !currentUserProvider.isAdmin()) {
+            throw new ForbiddenException("Only the document owner or an admin can modify this document.");
+        }
     }
 
     @Transactional(readOnly = true)
@@ -201,14 +214,6 @@ public class DocumentService {
             throw new NotFoundException("Document " + id + " not found.");
         }
         return document;
-    }
-
-    /** Visible but not yours (e.g. a released document) → 403, not 404. */
-    private void requireCanModify(Document document) {
-        boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
-        if (!isOwner && !currentUserProvider.isAdmin()) {
-            throw new ForbiddenException("Only the document owner or an admin can modify this document.");
-        }
     }
 
     private DocumentType requireActiveType(Integer typeId) {

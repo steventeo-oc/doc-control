@@ -86,7 +86,7 @@ class DocumentNumberConcurrencyTests {
             SecurityContextHolder.getContext().setAuthentication(creatorAuth);
             try {
                 return documentService
-                        .create(new CreateDocumentRequest(typeId, deptId, "Concurrent " + Thread.currentThread().getName()))
+                        .create(typeId, deptId, "Concurrent " + Thread.currentThread().getName())
                         .documentNumber();
             } finally {
                 SecurityContextHolder.clearContext();

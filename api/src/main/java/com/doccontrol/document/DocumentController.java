@@ -1,6 +1,7 @@
 package com.doccontrol.document;
 
 import jakarta.validation.Valid;
+import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
@@ -8,23 +9,25 @@ import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
-import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
+import org.springframework.web.multipart.MultipartFile;
 
+import java.io.IOException;
 import java.net.URI;
 
 @RestController
-@RequestMapping("/documents")
 public class DocumentController {
 
     private final DocumentService documentService;
+    private final DocumentVersionService documentVersionService;
 
-    public DocumentController(DocumentService documentService) {
+    public DocumentController(DocumentService documentService, DocumentVersionService documentVersionService) {
         this.documentService = documentService;
+        this.documentVersionService = documentVersionService;
     }
 
-    @GetMapping
+    @GetMapping("/documents")
     public DocumentsPageDto list(
             @RequestParam(required = false) String type,
             @RequestParam(required = false) String department,
@@ -35,31 +38,50 @@ public class DocumentController {
         return documentService.list(type, department, status, q, page, pageSize);
     }
 
-    @PostMapping
-    public ResponseEntity<DocumentDto> create(@Valid @RequestBody CreateDocumentRequest request) {
-        DocumentDto created = documentService.create(request);
+    /**
+     * Multipart per the API spec: metadata plus an optional file. A file on
+     * create becomes version 1 (the spec's create response shows
+     * current_version_id set immediately); without one the document starts
+     * metadata-only and version 1 is uploaded later.
+     */
+    @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
+    public ResponseEntity<DocumentDto> create(
+            @RequestParam("document_type_id") Integer documentTypeId,
+            @RequestParam("department_id") Integer departmentId,
+            @RequestParam("name") String name,
+            @RequestParam(value = "file", required = false) MultipartFile file) throws IOException {
+        if (name == null || name.isBlank()) {
+            throw new IllegalArgumentException("name is required");
+        }
+        DocumentDto created = documentService.create(documentTypeId, departmentId, name.trim());
+        if (file != null && !file.isEmpty()) {
+            documentVersionService.upload(created.id(), file.getOriginalFilename(), file.getContentType(),
+                    file.getSize(), file.getInputStream(), null);
+            // re-read so the response reflects the just-created version 1
+            created = documentService.get(created.id());
+        }
         return ResponseEntity
                 .created(URI.create("/documents/" + created.id()))
                 .body(created);
     }
 
-    @GetMapping("/{id}")
+    @GetMapping("/documents/{id}")
     public DocumentDto get(@PathVariable Integer id) {
         return documentService.get(id);
     }
 
-    @PatchMapping("/{id}")
+    @PatchMapping("/documents/{id}")
     public DocumentDto update(@PathVariable Integer id, @Valid @RequestBody UpdateDocumentRequest request) {
         return documentService.update(id, request);
     }
 
-    @DeleteMapping("/{id}")
+    @DeleteMapping("/documents/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
         documentService.delete(id);
         return ResponseEntity.noContent().build();
     }
 
-    @PostMapping("/{id}/restore")
+    @PostMapping("/documents/{id}/restore")
     public DocumentDto restore(@PathVariable Integer id) {
         return documentService.restore(id);
     }

@@ -50,4 +50,10 @@ public class GlobalExceptionHandler {
     ProblemDetail dataIntegrityViolation(DataIntegrityViolationException ex) {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Request violates a data constraint.");
     }
+
+    /** Bad request payloads surfaced as IllegalArgumentException (e.g. missing multipart parts). */
+    @ExceptionHandler(IllegalArgumentException.class)
+    ProblemDetail badRequest(IllegalArgumentException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.BAD_REQUEST, ex.getMessage());
+    }
 }

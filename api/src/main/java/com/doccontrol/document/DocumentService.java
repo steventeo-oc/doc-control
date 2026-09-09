@@ -42,6 +42,7 @@ public class DocumentService {
             List.of(DocumentStatus.APPROVED, DocumentStatus.RELEASED);
 
     private final DocumentRepository documentRepository;
+    private final DocumentVersionRepository documentVersionRepository;
     private final DocumentTypeRepository documentTypeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
@@ -50,6 +51,7 @@ public class DocumentService {
     private final CurrentUserProvider currentUserProvider;
 
     public DocumentService(DocumentRepository documentRepository,
+                           DocumentVersionRepository documentVersionRepository,
                            DocumentTypeRepository documentTypeRepository,
                            DepartmentRepository departmentRepository,
                            UserRepository userRepository,
@@ -57,6 +59,7 @@ public class DocumentService {
                            AuditService auditService,
                            CurrentUserProvider currentUserProvider) {
         this.documentRepository = documentRepository;
+        this.documentVersionRepository = documentVersionRepository;
         this.documentTypeRepository = documentTypeRepository;
         this.departmentRepository = departmentRepository;
         this.userRepository = userRepository;
@@ -186,12 +189,44 @@ public class DocumentService {
             auditService.record("document", id, "updated", Map.of("before", before, "after", after));
         }
 
-        if (newStatus != null && newStatus != document.getStatus()) {
-            DocumentStatus previous = document.getStatus();
-            document.setStatus(newStatus);
-            auditService.record("document", id, "status_changed", Map.of(
-                    "before", Map.of("status", previous == null ? "unknown" : previous.getValue()),
-                    "after", Map.of("status", newStatus.getValue())));
+        if (newStatus != null) {
+            // Releasing (or approving) a document is what moves the public
+            // version pointer: it re-points current_version_id at the latest
+            // version, including a re-release of an already-released document
+            // (that is how an uploaded draft gets published). Uploads never
+            // move the pointer themselves.
+            boolean statusChanged = newStatus != document.getStatus();
+            boolean makingPublic = PUBLIC_STATUSES.contains(newStatus);
+            Integer pointerBefore = document.getCurrentVersion() == null ? null : document.getCurrentVersion().getId();
+            Integer pointerAfter = pointerBefore;
+
+            if (makingPublic) {
+                DocumentVersion latest = documentVersionRepository
+                        .findTopByDocument_IdOrderByVersionNumberDesc(id)
+                        .orElse(null);
+                if (latest != null && !latest.equals(document.getCurrentVersion())) {
+                    document.setCurrentVersion(latest);
+                    pointerAfter = latest.getId();
+                }
+            }
+
+            if (statusChanged) {
+                DocumentStatus previous = document.getStatus();
+                document.setStatus(newStatus);
+                Map<String, Object> statusBefore = new LinkedHashMap<>();
+                statusBefore.put("status", previous == null ? "unknown" : previous.getValue());
+                statusBefore.put("current_version_id", pointerBefore);
+                Map<String, Object> statusAfter = new LinkedHashMap<>();
+                statusAfter.put("status", newStatus.getValue());
+                statusAfter.put("current_version_id", pointerAfter);
+                auditService.record("document", id, "status_changed",
+                        Map.of("before", statusBefore, "after", statusAfter));
+            } else if (!pointerBefore.equals(pointerAfter)) {
+                // re-release of an already-public document: the pointer moved
+                auditService.record("document", id, "updated", Map.of(
+                        "before", Map.of("current_version_id", pointerBefore),
+                        "after", Map.of("current_version_id", pointerAfter)));
+            }
         }
         return DocumentDto.from(document);
     }

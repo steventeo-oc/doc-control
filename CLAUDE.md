@@ -124,6 +124,17 @@ the data model doc — resolved here so they're answered once, not re-asked.
   usage patterns are known — not a permanent design constraint.
 - **Login identifier** — login by `email` (already unique on `user`). No
   separate username field.
+- **`current_version_id` semantics (resolved during the pilot)** — the pointer
+  means "the version the public sees". It is null until a document's first
+  release, and changes only via an explicit release: the admin status
+  override to `released`/`approved` re-points it at the latest version,
+  including a re-release of an already-released document (that is how an
+  uploaded draft gets published). Version uploads and document creation never
+  move the pointer — a pilot finding: uploading a draft to a released
+  document used to drag the public version pointer to unreviewed content.
+  (This deliberately deviates from the API spec's create-document example,
+  which shows current_version_id set on a draft; that example predates this
+  decision.) Sprint 3's promote endpoint will own this properly.
 - **Confirmed low-stakes assumptions**: Java 21 + Spring Boot 3.x; Maven;
   session-cookie auth via Spring Security; `audit_log.details` as Postgres
   `jsonb`; seed roles limited to `Admin` and `User` for now (role names like

@@ -40,9 +40,9 @@ public class DocumentController {
 
     /**
      * Multipart per the API spec: metadata plus an optional file. A file on
-     * create becomes version 1 (the spec's create response shows
-     * current_version_id set immediately); without one the document starts
-     * metadata-only and version 1 is uploaded later.
+     * create becomes version 1; current_version_id stays null until the
+     * document is explicitly released (see CLAUDE.md — the spec's create
+     * example predates that decision).
      */
     @PostMapping(value = "/documents", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public ResponseEntity<DocumentDto> create(
@@ -57,8 +57,6 @@ public class DocumentController {
         if (file != null && !file.isEmpty()) {
             documentVersionService.upload(created.id(), file.getOriginalFilename(), file.getContentType(),
                     file.getSize(), file.getInputStream(), null);
-            // re-read so the response reflects the just-created version 1
-            created = documentService.get(created.id());
         }
         return ResponseEntity
                 .created(URI.create("/documents/" + created.id()))

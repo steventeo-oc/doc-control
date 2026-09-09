@@ -267,10 +267,19 @@ class DocumentEndpointTests {
                 .andExpect(jsonPath("$.content[?(@.id == " + documentId + ")]").exists());
 
         assertThat(auditLogRepository.findAll())
-                .anyMatch(entry -> "document".equals(entry.getEntityType())
-                        && "status_changed".equals(entry.getAction())
-                        && Map.of("status", "draft").equals(entry.getDetails().get("before"))
-                        && Map.of("status", "released").equals(entry.getDetails().get("after")));
+                .anyMatch(entry -> {
+                    if (!"document".equals(entry.getEntityType())
+                            || !"status_changed".equals(entry.getAction())
+                            || entry.getDetails() == null) {
+                        return false;
+                    }
+                    Map<?, ?> before = (Map<?, ?>) entry.getDetails().get("before");
+                    Map<?, ?> after = (Map<?, ?>) entry.getDetails().get("after");
+                    return before != null && after != null
+                            && "draft".equals(before.get("status"))
+                            && "released".equals(after.get("status"))
+                            && before.containsKey("current_version_id");
+                });
     }
 
     @Test

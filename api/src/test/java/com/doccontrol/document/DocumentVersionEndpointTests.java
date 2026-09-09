@@ -26,10 +26,15 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Map;
+
 import static org.assertj.core.api.Assertions.assertThat;
 import static org.hamcrest.Matchers.containsString;
+
+import org.hamcrest.Matchers;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
@@ -106,9 +111,10 @@ class DocumentVersionEndpointTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.versionNumber").value(2));
 
-        // "current" tracks the latest uploaded version
+        // uploads never move the public version pointer — it stays null
+        // until an explicit release
         mockMvc.perform(get("/documents/{id}", docId).session(session))
-                .andExpect(jsonPath("$.currentVersionId").isNotEmpty());
+                .andExpect(jsonPath("$.currentVersionId").value(Matchers.nullValue()));
 
         mockMvc.perform(get("/documents/{id}/versions", docId).session(session))
                 .andExpect(status().isOk())
@@ -141,17 +147,21 @@ class DocumentVersionEndpointTests {
                         .param("name", "Created With File")
                         .session(session))
                 .andExpect(status().isCreated())
-                .andExpect(jsonPath("$.currentVersionId").isNotEmpty())
+                // the pointer stays null until an explicit release
+                .andExpect(jsonPath("$.currentVersionId").value(Matchers.nullValue()))
                 .andReturn();
         DocumentDto document = objectMapper.readValue(created.getResponse().getContentAsString(), DocumentDto.class);
-
-        mockMvc.perform(get("/documents/{id}", document.id()).session(session))
-                .andExpect(status().isOk())
-                .andExpect(jsonPath("$.currentVersionId").isNotEmpty());
 
         mockMvc.perform(get("/documents/{id}/versions", document.id()).session(session))
                 .andExpect(jsonPath("$.length()").value(1))
                 .andExpect(jsonPath("$[0].versionNumber").value(1));
+
+        // releasing is what makes version 1 current
+        mockMvc.perform(patch("/documents/{id}", document.id()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersionId").isNotEmpty());
     }
 
     @Test
@@ -196,6 +206,88 @@ class DocumentVersionEndpointTests {
                         .file(new MockMultipartFile("file", "nope.txt", "text/plain", "nope".getBytes()))
                         .session(outsiderSession))
                 .andExpect(status().isForbidden());
+    }
+
+    @Test
+    void releasedVersionStaysCurrentUntilExplicitReRelease() throws Exception {
+        // the pilot finding: uploading a draft to a released document must
+        // not drag the public version pointer to unreviewed content
+        Department dept = tempDepartment("R");
+        createUser("relowner@doccontrol.test", "User");
+        createUser("relviewer@doccontrol.test", "User");
+        MockHttpSession ownerSession = loginAs("relowner@doccontrol.test");
+        MockHttpSession viewerSession = loginAs("relviewer@doccontrol.test");
+        MockHttpSession adminSession = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
+
+        // create with file (version 1)
+        MvcResult created = mockMvc.perform(multipart("/documents")
+                        .file(new MockMultipartFile("file", "doc.txt", "text/plain", "v1 body".getBytes()))
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Public Doc")
+                        .session(ownerSession))
+                .andExpect(status().isCreated())
+                .andReturn();
+        DocumentDto doc = objectMapper.readValue(created.getResponse().getContentAsString(), DocumentDto.class);
+        DocumentVersionDto[] versions = objectMapper.readValue(
+                mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
+                        .andExpect(status().isOk())
+                        .andReturn().getResponse().getContentAsString(),
+                DocumentVersionDto[].class);
+        Integer v1Id = versions[0].id();
+
+        // release it
+        mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersionId").value(v1Id));
+
+        // upload v2 as a draft — the pointer must NOT move
+        MvcResult v2 = mockMvc.perform(multipart("/documents/{id}/versions", doc.id())
+                        .file(new MockMultipartFile("file", "doc.txt", "text/plain", "v2 body".getBytes()))
+                        .param("change_notes", "draft revision")
+                        .session(ownerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.versionNumber").value(2))
+                .andReturn();
+        Integer v2Id = objectMapper.readValue(v2.getResponse().getContentAsString(), DocumentVersionDto.class).id();
+
+        // the normal user still sees v1 as the current version, and its content
+        mockMvc.perform(get("/documents/{id}", doc.id()).session(viewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("released"))
+                .andExpect(jsonPath("$.currentVersionId").value(v1Id));
+        byte[] v1Body = mockMvc.perform(
+                        get("/documents/{id}/versions/{versionId}/download", doc.id(), v1Id).session(viewerSession))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(v1Body)).isEqualTo("v1 body");
+
+        // admin re-releases (status already released) — now the draft publishes
+        mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersionId").value(v2Id));
+
+        // the normal user now sees v2 as current, with its content
+        mockMvc.perform(get("/documents/{id}", doc.id()).session(viewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.currentVersionId").value(v2Id));
+        byte[] v2Body = mockMvc.perform(
+                        get("/documents/{id}/versions/{versionId}/download", doc.id(), v2Id).session(viewerSession))
+                .andExpect(status().isOk())
+                .andReturn().getResponse().getContentAsByteArray();
+        assertThat(new String(v2Body)).isEqualTo("v2 body");
+
+        // the pointer move is audited
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "document".equals(entry.getEntityType())
+                        && "updated".equals(entry.getAction())
+                        && entry.getDetails() != null
+                        && Map.of("current_version_id", v1Id).equals(entry.getDetails().get("before"))
+                        && Map.of("current_version_id", v2Id).equals(entry.getDetails().get("after")));
     }
 
     private Integer sopTypeId() {

@@ -57,10 +57,10 @@ public class DocumentVersionService {
         version.setUploadedBy(currentUserProvider.getCurrentUser());
         versionRepository.save(version);
 
-        // "Current" tracks the latest uploaded version (matches the API spec's
-        // create-document example); Sprint 3's promote endpoint will mark a
-        // version's status as current once approval completes.
-        document.setCurrentVersion(version);
+        // Deliberately NOT touching document.currentVersion here: an upload
+        // must never move the public version pointer of a released document
+        // (pilot finding). The pointer changes only on an explicit release
+        // via the status override — see DocumentService.update.
 
         auditService.record("document_version", version.getId(), "created", java.util.Map.of(
                 "document_id", documentId,

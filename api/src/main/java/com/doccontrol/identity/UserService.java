@@ -12,6 +12,7 @@ import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -124,6 +125,38 @@ public class UserService {
             before.put("active", user.isActive());
             after.put("active", request.active());
             user.setActive(request.active());
+        }
+        if (request.roles() != null) {
+            if (user.getId().equals(currentUserProvider.getCurrentUserId())) {
+                throw new ConflictException("You cannot change your own roles.");
+            }
+            List<Role> newRoles = request.roles().stream().distinct()
+                    .map(name -> roleRepository.findByName(name)
+                            .orElseThrow(() -> new NotFoundException("Role '" + name + "' not found.")))
+                    .toList();
+
+            List<String> oldNames = user.getRoles().stream()
+                    .map(membership -> membership.getRole().getName()).sorted().toList();
+            List<String> newNames = newRoles.stream().map(Role::getName).sorted().toList();
+
+            // full replacement: drop existing memberships, create the requested set
+            for (UserRole membership : new ArrayList<>(user.getRoles())) {
+                userRoleRepository.delete(membership);
+            }
+            user.getRoles().clear();
+            for (Role role : newRoles) {
+                UserRole membership = new UserRole();
+                membership.setId(new UserRoleId(user.getId(), role.getId()));
+                membership.setUser(user);
+                membership.setRole(role);
+                userRoleRepository.save(membership);
+                user.getRoles().add(membership);
+            }
+
+            if (!oldNames.equals(newNames)) {
+                before.put("roles", oldNames);
+                after.put("roles", newNames);
+            }
         }
 
         if (!after.isEmpty()) {

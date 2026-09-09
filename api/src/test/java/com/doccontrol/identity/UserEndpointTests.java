@@ -13,6 +13,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -210,6 +211,65 @@ class UserEndpointTests {
                 .andExpect(status().isForbidden());
 
         loginAs("resetme@doccontrol.test", "reset-pass-789");
+    }
+
+    @Test
+    void adminCanPromoteAndDemoteViaRolesPatch() throws Exception {
+        MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
+        Integer userId = createUserViaApi(admin, "promotable@doccontrol.test", "promote-pass-123");
+
+        // promote to Admin
+        mockMvc.perform(patch("/users/" + userId).session(admin)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("roles", List.of("Admin")))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles[0]").value("Admin"));
+
+        // authorities are minted at login, so the promotion takes effect on
+        // the next session
+        MockHttpSession promoted = loginAs("promotable@doccontrol.test", "promote-pass-123");
+        mockMvc.perform(get("/users").session(promoted))
+                .andExpect(status().isOk());
+
+        // demote to no roles at all
+        mockMvc.perform(patch("/users/" + userId).session(admin)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("roles", List.of()))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.roles").isEmpty());
+
+        MockHttpSession demoted = loginAs("promotable@doccontrol.test", "promote-pass-123");
+        mockMvc.perform(get("/users").session(demoted))
+                .andExpect(status().isForbidden());
+
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "user".equals(entry.getEntityType())
+                        && "updated".equals(entry.getAction())
+                        && Map.of("roles", List.of("User")).equals(entry.getDetails().get("before"))
+                        && Map.of("roles", List.of("Admin")).equals(entry.getDetails().get("after")));
+    }
+
+    @Test
+    void adminCannotChangeOwnRoles() throws Exception {
+        MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
+        Integer adminId = findUserIdByEmail(admin, BOOTSTRAP_EMAIL);
+
+        // the guard must fire — 409, not a silent no-op
+        mockMvc.perform(patch("/users/" + adminId).session(admin)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("roles", List.of("User")))))
+                .andExpect(status().isConflict());
+
+        // and the admin's authority is untouched: they can still administer
+        mockMvc.perform(get("/users").session(admin))
+                .andExpect(status().isOk());
+
+        // no roles audit entry was written for the blocked attempt
+        assertThat(auditLogRepository.findAll())
+                .noneMatch(entry -> "user".equals(entry.getEntityType())
+                        && entry.getDetails() != null
+                        && entry.getDetails().containsKey("roles")
+                        && Integer.valueOf(1).equals(entry.getEntityId()));
     }
 
     private Integer findUserIdByEmail(MockHttpSession session, String email) throws Exception {

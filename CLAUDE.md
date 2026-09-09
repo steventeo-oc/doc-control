@@ -157,6 +157,13 @@ deployment, even if they don't block Sprint 1 development itself:
   action** — an auditor asking "who can release a document without going
   through approval?" must get the answer "no one", not "an undocumented
   bypass nobody removed".
+- [ ] **Mint a second break-glass Admin before go-live**: create the account
+  (`POST /users` with `"roles": ["Admin"]`) and **securely store its
+  credentials** (password manager / sealed envelope, not a chat message),
+  then verify it can log in. This is the actual mitigation for "the sole
+  admin's password is lost" — an operational step, not a code fix. Also
+  note: an admin cannot change their own roles, so the second admin is the
+  only way back if the primary account is ever locked out.
 - [ ] **File upload limits & storage config are dev defaults** —
   `spring.servlet.multipart.*` in `application.yml` allows 50MB files for
   local development; confirm production-appropriate limits, and confirm

@@ -165,6 +165,10 @@ deployment, even if they don't block Sprint 1 development itself:
   `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
   deployment time — the checked-in defaults (`admin@doccontrol.local` /
   `changeme_admin`) are dev-only and must never reach a real environment.
+  A startup guard now enforces this: default credentials always log a
+  prominent warning, and startup **hard fails** when a `prod`/`production`
+  profile is active with them. Deployment must therefore set the real
+  credentials AND activate one of those profiles.
 - [x] **CSRF protection** — was disabled in Sprint 1 (SameSite=Lax only).
   Now enabled for the SPA: double-submit cookie scheme (`XSRF-TOKEN` cookie
   echoed in `X-XSRF-TOKEN`, Spring Security's documented SPA pattern in

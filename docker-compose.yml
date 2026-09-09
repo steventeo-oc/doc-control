@@ -65,6 +65,8 @@ services:
       # Set these for anything beyond local dev (see CLAUDE.md go-live checklist):
       # DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ...
       # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
+      # SPRING_PROFILES_ACTIVE: prod   # startup hard-fails on default admin
+      #                                # credentials under this profile
     ports:
       - "8080:8080"
 

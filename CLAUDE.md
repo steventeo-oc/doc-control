@@ -134,12 +134,13 @@ the data model doc — resolved here so they're answered once, not re-asked.
 Items discovered during implementation that must be resolved before a real
 deployment, even if they don't block Sprint 1 development itself:
 
-- [ ] **Admin password rotation**: no endpoint exists yet to change the
+- [x] **Admin password rotation**: no endpoint exists yet to change the
   bootstrap admin's password after first startup. Fold a minimal
   password-change capability into the Users/roles resource work — don't
   ship Sprint 1 as "complete" without it. Until then, the account is stuck
   with whatever `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` was set to at first
-  startup.
+  startup. *(Resolved: `POST /users/{id}/password` — self-service with
+  current password, admin reset for others; audited as `password_changed`.)*
 - [ ] **Confirm `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` and
   `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
   deployment time — the checked-in defaults (`admin@doccontrol.local` /

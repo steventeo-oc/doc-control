@@ -46,6 +46,12 @@ public class SecurityConfig {
                 // remaining writes on lookup resources are admin-only
                 .requestMatchers("/document-tiers/**", "/document-types/**", "/departments/**")
                     .hasRole("ADMIN")
+                // password change is self-service: the owner (or an admin,
+                // enforced in UserService) may hit it, unlike the rest of
+                // the admin-only /users/** surface
+                .requestMatchers(org.springframework.http.HttpMethod.POST, "/users/*/password")
+                    .authenticated()
+                .requestMatchers("/users/**", "/roles").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))

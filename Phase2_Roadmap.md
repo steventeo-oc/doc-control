@@ -29,32 +29,43 @@ department(s). Small, contained, low-risk relative to everything else here.
   re-architecting (a permission-override table alongside the department
   rule, not a replacement of it).
 
-## Phase 2b — Real workflow engine
+## Phase 2b — Real workflow engine (Flowable 8.0.0)
 
 **Why this is the big one**: three "Must" items (department-specific
 chains, delegation, escalation/reminders) all point at real BPMN engine
-capabilities (Camunda/Flowable), not custom code. Combined with the
-ad-hoc-assignment design note captured earlier, this is now a stronger
-case for using a real engine rather than hand-rolling workflow logic —
-delegation and escalation are exactly what these engines are built for.
+capabilities, not custom code. Combined with the ad-hoc-assignment design
+note captured earlier, this is a strong case for using a real engine
+rather than hand-rolling workflow logic — delegation and escalation are
+exactly what these engines are built for.
 
-Confirmed requirements to design against:
-- Approval chains differ by department — each department has a different
-  approving manager/group (#5).
-- Ad-hoc reviewer assignment at instance start time (captured earlier,
-  confirmed by real Alfresco usage) — not fixed in a template.
-- Sequential approval is not required for the common case ("parallel is
-  enough, but can be more" — #6) — build parallel-first, keep the door
-  open for sequential since it's a real BPMN capability either way.
-- Reviewer delegation/reassignment while unavailable (#7) — must-have.
-- Automatic reminders and escalation for overdue approvals (#8) — via
-  **Microsoft 365 / Graph API**, since the company has its own Microsoft
-  email domain. Do not build a generic SMTP integration by default.
+**Engine decision (confirmed)**: Flowable 8.0.0, embedded. The bounded
+spike was completed against our Spring Boot 3.5.4 stack: both engines
+handled ad-hoc per-instance reviewer assignment cleanly; Flowable wins on
+trajectory (Camunda 7 is EOL-bound per its own docs; Camunda 8's
+distributed cluster doesn't fit single-VM compose) and integration
+friction.
+
+**Confirmed requirements (QA conversation)**:
+- Approval chains are **single-stage, parallel, 100% required** (matching
+  current Alfresco behavior) — including cross-department sign-off: a
+  cross-department document simply gets multiple departments' managers
+  added as reviewers in that one stage. No sequential multi-department
+  chains for now; BPMN keeps the door open if that ever changes (#6).
+- Assignees are chosen **ad-hoc, per instance at start time** as either a
+  named individual or a **role/candidate-group** (e.g. "ENG Manager") —
+  reusing the existing `role` + `user_role` (+ department) structure. No
+  new identity tables.
+- **Delegation is unrestricted** — any reviewer can delegate to anyone.
+- **Escalation defaults (configurable, not hardcoded)**: due date 3
+  business days after start; reminder 1 day before and on the due date;
+  escalate to document owner + admin when 2+ business days overdue.
+  Notifications go through **Microsoft 365 / Graph API** — no generic SMTP
+  integration.
 - Conditional routing (#9) — Could/Maybe only, not required now.
 
-**Before building**: confirm the bounded Camunda vs. Flowable spike (asked
-for earlier) was completed, and get its recommendation — this phase is the
-reason that evaluation exists.
+**Status**: design plan-back (data model, API shape, Flowable mapping)
+delivered for review. Implementation starts only after that review —
+and after the pilot-facing questions it raises are answered.
 
 ## Phase 2c — Document lifecycle extensions
 

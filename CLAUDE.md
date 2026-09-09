@@ -165,29 +165,27 @@ the data model doc — resolved here so they're answered once, not re-asked.
   `jsonb`; seed roles limited to `Admin` and `User` for now (role names like
   "QA Reviewer" arrive with Sprint 3 workflow work, not before).
 
-## Sprint 3 design note (captured early, not yet acted on)
+## Sprint 3 design note (requirements confirmed with QA)
 
-Observed from actual current Alfresco usage (both the real workflow export
-reviewed during planning and confirmed directly): reviewers are assigned
-**ad-hoc, per approval instance**, not fixed in advance. Whoever starts an
-approval picks the specific reviewers (any number) at that moment; the
-"Required Approval Percentage" setting applies to that instance's chosen
-group, not a fixed roster.
+Confirmed: approval chains are **single-stage, parallel, 100% required**
+(matching current Alfresco behavior) even for cross-department sign-off —
+a cross-department document just gets multiple departments' managers added
+as reviewers in that one stage, not a sequential multi-department chain.
+Assignees are chosen **ad-hoc, per approval instance** at start time, as
+either a named individual or a **role/candidate-group** (e.g. "ENG
+Manager") — reusing the existing `role` + `user_role` (+ department)
+structure, no new identity tables. **Delegation is unrestricted** (any
+reviewer can delegate to anyone). **Escalation defaults are configurable,
+not hardcoded**: due date 3 business days after start, reminders 1 day
+before and on the due date, escalation to document owner + admin at 2+
+business days overdue — notifications via **Microsoft 365 / Graph API**
+(no generic SMTP).
 
-This means the current schema's `workflow_stage_assignee` — tied to the
-*template* — is likely the wrong shape. The template should define
-*structure* (stage count, parallel/sequential, required approval
-percentage); *who* fills each stage should be chosen at
-`workflow_instance` start time, not baked into the template. Likely
-requires an instance-level assignee table distinct from any
-template-level defaults.
-
-**Do not implement this yet.** This is a structural note for whenever
-Sprint 3 workflow design actually starts — captured now so it isn't lost,
-not a green light to start building it. Real approval-chain shape
-(sequential vs. parallel across departments, whether it varies by document
-type) still needs confirmation from a real QA conversation before Sprint 3
-begins in earnest.
+Engine decision: **Flowable 8.0.0**, embedded (bounded spike completed:
+both engines handled ad-hoc per-instance assignment cleanly; Camunda 7 is
+EOL-bound and Camunda 8's distributed architecture doesn't fit single-VM
+compose). A design plan-back (data model, API shape, Flowable mapping) has
+been delivered for review — implementation starts only after that review.
 
 Items discovered during implementation that must be resolved before a real
 deployment, even if they don't block Sprint 1 development itself:

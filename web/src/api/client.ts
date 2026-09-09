@@ -11,8 +11,23 @@ export class ApiError extends Error {
 // All API calls go through the /api mount (server.servlet.context-path).
 const BASE = '/api';
 
+// CSRF double-submit: the backend sets the XSRF-TOKEN cookie (readable by
+// JS); mutating requests echo it in the X-XSRF-TOKEN header.
+function csrfTokenFromCookie(): string | null {
+  const match = document.cookie.match(/(?:^|;\s*)XSRF-TOKEN=([^;]*)/);
+  return match ? decodeURIComponent(match[1]) : null;
+}
+
 async function request<T>(path: string, init?: RequestInit): Promise<T> {
-  const res = await fetch(BASE + path, { credentials: 'include', ...init });
+  const headers = new Headers(init?.headers);
+  const method = (init?.method ?? 'GET').toUpperCase();
+  if (['POST', 'PATCH', 'PUT', 'DELETE'].includes(method)) {
+    const token = csrfTokenFromCookie();
+    if (token) {
+      headers.set('X-XSRF-TOKEN', token);
+    }
+  }
+  const res = await fetch(BASE + path, { credentials: 'include', ...init, headers });
   if (res.status === 204) {
     return undefined as T;
   }

@@ -165,9 +165,12 @@ deployment, even if they don't block Sprint 1 development itself:
   `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
   deployment time — the checked-in defaults (`admin@doccontrol.local` /
   `changeme_admin`) are dev-only and must never reach a real environment.
-- [ ] **CSRF is currently disabled** (`SecurityConfig`, Sprint 1) — fine for
-  now with `SameSite=Lax` cookies and no frontend yet, but revisit once the
-  React frontend lands and is making real cross-origin-capable requests.
+- [x] **CSRF protection** — was disabled in Sprint 1 (SameSite=Lax only).
+  Now enabled for the SPA: double-submit cookie scheme (`XSRF-TOKEN` cookie
+  echoed in `X-XSRF-TOKEN`, Spring Security's documented SPA pattern in
+  `SpaCsrfTokenRequestHandler`), with `SameSite=Lax` kept on as defense in
+  depth. The frontend sends the header automatically; `scripts/smoke.sh`
+  demonstrates the full flow with curl.
 - [ ] **Admin status override is a Sprint 1 stopgap** — `PATCH /documents/{id}`
   accepts an optional `status` field (admin-only, audited as
   `status_changed`) so documents can reach approved/released before the
@@ -190,3 +193,28 @@ deployment, even if they don't block Sprint 1 development itself:
   MinIO credentials/bucket policy (`doccontrol.storage.*` /
   `MINIO_ROOT_*`) are overridden from the checked-in dev defaults at real
   deployment time.
+
+## Sprint 3 design note (captured early, not yet acted on)
+
+Observed from actual current Alfresco usage (both the real workflow export
+reviewed during planning and confirmed directly): reviewers are assigned
+ad-hoc, per approval instance, not fixed in advance. Whoever starts an
+approval picks the specific reviewers (any number) at that moment; the
+"Required Approval Percentage" setting applies to that instance's chosen
+group, not a fixed roster.
+
+This means the current schema's `workflow_stage_assignee` — tied to the
+template — is likely the wrong shape. The template should define
+structure (stage count, parallel/sequential, required approval
+percentage); who fills each stage should be chosen at
+`workflow_instance` start time, not baked into the template. Likely
+requires an instance-level assignee table distinct from any
+template-level defaults.
+
+Do not implement this yet. This is a structural note for whenever
+Sprint 3 workflow design actually starts — captured now so it isn't lost,
+not a green light to start building it. Real approval-chain shape
+(sequential vs. parallel across departments, whether it varies by document
+type) still needs confirmation from a real QA conversation before Sprint 3
+begins in earnest.
+```"

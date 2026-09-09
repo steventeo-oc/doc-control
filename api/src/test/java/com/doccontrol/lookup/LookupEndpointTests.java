@@ -11,10 +11,12 @@ import com.doccontrol.identity.UserRole;
 import com.doccontrol.identity.UserRoleId;
 import com.doccontrol.identity.UserRoleRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.doccontrol.CsrfTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -29,6 +31,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static com.doccontrol.CsrfTestSupport.csrf;
 
 /**
  * Permission matrix and audit-trail behavior of the lookup endpoints, using
@@ -36,6 +39,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CsrfTestSupport.class)
 @Transactional
 class LookupEndpointTests {
 
@@ -97,12 +101,12 @@ class LookupEndpointTests {
     void nonAdminCannotCreateOrPatchLookups() throws Exception {
         MockHttpSession session = loginAs(createUser("plain@doccontrol.test", "User"));
 
-        mockMvc.perform(post("/departments").session(session)
+        mockMvc.perform(post("/departments").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("code", "X1", "label", "Nope"))))
                 .andExpect(status().isForbidden());
 
-        mockMvc.perform(post("/document-types").session(session)
+        mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("code", "X1", "label", "Nope", "tierId", 1))))
                 .andExpect(status().isForbidden());
@@ -113,7 +117,7 @@ class LookupEndpointTests {
         MockHttpSession session = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
         Integer tierId = documentTierRepository.findAll().get(0).getId();
 
-        mockMvc.perform(post("/document-types").session(session)
+        mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
                                 Map.of("code", "TST", "label", "Test Type", "tierId", tierId))))
@@ -127,7 +131,7 @@ class LookupEndpointTests {
                         && "TST".equals(entry.getDetails().get("code")));
 
         // duplicate code is rejected
-        mockMvc.perform(post("/document-types").session(session)
+        mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
                                 Map.of("code", "TST", "label", "Again", "tierId", tierId))))
@@ -138,14 +142,14 @@ class LookupEndpointTests {
     void adminCanDeactivateDepartmentAndItLeavesTheList() throws Exception {
         MockHttpSession session = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
 
-        MvcResult created = mockMvc.perform(post("/departments").session(session)
+        MvcResult created = mockMvc.perform(post("/departments").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("code", "TMP", "label", "Temporary"))))
                 .andExpect(status().isCreated())
                 .andReturn();
         Integer id = objectMapper.readValue(created.getResponse().getContentAsString(), DepartmentDto.class).id();
 
-        mockMvc.perform(patch("/departments/" + id).session(session)
+        mockMvc.perform(patch("/departments/" + id).with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("active", false))))
                 .andExpect(status().isOk())
@@ -181,7 +185,7 @@ class LookupEndpointTests {
     }
 
     private MockHttpSession loginAs(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())

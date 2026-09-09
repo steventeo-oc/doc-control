@@ -2,10 +2,12 @@ package com.doccontrol.auth;
 
 import com.doccontrol.auth.dto.LoginRequest;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.doccontrol.CsrfTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -14,6 +16,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static com.doccontrol.CsrfTestSupport.csrf;
 
 /**
  * Exercises the real login flow (including the startup-created bootstrap
@@ -21,6 +24,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CsrfTestSupport.class)
 class AuthFlowTests {
 
     private static final String BOOTSTRAP_EMAIL = "admin@doccontrol.local";
@@ -45,7 +49,7 @@ class AuthFlowTests {
 
     @Test
     void wrongPasswordIsUnauthorized() throws Exception {
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(BOOTSTRAP_EMAIL, "wrong"))))
                 .andExpect(status().isUnauthorized());
@@ -53,7 +57,7 @@ class AuthFlowTests {
 
     @Test
     void unknownUserIsUnauthorized() throws Exception {
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest("nobody@doccontrol.local", "x"))))
                 .andExpect(status().isUnauthorized());
@@ -69,7 +73,7 @@ class AuthFlowTests {
     void logoutInvalidatesTheSession() throws Exception {
         MockHttpSession session = login(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
 
-        mockMvc.perform(post("/auth/logout").session(session))
+        mockMvc.perform(post("/auth/logout").with(csrf()).session(session))
                 .andExpect(status().isNoContent());
 
         mockMvc.perform(get("/auth/me").session(session))
@@ -77,7 +81,7 @@ class AuthFlowTests {
     }
 
     private MockHttpSession login(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())

@@ -8,15 +8,16 @@ import org.springframework.security.authentication.ProviderManager;
 import org.springframework.security.authentication.dao.DaoAuthenticationProvider;
 import org.springframework.security.config.annotation.web.builders.HttpSecurity;
 import org.springframework.security.config.annotation.web.configuration.EnableWebSecurity;
-import org.springframework.security.config.annotation.web.configurers.AbstractHttpConfigurer;
 import org.springframework.security.config.http.SessionCreationPolicy;
 import org.springframework.security.core.userdetails.UserDetailsService;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.security.web.SecurityFilterChain;
 import org.springframework.security.web.access.HttpStatusAccessDeniedHandler;
+import org.springframework.security.web.authentication.AnonymousAuthenticationFilter;
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
+import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -27,15 +28,18 @@ import java.util.List;
 @EnableWebSecurity
 public class SecurityConfig {
 
-    // CSRF is disabled for Sprint 1: internal-only API, session cookie is
-    // SameSite=Lax (application.yml). Revisit with a proper token scheme when
-    // the web frontend is wired up.
+    // CSRF: double-submit cookie scheme for the SPA (frontend reads the
+    // XSRF-TOKEN cookie and echoes it in X-XSRF-TOKEN). SameSite=Lax stays on
+    // as defense in depth. See SpaCsrfTokenRequestHandler and CsrfCookieFilter.
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             CorsConfigurationSource corsConfigurationSource) throws Exception {
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
-            .csrf(AbstractHttpConfigurer::disable)
+            .csrf(csrf -> csrf
+                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+            .addFilterAfter(new CsrfCookieFilter(), AnonymousAuthenticationFilter.class)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/auth/login").permitAll()

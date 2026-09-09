@@ -35,10 +35,20 @@ step() { printf '\n=== %s ===\n' "$*"; }
 fail() { printf 'FAILED: %s\n' "$*" >&2; exit 1; }
 api() { curl -s -m 15 "$@"; }
 
+# CSRF: the backend sets an XSRF-TOKEN cookie; mutating requests echo it in
+# the X-XSRF-TOKEN header (double-submit cookie scheme).
+csrf_of() { awk -F'\t' '$6 == "XSRF-TOKEN" {v=$7} END {print v}' "$1"; }
+
 login() { # login <cookiejar> <email> <password>
-  api -c "$1" -o /dev/null -X POST "$API/auth/login" \
-    -H "Content-Type: application/json" \
+  api -c "$1" -o /dev/null "$API/auth/me"   # seeds the XSRF-TOKEN cookie
+  api -c "$1" -b "$1" -o /dev/null -X POST "$API/auth/login" \
+    -H "Content-Type: application/json" -H "X-XSRF-TOKEN: $(csrf_of "$1")" \
     -d "{\"email\":\"$2\",\"password\":\"$3\"}"
+}
+
+mut() { # mut <cookiejar> <curl args...> — mutating call with the CSRF header
+  local jar="$1"; shift
+  api -b "$jar" -c "$jar" -H "X-XSRF-TOKEN: $(csrf_of "$jar")" "$@"
 }
 
 field() { # field <json-payload> <key>
@@ -57,14 +67,14 @@ ME="$(api -b "$TMP/admin.jar" "$API/auth/me")"
 echo "OK — authenticated as $ADMIN_EMAIL"
 
 step "2. Create a department (extensible lookup — a pure data change)"
-DEPT="$(api -b "$TMP/admin.jar" -X POST "$API/departments" \
+DEPT="$(mut "$TMP/admin.jar" -X POST "$API/departments" \
   -H "Content-Type: application/json" \
   -d "{\"code\":\"SMK$SUFFIX\",\"label\":\"Smoke Test Dept $SUFFIX\"}")"
 DEPT_ID="$(field "$DEPT" id)"; DEPT_CODE="$(field "$DEPT" code)"
 echo "OK — department $DEPT_CODE (id $DEPT_ID)"
 
 step "3. Create a second, regular user (roles default to User)"
-USER_JSON="$(api -b "$TMP/admin.jar" -X POST "$API/users" \
+USER_JSON="$(mut "$TMP/admin.jar" -X POST "$API/users" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"Smoke Viewer $SUFFIX\",\"email\":\"viewer$SUFFIX@doccontrol.local\",\"departmentId\":$DEPT_ID,\"password\":\"viewer-pass-123\"}")"
 VIEWER_ID="$(field "$USER_JSON" id)"
@@ -75,7 +85,7 @@ step "4. Create a document with a file (file becomes version 1)"
 printf 'Rev A — smoke test content.\n' > "$TMP/rev-a.txt"
 SOP_TYPE_ID="$(api -b "$TMP/admin.jar" "$API/document-types" \
   | python -c "import sys,json;print([t['id'] for t in json.load(sys.stdin) if t['code']=='SOP'][0])")"
-DOC="$(api -b "$TMP/admin.jar" -X POST "$API/documents" \
+DOC="$(mut "$TMP/admin.jar" -X POST "$API/documents" \
   -F "document_type_id=$SOP_TYPE_ID" -F "department_id=$DEPT_ID" \
   -F "name=Smoke Test Procedure $SUFFIX" -F "file=@$TMP/rev-a.txt;type=text/plain")"
 DOC_ID="$(field "$DOC" id)"; DOC_NUMBER="$(field "$DOC" documentNumber)"
@@ -83,7 +93,7 @@ echo "OK — $DOC_NUMBER (id $DOC_ID), version 1 stored, current_version_id=$(fi
 
 step "5. Upload version 2"
 printf 'Rev B — smoke test content with changes.\n' > "$TMP/rev-b.txt"
-V2="$(api -b "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions" \
+V2="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions" \
   -F "file=@$TMP/rev-b.txt;type=text/plain" -F "change_notes=Smoke test revision B")"
 V2_ID="$(field "$V2" id)"
 echo "OK — version $(field "$V2" versionNumber) uploaded (id $V2_ID)"
@@ -99,7 +109,7 @@ code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$API/documents/
 echo "OK (404 as expected)"
 
 step "8. Admin releases the document via the status override (Sprint 1 stopgap)"
-api -b "$TMP/admin.jar" -X PATCH "$API/documents/$DOC_ID" \
+mut "$TMP/admin.jar" -X PATCH "$API/documents/$DOC_ID" \
   -H "Content-Type: application/json" -d '{"status":"released"}' \
   | python -c "import sys,json;print('OK — document status is now', json.load(sys.stdin)['status'])"
 
@@ -109,7 +119,7 @@ SEEN="$(api -b "$TMP/viewer.jar" "$API/documents/$DOC_ID")"
 echo "OK — viewer reads $DOC_NUMBER (released documents are public to all authenticated users)"
 
 step "10. Bonus: create a second ADMIN via roles on create (break-glass account)"
-ADMIN2="$(api -b "$TMP/admin.jar" -X POST "$API/users" \
+ADMIN2="$(mut "$TMP/admin.jar" -X POST "$API/users" \
   -H "Content-Type: application/json" \
   -d "{\"name\":\"Smoke Admin 2 $SUFFIX\",\"email\":\"admin2$SUFFIX@doccontrol.local\",\"departmentId\":$DEPT_ID,\"password\":\"admin2-pass-123\",\"roles\":[\"Admin\"]}")"
 ADMIN2_ID="$(field "$ADMIN2" id)"

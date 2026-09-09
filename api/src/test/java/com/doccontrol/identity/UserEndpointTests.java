@@ -4,10 +4,12 @@ import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.auth.dto.LoginRequest;
 import com.doccontrol.lookup.DepartmentRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.doccontrol.CsrfTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
@@ -22,6 +24,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static com.doccontrol.CsrfTestSupport.csrf;
 
 /**
  * Users/roles admin CRUD plus the password-change endpoint (the tracked
@@ -29,6 +32,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CsrfTestSupport.class)
 @Transactional
 class UserEndpointTests {
 
@@ -57,7 +61,7 @@ class UserEndpointTests {
                 .andExpect(status().isForbidden());
         mockMvc.perform(get("/roles").session(userSession))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(post("/users").session(userSession)
+        mockMvc.perform(post("/users").with(csrf()).session(userSession)
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isForbidden());
         assertThat(userId).isNotNull();
@@ -82,7 +86,7 @@ class UserEndpointTests {
         MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
         Integer deptId = departmentRepository.findByCode("ENG").orElseThrow().getId();
 
-        MvcResult created = mockMvc.perform(post("/users").session(admin)
+        MvcResult created = mockMvc.perform(post("/users").with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Dana Newuser",
@@ -96,7 +100,7 @@ class UserEndpointTests {
         Integer userId = objectMapper.readValue(created.getResponse().getContentAsString(), UserDto.class).id();
 
         // duplicate email rejected
-        mockMvc.perform(post("/users").session(admin)
+        mockMvc.perform(post("/users").with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Dana Again",
@@ -106,7 +110,7 @@ class UserEndpointTests {
                 .andExpect(status().isConflict());
 
         // short password rejected
-        mockMvc.perform(post("/users").session(admin)
+        mockMvc.perform(post("/users").with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Weak", "email", "weak@doccontrol.test",
@@ -131,20 +135,20 @@ class UserEndpointTests {
         Integer userId = createUserViaApi(admin, "patchme@doccontrol.test", "first-pass-123");
 
         Integer deptId = departmentRepository.findByCode("PROD").orElseThrow().getId();
-        mockMvc.perform(patch("/users/" + userId).session(admin)
+        mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("departmentId", deptId, "active", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.department.code").value("PROD"));
 
         // deactivate, then the account can no longer log in
-        mockMvc.perform(patch("/users/" + userId).session(admin)
+        mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("active", false))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(false));
 
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
                                 new LoginRequest("patchme@doccontrol.test", "first-pass-123"))))
@@ -152,7 +156,7 @@ class UserEndpointTests {
 
         // an admin cannot deactivate their own account
         Integer adminId = findUserIdByEmail(admin, BOOTSTRAP_EMAIL);
-        mockMvc.perform(patch("/users/" + adminId).session(admin)
+        mockMvc.perform(patch("/users/" + adminId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("active", false))))
                 .andExpect(status().isConflict());
@@ -165,21 +169,21 @@ class UserEndpointTests {
         MockHttpSession self = loginAs("selfpw@doccontrol.test", "old-pass-123");
 
         // wrong current password
-        mockMvc.perform(post("/users/" + userId + "/password").session(self)
+        mockMvc.perform(post("/users/" + userId + "/password").with(csrf()).session(self)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "currentPassword", "wrong-pass-123", "newPassword", "new-pass-456"))))
                 .andExpect(status().isBadRequest());
 
         // correct current password
-        mockMvc.perform(post("/users/" + userId + "/password").session(self)
+        mockMvc.perform(post("/users/" + userId + "/password").with(csrf()).session(self)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "currentPassword", "old-pass-123", "newPassword", "new-pass-456"))))
                 .andExpect(status().isNoContent());
 
         // old password no longer works, new one does
-        mockMvc.perform(post("/auth/login")
+        mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
                                 new LoginRequest("selfpw@doccontrol.test", "old-pass-123"))))
@@ -197,7 +201,7 @@ class UserEndpointTests {
         MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
         Integer userId = createUserViaApi(admin, "resetme@doccontrol.test", "old-pass-123");
 
-        mockMvc.perform(post("/users/" + userId + "/password").session(admin)
+        mockMvc.perform(post("/users/" + userId + "/password").with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("newPassword", "reset-pass-789"))))
                 .andExpect(status().isNoContent());
@@ -205,7 +209,7 @@ class UserEndpointTests {
         // non-admin cannot reset someone else's password
         MockHttpSession other = loginAs("resetme@doccontrol.test", "reset-pass-789");
         Integer adminId = findUserIdByEmail(admin, BOOTSTRAP_EMAIL);
-        mockMvc.perform(post("/users/" + adminId + "/password").session(other)
+        mockMvc.perform(post("/users/" + adminId + "/password").with(csrf()).session(other)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("newPassword", "hijack-pass-1"))))
                 .andExpect(status().isForbidden());
@@ -219,7 +223,7 @@ class UserEndpointTests {
         Integer userId = createUserViaApi(admin, "promotable@doccontrol.test", "promote-pass-123");
 
         // promote to Admin
-        mockMvc.perform(patch("/users/" + userId).session(admin)
+        mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("roles", List.of("Admin")))))
                 .andExpect(status().isOk())
@@ -232,7 +236,7 @@ class UserEndpointTests {
                 .andExpect(status().isOk());
 
         // demote to no roles at all
-        mockMvc.perform(patch("/users/" + userId).session(admin)
+        mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("roles", List.of()))))
                 .andExpect(status().isOk())
@@ -255,7 +259,7 @@ class UserEndpointTests {
         Integer adminId = findUserIdByEmail(admin, BOOTSTRAP_EMAIL);
 
         // the guard must fire — 409, not a silent no-op
-        mockMvc.perform(patch("/users/" + adminId).session(admin)
+        mockMvc.perform(patch("/users/" + adminId).with(csrf()).session(admin)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("roles", List.of("User")))))
                 .andExpect(status().isConflict());
@@ -287,7 +291,7 @@ class UserEndpointTests {
 
     private Integer createUserViaApi(MockHttpSession adminSession, String email, String password) throws Exception {
         Integer deptId = departmentRepository.findByCode("QA").orElseThrow().getId();
-        MvcResult result = mockMvc.perform(post("/users").session(adminSession)
+        MvcResult result = mockMvc.perform(post("/users").with(csrf()).session(adminSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", email, "email", email,
@@ -298,7 +302,7 @@ class UserEndpointTests {
     }
 
     private MockHttpSession loginAs(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())

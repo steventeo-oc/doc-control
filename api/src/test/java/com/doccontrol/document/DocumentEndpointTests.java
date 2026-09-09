@@ -14,10 +14,12 @@ import com.doccontrol.lookup.DepartmentRepository;
 import com.doccontrol.lookup.DocumentTypeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import com.doccontrol.CsrfTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.test.web.servlet.MockMvc;
@@ -34,6 +36,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static com.doccontrol.CsrfTestSupport.csrf;
 
 /**
  * Document CRUD against the live database: server-generated numbers, the
@@ -42,6 +45,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CsrfTestSupport.class)
 @Transactional
 class DocumentEndpointTests {
 
@@ -89,7 +93,7 @@ class DocumentEndpointTests {
         mockMvc.perform(multipart("/documents").session(session)
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
-                        .param("name", "Incoming Inspection Procedure"))
+                        .param("name", "Incoming Inspection Procedure").with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.documentNumber").value("SOP-" + dept.getCode() + "-0001"))
                 .andExpect(jsonPath("$.status").value("draft"))
@@ -99,7 +103,7 @@ class DocumentEndpointTests {
         mockMvc.perform(multipart("/documents").session(session)
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
-                        .param("name", "Second Document"))
+                        .param("name", "Second Document").with(csrf()))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.documentNumber").value("SOP-" + dept.getCode() + "-0002"));
     }
@@ -115,7 +119,7 @@ class DocumentEndpointTests {
         MvcResult created = mockMvc.perform(multipart("/documents").session(authorSession)
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
-                        .param("name", "Secret Draft"))
+                        .param("name", "Secret Draft").with(csrf()))
                 .andExpect(status().isCreated())
                 .andReturn();
         Integer documentId = objectMapper.readValue(created.getResponse().getContentAsString(), DocumentDto.class).id();
@@ -154,13 +158,13 @@ class DocumentEndpointTests {
         Integer documentId = createDocument(authorSession, dept.getId(), "Editable Doc");
 
         // outsider cannot even see the draft → 404 on patch
-        mockMvc.perform(patch("/documents/" + documentId).session(outsiderSession)
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(outsiderSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("name", "Hacked"))))
                 .andExpect(status().isNotFound());
 
         // admin can patch
-        mockMvc.perform(patch("/documents/" + documentId).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("name", "Renamed By Admin"))))
                 .andExpect(status().isOk())
@@ -172,7 +176,7 @@ class DocumentEndpointTests {
         document.setStatus(DocumentStatus.RELEASED);
         entityManager.flush();
 
-        mockMvc.perform(patch("/documents/" + documentId).session(outsiderSession)
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(outsiderSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("name", "Still Nope"))))
                 .andExpect(status().isForbidden());
@@ -186,7 +190,7 @@ class DocumentEndpointTests {
 
         Integer documentId = createDocument(session, dept.getId(), "Trash Me");
 
-        mockMvc.perform(delete("/documents/" + documentId).session(session))
+        mockMvc.perform(delete("/documents/" + documentId).with(csrf()).session(session))
                 .andExpect(status().isNoContent());
 
         // excluded from the default list, but still addressable in detail (trash)
@@ -196,7 +200,7 @@ class DocumentEndpointTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deletedAt").isNotEmpty());
 
-        mockMvc.perform(post("/documents/" + documentId + "/restore").session(session))
+        mockMvc.perform(post("/documents/" + documentId + "/restore").with(csrf()).session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.deletedAt").doesNotExist());
 
@@ -254,7 +258,7 @@ class DocumentEndpointTests {
                 .andExpect(status().isNotFound());
 
         // admin overrides status — the Sprint 1 stopgap
-        mockMvc.perform(patch("/documents/" + documentId).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
@@ -293,13 +297,13 @@ class DocumentEndpointTests {
         Integer documentId = createDocument(ownerSession, dept.getId(), "Owner Only");
 
         // even the owner is rejected when sending status — explicitly, not silently
-        mockMvc.perform(patch("/documents/" + documentId).session(ownerSession)
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(ownerSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isForbidden());
 
         // the owner can still patch ordinary metadata
-        mockMvc.perform(patch("/documents/" + documentId).session(ownerSession)
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(ownerSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("name", "Owner Renamed"))))
                 .andExpect(status().isOk());
@@ -309,7 +313,7 @@ class DocumentEndpointTests {
         document.setStatus(DocumentStatus.RELEASED);
         entityManager.flush();
 
-        mockMvc.perform(patch("/documents/" + documentId).session(outsiderSession)
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(outsiderSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "obsolete"))))
                 .andExpect(status().isForbidden());
@@ -322,7 +326,7 @@ class DocumentEndpointTests {
         MockHttpSession session = loginAs("invalid@doccontrol.test");
         Integer documentId = createDocument(session, dept.getId(), "Bad Status");
 
-        mockMvc.perform(patch("/documents/" + documentId).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "bogus"))))
                 .andExpect(status().isBadRequest());
@@ -347,7 +351,7 @@ class DocumentEndpointTests {
         MvcResult result = mockMvc.perform(multipart("/documents").session(session)
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(departmentId))
-                        .param("name", name))
+                        .param("name", name).with(csrf()))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsString(), DocumentDto.class).id();
@@ -378,7 +382,7 @@ class DocumentEndpointTests {
     }
 
     private MockHttpSession loginAs(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())

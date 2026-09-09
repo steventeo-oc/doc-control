@@ -14,10 +14,12 @@ import com.doccontrol.lookup.DepartmentRepository;
 import com.doccontrol.lookup.DocumentTypeRepository;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
+import com.doccontrol.CsrfTestSupport;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
 import org.springframework.boot.test.context.SpringBootTest;
+import org.springframework.context.annotation.Import;
 import org.springframework.http.HttpHeaders;
 import org.springframework.mock.web.MockHttpSession;
 import org.springframework.mock.web.MockMultipartFile;
@@ -39,6 +41,7 @@ import static org.springframework.test.web.servlet.request.MockMvcRequestBuilder
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.header;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
+import static com.doccontrol.CsrfTestSupport.csrf;
 
 /**
  * Version lifecycle against live Postgres AND live MinIO (localhost:9000 —
@@ -47,6 +50,7 @@ import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.
  */
 @SpringBootTest
 @AutoConfigureMockMvc
+@Import(CsrfTestSupport.class)
 @Transactional
 class DocumentVersionEndpointTests {
 
@@ -96,7 +100,7 @@ class DocumentVersionEndpointTests {
         MvcResult v1 = mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "procedure.txt", "text/plain", "hello v1".getBytes()))
                         .param("change_notes", "initial upload")
-                        .session(session))
+                        .session(session).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.versionNumber").value(1))
                 .andExpect(jsonPath("$.status").value("draft"))
@@ -107,7 +111,7 @@ class DocumentVersionEndpointTests {
         mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "procedure.txt", "text/plain", "hello v2".getBytes()))
                         .param("change_notes", "second revision")
-                        .session(session))
+                        .session(session).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.versionNumber").value(2));
 
@@ -145,7 +149,7 @@ class DocumentVersionEndpointTests {
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
                         .param("name", "Created With File")
-                        .session(session))
+                        .session(session).with(csrf()))
                 .andExpect(status().isCreated())
                 // the pointer stays null until an explicit release
                 .andExpect(jsonPath("$.currentVersionId").value(Matchers.nullValue()))
@@ -157,7 +161,7 @@ class DocumentVersionEndpointTests {
                 .andExpect(jsonPath("$[0].versionNumber").value(1));
 
         // releasing is what makes version 1 current
-        mockMvc.perform(patch("/documents/{id}", document.id()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+        mockMvc.perform(patch("/documents/{id}", document.id()).with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
@@ -175,7 +179,7 @@ class DocumentVersionEndpointTests {
         Integer docId = createDocument(hider, dept.getId(), "Hidden Draft");
         MvcResult v1 = mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "hidden.txt", "text/plain", "secret".getBytes()))
-                        .session(hider))
+                        .session(hider).with(csrf()))
                 .andExpect(status().isOk())
                 .andReturn();
         Integer v1Id = objectMapper.readValue(v1.getResponse().getContentAsString(), DocumentVersionDto.class).id();
@@ -204,7 +208,7 @@ class DocumentVersionEndpointTests {
                 .andExpect(status().isOk());
         mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "nope.txt", "text/plain", "nope".getBytes()))
-                        .session(outsiderSession))
+                        .session(outsiderSession).with(csrf()))
                 .andExpect(status().isForbidden());
     }
 
@@ -225,7 +229,7 @@ class DocumentVersionEndpointTests {
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
                         .param("name", "Public Doc")
-                        .session(ownerSession))
+                        .session(ownerSession).with(csrf()))
                 .andExpect(status().isCreated())
                 .andReturn();
         DocumentDto doc = objectMapper.readValue(created.getResponse().getContentAsString(), DocumentDto.class);
@@ -237,7 +241,7 @@ class DocumentVersionEndpointTests {
         Integer v1Id = versions[0].id();
 
         // release it — v1 becomes the current version
-        mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
+        mockMvc.perform(patch("/documents/" + doc.id()).with(csrf()).session(adminSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
@@ -249,7 +253,7 @@ class DocumentVersionEndpointTests {
         MvcResult v2 = mockMvc.perform(multipart("/documents/{id}/versions", doc.id())
                         .file(new MockMultipartFile("file", "doc.txt", "text/plain", "v2 body".getBytes()))
                         .param("change_notes", "draft revision")
-                        .session(ownerSession))
+                        .session(ownerSession).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.versionNumber").value(2))
                 .andReturn();
@@ -295,7 +299,7 @@ class DocumentVersionEndpointTests {
 
         // admin re-releases (status already released) — now the draft publishes:
         // v2 becomes current, v1 becomes superseded
-        mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
+        mockMvc.perform(patch("/documents/" + doc.id()).with(csrf()).session(adminSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
@@ -348,7 +352,7 @@ class DocumentVersionEndpointTests {
         MvcResult result = mockMvc.perform(multipart("/documents").session(session)
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(departmentId))
-                        .param("name", name))
+                        .param("name", name).with(csrf()))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsString(), DocumentDto.class).id();
@@ -379,7 +383,7 @@ class DocumentVersionEndpointTests {
     }
 
     private MockHttpSession loginAs(String email, String password) throws Exception {
-        MvcResult result = mockMvc.perform(post("/auth/login")
+        MvcResult result = mockMvc.perform(post("/auth/login").with(csrf())
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(new LoginRequest(email, password))))
                 .andExpect(status().isOk())

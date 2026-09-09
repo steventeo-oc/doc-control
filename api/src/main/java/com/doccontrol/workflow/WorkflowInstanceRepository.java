@@ -11,6 +11,8 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
 
     Optional<WorkflowInstance> findByProcessInstanceId(String processInstanceId);
 
+    List<WorkflowInstance> findByStatus(WorkflowInstanceStatus status);
+
     boolean existsByDocumentVersionIdAndStatus(Integer documentVersionId, WorkflowInstanceStatus status);
 
     /** In-progress instances across all versions of a document (reviewer visibility). */

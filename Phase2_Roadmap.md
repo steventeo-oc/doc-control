@@ -63,12 +63,16 @@ friction.
   integration.
 - Conditional routing (#9) — Could/Maybe only, not required now.
 
-**Status**: plan-back approved; core approval flow implemented and tested
+**Status**: plan-back approved. Implemented and tested: core approval flow
 (ad-hoc parallel start, 100% completion with version promotion, rejection,
 unrestricted delegation, pooled role tasks via candidate groups, reviewer
-visibility). Remaining in this phase: reminder/escalation job (log-only
-sender first) and the Microsoft Graph integration — blocked on the Azure
-app registration / sender mailbox, handled operationally.
+visibility) **and** the reminder/escalation job — daily sweep with
+configurable thresholds (3/1/2 business days), pooled tasks remind current
+role members until claimed, reminders dedup per day and escalations fire
+once per task per recipient, all recorded in `notification_log` and sent
+through the log-only `NotificationSender`. Remaining: swap the sender for
+Microsoft Graph — blocked only on the Azure app registration / sender
+mailbox (operational).
 
 ## Phase 2c — Document lifecycle extensions
 

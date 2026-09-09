@@ -5,8 +5,6 @@ import org.flowable.engine.delegate.TaskListener;
 import org.flowable.task.service.delegate.DelegateTask;
 import org.springframework.stereotype.Component;
 
-import java.time.DayOfWeek;
-import java.time.LocalDate;
 import java.time.ZoneId;
 import java.util.Date;
 
@@ -42,21 +40,9 @@ public class SlotAssignmentListener implements TaskListener {
             throw new IllegalStateException("Unrecognized assignee slot: " + slot);
         }
         delegateTask.setDueDate(Date.from(
-                businessDaysFromNow(properties.dueBusinessDays())
+                BusinessDays.addBusinessDays(java.time.LocalDate.now(), properties.dueBusinessDays())
                         .atTime(17, 0)
                         .atZone(ZoneId.systemDefault())
                         .toInstant()));
-    }
-
-    static LocalDate businessDaysFromNow(int businessDays) {
-        LocalDate date = LocalDate.now();
-        int added = 0;
-        while (added < businessDays) {
-            date = date.plusDays(1);
-            if (date.getDayOfWeek() != DayOfWeek.SATURDAY && date.getDayOfWeek() != DayOfWeek.SUNDAY) {
-                added++;
-            }
-        }
-        return date;
     }
 }

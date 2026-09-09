@@ -41,6 +41,8 @@ doccontrol:
     due-business-days: 3
     reminder-before-days: 1
     escalate-after-overdue-days: 2
+    # Daily reminder/escalation sweep (07:00 server time)
+    reminder-cron: "0 0 7 * * *"
 
   storage:
     # Defaults match docker-compose.yml's minio service on localhost (dev).

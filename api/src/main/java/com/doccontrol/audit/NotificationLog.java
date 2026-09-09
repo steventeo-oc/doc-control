@@ -16,6 +16,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -55,6 +56,10 @@ public class NotificationLog {
     @CreationTimestamp
     @Column(name = "sent_at", nullable = false, updatable = false)
     private LocalDateTime sentAt;
+
+    /** The business date the notification was issued for (dedup key). */
+    @Column(name = "notification_date")
+    private LocalDate notificationDate;
 
     /** 'log' until the Microsoft Graph sender lands. */
     @Column(nullable = false)

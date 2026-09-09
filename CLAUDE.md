@@ -187,9 +187,12 @@ EOL-bound and Camunda 8's distributed architecture doesn't fit single-VM
 compose). The design plan-back was approved; the core approval flow
 (ad-hoc parallel start, 100% completion with version promotion, rejection,
 unrestricted delegation, pooled role tasks, reviewer visibility) is
-implemented and tested — the status-override stopgap is retired. Next:
-reminder/escalation job with the log-only NotificationSender, then the
-Microsoft Graph sender (pending Azure app registration).
+implemented and tested — the status-override stopgap is retired. The
+reminder/escalation job is also implemented (daily sweep, configurable
+thresholds, pooled tasks remind current role members until claimed,
+dedup via notification_log) on the log-only NotificationSender; the
+Microsoft Graph sender is the last Phase 2b piece (pending Azure app
+registration).
 
 Items discovered during implementation that must be resolved before a real
 deployment, even if they don't block Sprint 1 development itself:

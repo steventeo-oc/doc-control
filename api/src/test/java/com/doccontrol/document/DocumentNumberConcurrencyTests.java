@@ -1,6 +1,9 @@
 package com.doccontrol.document;
 
 import com.doccontrol.identity.User;
+import com.doccontrol.identity.UserDepartment;
+import com.doccontrol.identity.UserDepartmentId;
+import com.doccontrol.identity.UserDepartmentRepository;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.lookup.Department;
 import com.doccontrol.lookup.DepartmentRepository;
@@ -44,6 +47,9 @@ class DocumentNumberConcurrencyTests {
     UserRepository userRepository;
 
     @Autowired
+    UserDepartmentRepository userDepartmentRepository;
+
+    @Autowired
     DepartmentRepository departmentRepository;
 
     @Autowired
@@ -67,12 +73,19 @@ class DocumentNumberConcurrencyTests {
                 .findFirst().orElseThrow().getId();
 
         User creator = new User();
-        creator.setName("concurrency@doccontrol.test");
-        creator.setEmail("concurrency@doccontrol.test");
-        creator.setDepartment(departmentRepository.findByCode("QA").orElseThrow());
+        String email = "conc" + System.nanoTime() % 100000 + "@doccontrol.test";
+        creator.setName(email);
+        creator.setEmail(email);
         creator.setPasswordHash("x");
         creator.setActive(true);
         Integer creatorId = userRepository.save(creator).getId();
+
+        com.doccontrol.lookup.Department qa = departmentRepository.findByCode("QA").orElseThrow();
+        UserDepartment departmentMembership = new UserDepartment();
+        departmentMembership.setId(new UserDepartmentId(creatorId, qa.getId()));
+        departmentMembership.setUser(creator);
+        departmentMembership.setDepartment(qa);
+        userDepartmentRepository.save(departmentMembership);
 
         Authentication creatorAuth = new UsernamePasswordAuthenticationToken(
                 new AppUserPrincipal(creatorId, creator.getEmail(), "x", true,
@@ -112,6 +125,7 @@ class DocumentNumberConcurrencyTests {
         jdbcTemplate.update("DELETE FROM audit_log WHERE performed_by = ?", userId);
         jdbcTemplate.update("DELETE FROM document WHERE department_id = ?", deptId);
         jdbcTemplate.update("DELETE FROM document_sequence_counter WHERE department_id = ?", deptId);
+        jdbcTemplate.update("DELETE FROM user_department WHERE user_id = ?", userId);
         jdbcTemplate.update("DELETE FROM \"user\" WHERE id = ?", userId);
         jdbcTemplate.update("DELETE FROM department WHERE id = ?", deptId);
     }

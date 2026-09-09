@@ -5,6 +5,9 @@ import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
+import com.doccontrol.identity.UserDepartment;
+import com.doccontrol.identity.UserDepartmentId;
+import com.doccontrol.identity.UserDepartmentRepository;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.identity.UserRole;
 import com.doccontrol.identity.UserRoleId;
@@ -66,6 +69,9 @@ class DocumentEndpointTests {
 
     @Autowired
     UserRepository userRepository;
+
+    @Autowired
+    UserDepartmentRepository userDepartmentRepository;
 
     @Autowired
     UserRoleRepository userRoleRepository;
@@ -361,10 +367,16 @@ class DocumentEndpointTests {
         User user = new User();
         user.setName(email);
         user.setEmail(email);
-        user.setDepartment(departmentRepository.findByCode("QA").orElseThrow());
         user.setPasswordHash(passwordEncoder.encode("pw-" + email));
         user.setActive(true);
         userRepository.save(user);
+
+        com.doccontrol.lookup.Department qa = departmentRepository.findByCode("QA").orElseThrow();
+        UserDepartment departmentMembership = new UserDepartment();
+        departmentMembership.setId(new UserDepartmentId(user.getId(), qa.getId()));
+        departmentMembership.setUser(user);
+        departmentMembership.setDepartment(qa);
+        userDepartmentRepository.save(departmentMembership);
 
         for (String roleName : roleNames) {
             Role role = roleRepository.findByName(roleName).orElseThrow();

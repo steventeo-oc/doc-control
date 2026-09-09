@@ -23,7 +23,8 @@ export default function Layout() {
         </nav>
         <div className="session">
           <span>
-            {user?.name} <small>({user?.department.code})</small>
+            {user?.name}{' '}
+            <small>({user?.departments.map((d) => d.code).join(', ')})</small>
           </span>
           <button type="button" onClick={handleLogout}>
             Log out

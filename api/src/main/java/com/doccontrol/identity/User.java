@@ -1,14 +1,11 @@
 package com.doccontrol.identity;
 
-import com.doccontrol.lookup.Department;
 import jakarta.persistence.Column;
 import jakarta.persistence.Entity;
 import jakarta.persistence.FetchType;
 import jakarta.persistence.GeneratedValue;
 import jakarta.persistence.GenerationType;
 import jakarta.persistence.Id;
-import jakarta.persistence.JoinColumn;
-import jakarta.persistence.ManyToOne;
 import jakarta.persistence.OneToMany;
 import jakarta.persistence.Table;
 import lombok.Getter;
@@ -20,7 +17,8 @@ import java.util.Set;
 
 /**
  * Maps the "user" table. The table name is quoted because "user" is a
- * reserved word in PostgreSQL.
+ * reserved word in PostgreSQL. Departments are many-to-many since Phase 2a
+ * (see {@link UserDepartment}) — a user belongs to one or more departments.
  */
 @Entity
 @Table(name = "\"user\"")
@@ -39,10 +37,6 @@ public class User {
     @Column(nullable = false, unique = true)
     private String email;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "department_id", nullable = false)
-    private Department department;
-
     @Column(name = "ad_username")
     private String adUsername;
 
@@ -58,4 +52,7 @@ public class User {
 
     @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
     private Set<UserRole> roles = new HashSet<>();
+
+    @OneToMany(mappedBy = "user", fetch = FetchType.LAZY)
+    private Set<UserDepartment> departments = new HashSet<>();
 }

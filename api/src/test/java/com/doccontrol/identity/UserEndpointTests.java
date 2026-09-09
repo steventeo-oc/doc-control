@@ -91,7 +91,7 @@ class UserEndpointTests {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Dana Newuser",
                                 "email", "dana@doccontrol.test",
-                                "departmentId", deptId,
+                                "departmentIds", List.of(deptId),
                                 "password", "initial-pass-123"))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.roles[0]").value("User"))
@@ -105,7 +105,7 @@ class UserEndpointTests {
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Dana Again",
                                 "email", "dana@doccontrol.test",
-                                "departmentId", deptId,
+                                "departmentIds", List.of(deptId),
                                 "password", "initial-pass-123"))))
                 .andExpect(status().isConflict());
 
@@ -114,7 +114,7 @@ class UserEndpointTests {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", "Weak", "email", "weak@doccontrol.test",
-                                "departmentId", deptId, "password", "short"))))
+                                "departmentIds", List.of(deptId), "password", "short"))))
                 .andExpect(status().isBadRequest());
 
         // the new user can log in with the initial password
@@ -137,9 +137,9 @@ class UserEndpointTests {
         Integer deptId = departmentRepository.findByCode("PROD").orElseThrow().getId();
         mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of("departmentId", deptId, "active", true))))
+                        .content(objectMapper.writeValueAsString(Map.of("departmentIds", List.of(deptId), "active", true))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.department.code").value("PROD"));
+                .andExpect(jsonPath("$.departments[0].code").value("PROD"));
 
         // deactivate, then the account can no longer log in
         mockMvc.perform(patch("/users/" + userId).with(csrf()).session(admin)
@@ -295,7 +295,7 @@ class UserEndpointTests {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of(
                                 "name", email, "email", email,
-                                "departmentId", deptId, "password", password))))
+                                "departmentIds", List.of(deptId), "password", password))))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsString(), UserDto.class).id();

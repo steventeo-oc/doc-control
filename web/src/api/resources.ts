@@ -77,13 +77,19 @@ export const userApi = {
   create: (body: {
     name: string;
     email: string;
-    departmentId: number;
+    departmentIds: number[];
     password: string;
     roles?: string[];
   }) => api.post<UserRow>('/users', body),
   update: (
     id: number,
-    patch: { name?: string; departmentId?: number; adUsername?: string; active?: boolean; roles?: string[] },
+    patch: {
+      name?: string;
+      departmentIds?: number[];
+      adUsername?: string;
+      active?: boolean;
+      roles?: string[];
+    },
   ) => api.patch<UserRow>(`/users/${id}`, patch),
   changePassword: (id: number, body: { currentPassword?: string; newPassword: string }) =>
     api.post<void>(`/users/${id}/password`, body),

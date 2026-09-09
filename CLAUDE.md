@@ -42,20 +42,21 @@ why — don't just substitute silently.
 - `Document_Control_API_Spec_v1.md` — full REST endpoint list, grouped by
   resource, with which Sprint each belongs to. Endpoints marked Sprint 3
   (workflow) should not be built yet — see Current scope below.
+- `Phase2_Roadmap.md` — **read this before starting any work beyond Sprint
+  1.** Sprint 1 (below) is complete. Everything after it was re-scoped based
+  on real QA feedback, not the original API spec's Sprint 2-4 labels — the
+  roadmap doc supersedes those labels for anything workflow, lifecycle, or
+  distribution related.
 
-## Current scope: Sprint 1 only
+## Current scope: Sprint 1 (complete) — see Phase2_Roadmap.md for what's next
 
-Build **only** these resources right now, per the API spec:
-- Auth (`/auth/*`)
-- Lookups: `/document-tiers`, `/document-types`, `/departments`
-- Documents: `/documents` (CRUD)
-- Versions: `/documents/{id}/versions` (upload, list, download)
-- Users/roles (admin CRUD)
-
-**Do not build workflow, search, or audit-log endpoints yet** — they're
-specced for later sprints intentionally. If something in Sprint 1 turns out
-to need a piece of those (e.g. audit logging), flag it rather than building
-the full feature early.
+Sprint 1 is done: auth, lookups, documents (CRUD), versions (MinIO-backed),
+users/roles, plus fixes found during piloting (current-version-pointer
+semantics, version-history visibility). **Do not build anything from the
+original API spec's Sprint 2-4 labels without checking `Phase2_Roadmap.md`
+first** — real QA feedback changed the shape of what comes next
+significantly. Start with Phase 2a (org/access foundation) per that
+document.
 
 ## Non-negotiable conventions
 
@@ -124,106 +125,48 @@ the data model doc — resolved here so they're answered once, not re-asked.
   usage patterns are known — not a permanent design constraint.
 - **Login identifier** — login by `email` (already unique on `user`). No
   separate username field.
-- **`current_version_id` semantics (resolved during the pilot)** — the pointer
-  means "the version the public sees". It is null until a document's first
-  release, and changes only via an explicit release: the admin status
-  override to `released`/`approved` re-points it at the latest version,
-  including a re-release of an already-released document (that is how an
-  uploaded draft gets published). Version uploads and document creation never
-  move the pointer — a pilot finding: uploading a draft to a released
-  document used to drag the public version pointer to unreviewed content.
-  (This deliberately deviates from the API spec's create-document example,
-  which shows current_version_id set on a draft; that example predates this
-  decision.) Sprint 3's promote endpoint will own this properly. On each
-  release the newly-current version's status becomes `current` and the
-  previously-current version becomes `superseded`; versions never pointed to
-  stay `draft`.
-- **Version history visibility (pilot finding #2)** — for non-owner/non-admin
-  viewers of a visible document, the version list shows exactly the current
-  version, and version detail/download for any other version id returns 404
-  (existence not leaked). Owners and admins see the full history. Draft
-  versions of a released document are therefore not enumerable or
-  downloadable by normal users.
 - **Confirmed low-stakes assumptions**: Java 21 + Spring Boot 3.x; Maven;
   session-cookie auth via Spring Security; `audit_log.details` as Postgres
   `jsonb`; seed roles limited to `Admin` and `User` for now (role names like
   "QA Reviewer" arrive with Sprint 3 workflow work, not before).
 
-## Go-live checklist (running list — add to this, don't just note gaps in chat)
-
-Items discovered during implementation that must be resolved before a real
-deployment, even if they don't block Sprint 1 development itself:
-
-- [x] **Admin password rotation**: no endpoint exists yet to change the
-  bootstrap admin's password after first startup. Fold a minimal
-  password-change capability into the Users/roles resource work — don't
-  ship Sprint 1 as "complete" without it. Until then, the account is stuck
-  with whatever `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` was set to at first
-  startup. *(Resolved: `POST /users/{id}/password` — self-service with
-  current password, admin reset for others; audited as `password_changed`.)*
-- [ ] **Confirm `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` and
-  `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
-  deployment time — the checked-in defaults (`admin@doccontrol.local` /
-  `changeme_admin`) are dev-only and must never reach a real environment.
-  A startup guard now enforces this: default credentials always log a
-  prominent warning, and startup **hard fails** when a `prod`/`production`
-  profile is active with them. Deployment must therefore set the real
-  credentials AND activate one of those profiles.
-- [x] **CSRF protection** — was disabled in Sprint 1 (SameSite=Lax only).
-  Now enabled for the SPA: double-submit cookie scheme (`XSRF-TOKEN` cookie
-  echoed in `X-XSRF-TOKEN`, Spring Security's documented SPA pattern in
-  `SpaCsrfTokenRequestHandler`), with `SameSite=Lax` kept on as defense in
-  depth. The frontend sends the header automatically; `scripts/smoke.sh`
-  demonstrates the full flow with curl.
-- [ ] **Admin status override is a Sprint 1 stopgap** — `PATCH /documents/{id}`
-  accepts an optional `status` field (admin-only, audited as
-  `status_changed`) so documents can reach approved/released before the
-  workflow engine exists and the visibility rule is exercised by real API
-  traffic. When Sprint 3 lands, status changes become workflow-driven and
-  this override must be **removed or narrowed to a deliberate break-glass
-  action** — an auditor asking "who can release a document without going
-  through approval?" must get the answer "no one", not "an undocumented
-  bypass nobody removed".
-- [ ] **Mint a second break-glass Admin before go-live**: create the account
-  (`POST /users` with `"roles": ["Admin"]`) and **securely store its
-  credentials** (password manager / sealed envelope, not a chat message),
-  then verify it can log in. This is the actual mitigation for "the sole
-  admin's password is lost" — an operational step, not a code fix. Also
-  note: an admin cannot change their own roles, so the second admin is the
-  only way back if the primary account is ever locked out.
-- [ ] **File upload limits & storage config are dev defaults** —
-  `spring.servlet.multipart.*` currently allows 50MB. Proposal in
-  `application.yml`: 25MB if only office documents are in scope, **100MB
-  (110MB request) if large CAD/DWG drawings are** — confirm by measuring the
-  largest real artifact in the old read-only Alfresco archive before
-  deciding. Storage: override MinIO credentials at deployment
-  (`MINIO_ROOT_*` for the container, `DOCCONTROL_STORAGE_ACCESS_KEY/SECRET_KEY`
-  for the api) and **create a dedicated MinIO user** for the api with
-  read/write on the `doccontrol` bucket only — the api should never use the
-  root account. Serve MinIO behind TLS; switch the api's storage endpoint to
-  https accordingly.
-
 ## Sprint 3 design note (captured early, not yet acted on)
 
 Observed from actual current Alfresco usage (both the real workflow export
 reviewed during planning and confirmed directly): reviewers are assigned
-ad-hoc, per approval instance, not fixed in advance. Whoever starts an
+**ad-hoc, per approval instance**, not fixed in advance. Whoever starts an
 approval picks the specific reviewers (any number) at that moment; the
 "Required Approval Percentage" setting applies to that instance's chosen
 group, not a fixed roster.
 
 This means the current schema's `workflow_stage_assignee` — tied to the
-template — is likely the wrong shape. The template should define
-structure (stage count, parallel/sequential, required approval
-percentage); who fills each stage should be chosen at
+*template* — is likely the wrong shape. The template should define
+*structure* (stage count, parallel/sequential, required approval
+percentage); *who* fills each stage should be chosen at
 `workflow_instance` start time, not baked into the template. Likely
 requires an instance-level assignee table distinct from any
 template-level defaults.
 
-Do not implement this yet. This is a structural note for whenever
+**Do not implement this yet.** This is a structural note for whenever
 Sprint 3 workflow design actually starts — captured now so it isn't lost,
 not a green light to start building it. Real approval-chain shape
 (sequential vs. parallel across departments, whether it varies by document
 type) still needs confirmation from a real QA conversation before Sprint 3
 begins in earnest.
-```"
+
+Items discovered during implementation that must be resolved before a real
+deployment, even if they don't block Sprint 1 development itself:
+
+- [ ] **Admin password rotation**: no endpoint exists yet to change the
+  bootstrap admin's password after first startup. Fold a minimal
+  password-change capability into the Users/roles resource work — don't
+  ship Sprint 1 as "complete" without it. Until then, the account is stuck
+  with whatever `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` was set to at first
+  startup.
+- [ ] **Confirm `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` and
+  `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
+  deployment time — the checked-in defaults (`admin@doccontrol.local` /
+  `changeme_admin`) are dev-only and must never reach a real environment.
+- [ ] **CSRF is currently disabled** (`SecurityConfig`, Sprint 1) — fine for
+  now with `SameSite=Lax` cookies and no frontend yet, but revisit once the
+  React frontend lands and is making real cross-origin-capable requests.

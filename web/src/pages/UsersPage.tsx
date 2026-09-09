@@ -41,12 +41,19 @@ export default function UsersPage() {
     const selectedRoles = roles
       .filter((role) => data.get(`role-${role.name}`) === 'on')
       .map((role) => role.name);
+    const selectedDepartments = departments
+      .filter((d) => data.get(`dept-${d.id}`) === 'on')
+      .map((d) => d.id);
+    if (selectedDepartments.length === 0) {
+      setError('Select at least one department.');
+      return;
+    }
     run(
       () =>
         userApi.create({
           name: String(data.get('name') ?? '').trim(),
           email: String(data.get('email') ?? '').trim(),
-          departmentId: Number(data.get('departmentId')),
+          departmentIds: selectedDepartments,
           password: String(data.get('password') ?? ''),
           roles: selectedRoles,
         }),
@@ -59,6 +66,17 @@ export default function UsersPage() {
     const newPassword = window.prompt(`New password for ${user.email} (min 8 chars):`);
     if (!newPassword) return;
     run(() => userApi.changePassword(user.id, { newPassword }), 'Password reset.');
+  }
+
+  function toggleDepartment(user: UserRow, department: Department) {
+    const has = user.departments.some((ud) => ud.id === department.id);
+    const next = has
+      ? user.departments.filter((ud) => ud.id !== department.id).map((ud) => ud.id)
+      : [...user.departments.map((ud) => ud.id), department.id];
+    run(
+      () => userApi.update(user.id, { departmentIds: next }),
+      `Departments updated for ${user.email}.`,
+    );
   }
 
   function toggleRole(user: UserRow, roleName: string) {
@@ -90,21 +108,18 @@ export default function UsersPage() {
               <td>{user.name}</td>
               <td>{user.email}</td>
               <td>
-                <select
-                  value={user.department.id}
-                  onChange={(e) =>
-                    run(
-                      () => userApi.update(user.id, { departmentId: Number(e.target.value) }),
-                      'Department updated.',
-                    )
-                  }
-                >
-                  {departments.map((d) => (
-                    <option key={d.id} value={d.id}>
-                      {d.code}
-                    </option>
-                  ))}
-                </select>
+                {departments.map((d) => (
+                  <label key={d.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4, marginRight: 8 }}>
+                    <input
+                      type="checkbox"
+                      checked={user.departments.some((ud) => ud.id === d.id)}
+                      onChange={() =>
+                        toggleDepartment(user, d)
+                      }
+                    />
+                    {d.code}
+                  </label>
+                ))}
               </td>
               <td>
                 {roles.map((role) => (
@@ -145,17 +160,15 @@ export default function UsersPage() {
             <input name="email" type="email" required maxLength={255} />
           </label>
           <label>
-            Department
-            <select name="departmentId" required defaultValue="">
-              <option value="" disabled>
-                Choose…
-              </option>
+            Departments
+            <span style={{ flexDirection: 'row', display: 'flex', gap: 8 }}>
               {departments.map((d) => (
-                <option key={d.id} value={d.id}>
+                <label key={d.id} style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+                  <input type="checkbox" name={`dept-${d.id}`} />
                   {d.code}
-                </option>
+                </label>
               ))}
-            </select>
+            </span>
           </label>
           <label>
             Initial password

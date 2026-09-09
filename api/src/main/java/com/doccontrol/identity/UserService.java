@@ -13,6 +13,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
 import java.util.ArrayList;
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -24,6 +25,7 @@ public class UserService {
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final UserDepartmentRepository userDepartmentRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
@@ -31,11 +33,12 @@ public class UserService {
     private final CurrentUserProvider currentUserProvider;
 
     public UserService(UserRepository userRepository, UserRoleRepository userRoleRepository,
-                       RoleRepository roleRepository, DepartmentRepository departmentRepository,
-                       PasswordEncoder passwordEncoder, AuditService auditService,
-                       CurrentUserProvider currentUserProvider) {
+                       UserDepartmentRepository userDepartmentRepository, RoleRepository roleRepository,
+                       DepartmentRepository departmentRepository, PasswordEncoder passwordEncoder,
+                       AuditService auditService, CurrentUserProvider currentUserProvider) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
+        this.userDepartmentRepository = userDepartmentRepository;
         this.roleRepository = roleRepository;
         this.departmentRepository = departmentRepository;
         this.passwordEncoder = passwordEncoder;
@@ -50,13 +53,17 @@ public class UserService {
                 .toList();
     }
 
+    /** True when the user belongs to the given department (Phase 2a permission basis). */
+    @Transactional(readOnly = true)
+    public boolean isDepartmentMember(Integer userId, Integer departmentId) {
+        return userDepartmentRepository.existsById(new UserDepartmentId(userId, departmentId));
+    }
+
     @Transactional
     public UserDto create(CreateUserRequest request) {
         if (userRepository.existsByEmailIgnoreCase(request.email())) {
             throw new ConflictException("A user with email '" + request.email() + "' already exists.");
         }
-        Department department = departmentRepository.findById(request.departmentId())
-                .orElseThrow(() -> new NotFoundException("Department " + request.departmentId() + " not found."));
 
         List<String> roleNames = request.roles() == null || request.roles().isEmpty()
                 ? List.of(DEFAULT_ROLE)
@@ -69,12 +76,12 @@ public class UserService {
         User user = new User();
         user.setName(request.name());
         user.setEmail(request.email());
-        user.setDepartment(department);
         user.setAdUsername(request.adUsername());
         user.setPasswordHash(passwordEncoder.encode(request.password()));
         user.setActive(true);
         userRepository.save(user);
 
+        replaceDepartments(user, request.departmentIds());
         for (Role role : roles) {
             UserRole membership = new UserRole();
             membership.setId(new UserRoleId(user.getId(), role.getId()));
@@ -86,7 +93,7 @@ public class UserService {
 
         auditService.record("user", user.getId(), "created", Map.of(
                 "email", user.getEmail(),
-                "department", department.getCode(),
+                "departments", departmentCodes(user),
                 "roles", roleNames));
 
         return UserDto.from(user);
@@ -109,12 +116,14 @@ public class UserService {
             after.put("name", request.name());
             user.setName(request.name());
         }
-        if (request.departmentId() != null && !request.departmentId().equals(user.getDepartment().getId())) {
-            Department department = departmentRepository.findById(request.departmentId())
-                    .orElseThrow(() -> new NotFoundException("Department " + request.departmentId() + " not found."));
-            before.put("department_id", user.getDepartment().getId());
-            after.put("department_id", department.getId());
-            user.setDepartment(department);
+        if (request.departmentIds() != null) {
+            List<String> beforeCodes = departmentCodes(user);
+            replaceDepartments(user, request.departmentIds());
+            List<String> afterCodes = departmentCodes(user);
+            if (!beforeCodes.equals(afterCodes)) {
+                before.put("departments", beforeCodes);
+                after.put("departments", afterCodes);
+            }
         }
         if (request.adUsername() != null && !request.adUsername().equals(user.getAdUsername())) {
             before.put("ad_username", user.getAdUsername());
@@ -191,5 +200,30 @@ public class UserService {
         target.setPasswordHash(passwordEncoder.encode(request.newPassword()));
         auditService.record("user", targetUserId, "password_changed", Map.of(
                 "self_service", selfService));
+    }
+
+    /** Full replacement of the user's department memberships (Phase 2a). */
+    private void replaceDepartments(User user, List<Integer> departmentIds) {
+        for (UserDepartment membership : new ArrayList<>(user.getDepartments())) {
+            userDepartmentRepository.delete(membership);
+        }
+        user.getDepartments().clear();
+        for (Integer departmentId : departmentIds.stream().distinct().toList()) {
+            Department department = departmentRepository.findById(departmentId)
+                    .orElseThrow(() -> new NotFoundException("Department " + departmentId + " not found."));
+            UserDepartment membership = new UserDepartment();
+            membership.setId(new UserDepartmentId(user.getId(), department.getId()));
+            membership.setUser(user);
+            membership.setDepartment(department);
+            userDepartmentRepository.save(membership);
+            user.getDepartments().add(membership);
+        }
+    }
+
+    private List<String> departmentCodes(User user) {
+        return user.getDepartments().stream()
+                .map(membership -> membership.getDepartment().getCode())
+                .sorted(Comparator.comparing(String::toString))
+                .toList();
     }
 }

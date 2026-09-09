@@ -36,6 +36,7 @@ public class AdminBootstrap implements ApplicationRunner {
 
     private final UserRepository userRepository;
     private final UserRoleRepository userRoleRepository;
+    private final UserDepartmentRepository userDepartmentRepository;
     private final RoleRepository roleRepository;
     private final DepartmentRepository departmentRepository;
     private final PasswordEncoder passwordEncoder;
@@ -43,11 +44,12 @@ public class AdminBootstrap implements ApplicationRunner {
     private final Environment environment;
 
     public AdminBootstrap(UserRepository userRepository, UserRoleRepository userRoleRepository,
-                          RoleRepository roleRepository, DepartmentRepository departmentRepository,
-                          PasswordEncoder passwordEncoder, BootstrapProperties properties,
-                          Environment environment) {
+                          UserDepartmentRepository userDepartmentRepository, RoleRepository roleRepository,
+                          DepartmentRepository departmentRepository, PasswordEncoder passwordEncoder,
+                          BootstrapProperties properties, Environment environment) {
         this.userRepository = userRepository;
         this.userRoleRepository = userRoleRepository;
+        this.userDepartmentRepository = userDepartmentRepository;
         this.roleRepository = roleRepository;
         this.departmentRepository = departmentRepository;
         this.passwordEncoder = passwordEncoder;
@@ -86,10 +88,15 @@ public class AdminBootstrap implements ApplicationRunner {
         User admin = new User();
         admin.setName("Administrator");
         admin.setEmail(properties.adminEmail());
-        admin.setDepartment(department);
         admin.setPasswordHash(passwordEncoder.encode(properties.adminPassword()));
         admin.setActive(true);
         userRepository.save(admin);
+
+        UserDepartment departmentMembership = new UserDepartment();
+        departmentMembership.setId(new UserDepartmentId(admin.getId(), department.getId()));
+        departmentMembership.setUser(admin);
+        departmentMembership.setDepartment(department);
+        userDepartmentRepository.save(departmentMembership);
 
         UserRole membership = new UserRole();
         membership.setId(new UserRoleId(admin.getId(), adminRole.getId()));

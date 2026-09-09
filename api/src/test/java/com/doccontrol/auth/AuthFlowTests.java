@@ -44,7 +44,7 @@ class AuthFlowTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.email").value(BOOTSTRAP_EMAIL))
                 .andExpect(jsonPath("$.roles[0]").value("Admin"))
-                .andExpect(jsonPath("$.department.code").value("QA"));
+                .andExpect(jsonPath("$.departments[0].code").value("QA"));
     }
 
     @Test

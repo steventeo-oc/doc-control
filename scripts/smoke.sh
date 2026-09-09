@@ -76,7 +76,7 @@ echo "OK — department $DEPT_CODE (id $DEPT_ID)"
 step "3. Create a second, regular user (roles default to User)"
 USER_JSON="$(mut "$TMP/admin.jar" -X POST "$API/users" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Smoke Viewer $SUFFIX\",\"email\":\"viewer$SUFFIX@doccontrol.local\",\"departmentId\":$DEPT_ID,\"password\":\"viewer-pass-123\"}")"
+  -d "{\"name\":\"Smoke Viewer $SUFFIX\",\"email\":\"viewer$SUFFIX@doccontrol.local\",\"departmentIds\":[$DEPT_ID],\"password\":\"viewer-pass-123\"}")"
 VIEWER_ID="$(field "$USER_JSON" id)"
 login "$TMP/viewer.jar" "viewer$SUFFIX@doccontrol.local" "viewer-pass-123"
 echo "OK — viewer user id $VIEWER_ID, logged in"
@@ -121,7 +121,7 @@ echo "OK — viewer reads $DOC_NUMBER (released documents are public to all auth
 step "10. Bonus: create a second ADMIN via roles on create (break-glass account)"
 ADMIN2="$(mut "$TMP/admin.jar" -X POST "$API/users" \
   -H "Content-Type: application/json" \
-  -d "{\"name\":\"Smoke Admin 2 $SUFFIX\",\"email\":\"admin2$SUFFIX@doccontrol.local\",\"departmentId\":$DEPT_ID,\"password\":\"admin2-pass-123\",\"roles\":[\"Admin\"]}")"
+  -d "{\"name\":\"Smoke Admin 2 $SUFFIX\",\"email\":\"admin2$SUFFIX@doccontrol.local\",\"departmentIds\":[$DEPT_ID],\"password\":\"admin2-pass-123\",\"roles\":[\"Admin\"]}")"
 ADMIN2_ID="$(field "$ADMIN2" id)"
 login "$TMP/admin2.jar" "admin2$SUFFIX@doccontrol.local" "admin2-pass-123"
 code="$(api -b "$TMP/admin2.jar" -o /dev/null -w '%{http_code}' "$API/users")"

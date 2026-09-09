@@ -77,7 +77,7 @@ export interface UserSummary {
   id: number;
   name: string;
   email: string;
-  department: Department;
+  departments: Department[];
   roles: string[];
   active: boolean;
 }
@@ -86,7 +86,7 @@ export interface UserRow {
   id: number;
   name: string;
   email: string;
-  department: Department;
+  departments: Department[];
   adUsername: string | null;
   active: boolean;
   roles: string[];

@@ -184,8 +184,12 @@ business days overdue — notifications via **Microsoft 365 / Graph API**
 Engine decision: **Flowable 8.0.0**, embedded (bounded spike completed:
 both engines handled ad-hoc per-instance assignment cleanly; Camunda 7 is
 EOL-bound and Camunda 8's distributed architecture doesn't fit single-VM
-compose). A design plan-back (data model, API shape, Flowable mapping) has
-been delivered for review — implementation starts only after that review.
+compose). The design plan-back was approved; the core approval flow
+(ad-hoc parallel start, 100% completion with version promotion, rejection,
+unrestricted delegation, pooled role tasks, reviewer visibility) is
+implemented and tested — the status-override stopgap is retired. Next:
+reminder/escalation job with the log-only NotificationSender, then the
+Microsoft Graph sender (pending Azure app registration).
 
 Items discovered during implementation that must be resolved before a real
 deployment, even if they don't block Sprint 1 development itself:
@@ -211,15 +215,12 @@ deployment, even if they don't block Sprint 1 development itself:
   `SpaCsrfTokenRequestHandler`), with `SameSite=Lax` kept on as defense in
   depth. The frontend sends the header automatically; `scripts/smoke.sh`
   demonstrates the full flow with curl.
-- [ ] **Admin status override is a Sprint 1 stopgap** — `PATCH /documents/{id}`
-  accepts an optional `status` field (admin-only, audited as
-  `status_changed`) so documents can reach approved/released before the
-  workflow engine exists and the visibility rule is exercised by real API
-  traffic. When Sprint 3 lands, status changes become workflow-driven and
-  this override must be **removed or narrowed to a deliberate break-glass
-  action** — an auditor asking "who can release a document without going
-  through approval?" must get the answer "no one", not "an undocumented
-  bypass nobody removed".
+- [x] **Admin status override was a Sprint 1 stopgap** — removed in Phase 2b
+  as planned: releases are now driven by the workflow engine (approval
+  completion promotes the version via `DocumentService.promoteVersion`).
+  An auditor asking "who can release a document without going through
+  approval?" now gets the answer "no one" — the engine's approval history
+  is the record.
 - [ ] **Mint a second break-glass Admin before go-live**: create the account
   (`POST /users` with `"roles": ["Admin"]`) and **securely store its
   credentials** (password manager / sealed envelope, not a chat message),

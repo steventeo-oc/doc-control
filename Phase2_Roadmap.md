@@ -63,9 +63,12 @@ friction.
   integration.
 - Conditional routing (#9) — Could/Maybe only, not required now.
 
-**Status**: design plan-back (data model, API shape, Flowable mapping)
-delivered for review. Implementation starts only after that review —
-and after the pilot-facing questions it raises are answered.
+**Status**: plan-back approved; core approval flow implemented and tested
+(ad-hoc parallel start, 100% completion with version promotion, rejection,
+unrestricted delegation, pooled role tasks via candidate groups, reviewer
+visibility). Remaining in this phase: reminder/escalation job (log-only
+sender first) and the Microsoft Graph integration — blocked on the Azure
+app registration / sender mailbox, handled operationally.
 
 ## Phase 2c — Document lifecycle extensions
 

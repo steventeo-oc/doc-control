@@ -17,6 +17,7 @@ import com.doccontrol.identity.UserRoleRepository;
 import com.doccontrol.lookup.Department;
 import com.doccontrol.lookup.DepartmentRepository;
 import com.doccontrol.lookup.DocumentTypeRepository;
+import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import com.doccontrol.CsrfTestSupport;
@@ -33,6 +34,7 @@ import org.springframework.test.web.servlet.MockMvc;
 import org.springframework.test.web.servlet.MvcResult;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Map;
 
 import static org.assertj.core.api.Assertions.assertThat;
@@ -168,13 +170,38 @@ class DocumentVersionEndpointTests {
 
         mockMvc.perform(get("/documents/{id}/versions", document.id()).session(session))
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].versionNumber").value(1));
+                .andExpect(jsonPath("$[0].versionNumber").value(1))
+                .andExpect(jsonPath("$[0].status").value("draft"));
 
-        // releasing is what makes version 1 current
-        mockMvc.perform(patch("/documents/{id}", document.id()).with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+        // releasing (via an approval) is what makes version 1 current
+        Integer version1Id = objectMapper.readValue(mockMvc
+                .perform(get("/documents/{id}/versions", document.id()).session(session))
+                .andReturn().getResponse().getContentAsString(), DocumentVersionDto[].class)[0].id();
+        Integer adminId = userRepository.findByEmailIgnoreCase(BOOTSTRAP_EMAIL).orElseThrow().getId();
+        MvcResult started = mockMvc.perform(
+                        post("/documents/{id}/versions/{versionId}/workflow/start",
+                                document.id(), version1Id).with(csrf()).session(session)
+                                .contentType("application/json")
+                                .content(objectMapper.writeValueAsString(Map.of("assignees",
+                                        List.of(Map.of("type", "USER", "userId", adminId))))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        WorkflowInstanceDto instance = objectMapper.readValue(
+                started.getResponse().getContentAsString(), WorkflowInstanceDto.class);
+
+        // the assigned reviewer (an admin here) approves — version 1 becomes current
+        mockMvc.perform(post("/workflow-tasks/{taskId}/complete",
+                        instance.tasks().get(0).id()).with(csrf())
+                        .session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
-                .andExpect(status().isOk())
+                        .content(objectMapper.writeValueAsString(Map.of("approved", true))))
+                .andExpect(status().isOk());
+
+        mockMvc.perform(get("/documents/{id}/versions", document.id()).session(session))
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].versionNumber").value(1))
+                .andExpect(jsonPath("$[0].status").value("current"));
+        mockMvc.perform(get("/documents/{id}", document.id()).session(session))
                 .andExpect(jsonPath("$.currentVersionId").isNotEmpty());
     }
 
@@ -253,12 +280,32 @@ class DocumentVersionEndpointTests {
                 DocumentVersionDto[].class);
         Integer v1Id = versions[0].id();
 
-        // release it — v1 becomes the current version
-        mockMvc.perform(patch("/documents/" + doc.id()).with(csrf()).session(adminSession)
+        // release it via the workflow (Phase 2b): owner starts the approval,
+        // relviewer is the assigned reviewer and approves
+        Integer viewerId = userRepository.findByEmailIgnoreCase("relviewer@doccontrol.test")
+                .orElseThrow().getId();
+        MvcResult started = mockMvc.perform(
+                        post("/documents/{id}/versions/{versionId}/workflow/start", doc.id(), v1Id)
+                                .with(csrf()).session(ownerSession)
+                                .contentType("application/json")
+                                .content(objectMapper.writeValueAsString(Map.of("assignees",
+                                        List.of(Map.of("type", "USER", "userId", viewerId))))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        WorkflowInstanceDto instance = objectMapper.readValue(
+                started.getResponse().getContentAsString(), WorkflowInstanceDto.class);
+        String taskId = instance.tasks().get(0).id();
+
+        // the assigned reviewer can now see the draft document
+        mockMvc.perform(get("/documents/{id}", doc.id()).session(viewerSession))
+                .andExpect(status().isOk());
+
+        // relviewer approves — v1 becomes the current version
+        mockMvc.perform(post("/workflow-tasks/{taskId}/complete", taskId).with(csrf()).session(viewerSession)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                        .content(objectMapper.writeValueAsString(Map.of("approved", true))))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.currentVersionId").value(v1Id));
+                .andExpect(jsonPath("$.status").value("completed"));
         mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
                 .andExpect(jsonPath("$[0].status").value("current"));
 
@@ -310,12 +357,25 @@ class DocumentVersionEndpointTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
 
-        // admin re-releases (status already released) — now the draft publishes:
+        // re-release v2 via a second approval — now the draft publishes:
         // v2 becomes current, v1 becomes superseded
-        mockMvc.perform(patch("/documents/" + doc.id()).with(csrf()).session(adminSession)
+        MvcResult started2 = mockMvc.perform(
+                        post("/documents/{id}/versions/{versionId}/workflow/start", doc.id(), v2Id)
+                                .with(csrf()).session(ownerSession)
+                                .contentType("application/json")
+                                .content(objectMapper.writeValueAsString(Map.of("assignees",
+                                        List.of(Map.of("type", "USER", "userId", viewerId))))))
+                .andExpect(status().isCreated())
+                .andReturn();
+        WorkflowInstanceDto instance2 = objectMapper.readValue(
+                started2.getResponse().getContentAsString(), WorkflowInstanceDto.class);
+        mockMvc.perform(post("/workflow-tasks/{taskId}/complete",
+                        instance2.tasks().get(0).id()).with(csrf()).session(viewerSession)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
+                        .content(objectMapper.writeValueAsString(Map.of("approved", true))))
                 .andExpect(status().isOk())
+                .andExpect(jsonPath("$.status").value("completed"));
+        mockMvc.perform(get("/documents/{id}", doc.id()).session(ownerSession))
                 .andExpect(jsonPath("$.currentVersionId").value(v2Id));
         mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
                 .andExpect(jsonPath("$[0].status").value("superseded"))
@@ -352,7 +412,7 @@ class DocumentVersionEndpointTests {
         membership.setId(new UserDepartmentId(user.getId(), department.getId()));
         membership.setUser(user);
         membership.setDepartment(department);
-        userDepartmentRepository.save(membership);
+        userDepartmentRepository.saveAndFlush(membership);
     }
 
     private Integer sopTypeId() {
@@ -393,7 +453,8 @@ class DocumentVersionEndpointTests {
         departmentMembership.setId(new UserDepartmentId(user.getId(), qa.getId()));
         departmentMembership.setUser(user);
         departmentMembership.setDepartment(qa);
-        userDepartmentRepository.save(departmentMembership);
+        userDepartmentRepository.saveAndFlush(departmentMembership);
+        user.getDepartments().add(departmentMembership);
 
         for (String roleName : roleNames) {
             Role role = roleRepository.findByName(roleName).orElseThrow();
@@ -401,7 +462,8 @@ class DocumentVersionEndpointTests {
             membership.setId(new UserRoleId(user.getId(), role.getId()));
             membership.setUser(user);
             membership.setRole(role);
-            userRoleRepository.save(membership);
+            userRoleRepository.saveAndFlush(membership);
+        user.getRoles().add(membership);
         }
         return email;
     }

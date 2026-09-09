@@ -108,15 +108,21 @@ code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$API/documents/
 [ "$code" = "404" ] || fail "expected 404 for hidden draft, got $code"
 echo "OK (404 as expected)"
 
-step "8. Admin releases the document via the status override (Sprint 1 stopgap)"
-mut "$TMP/admin.jar" -X PATCH "$API/documents/$DOC_ID" \
-  -H "Content-Type: application/json" -d '{"status":"released"}' \
-  | python -c "import sys,json;print('OK — document status is now', json.load(sys.stdin)['status'])"
+step "8. Owner starts the approval workflow; the viewer is the assigned reviewer"
+VIEWER_ID="$(field "$USER_JSON" id)"
+V1_ID="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/versions" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+INST="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions/$V1_ID/workflow/start"   -H "Content-Type: application/json"   -d "{\"assignees\":[{\"type\":\"USER\",\"userId\":$VIEWER_ID}]}"   | python -c "import sys,json;print(json.load(sys.stdin)['id'])")"
+TASK="$(api -b "$TMP/viewer.jar" "$API/workflow-instances/$INST/tasks" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+echo "OK — approval instance $INST started, reviewer task assigned"
 
-step "9. The second user can now see the released document"
+step "9. The reviewer approves — 100% reached, document released and version promoted"
+mut "$TMP/viewer.jar" -X POST "$API/workflow-tasks/$TASK/complete"   -H "Content-Type: application/json"   -d '{"approved":true,"comment":"Smoke approval"}'   | python -c "import sys,json;d=json.load(sys.stdin);print('OK — approval', d['status'])"
+
+step "9b. The second user can now see the released document"
 SEEN="$(api -b "$TMP/viewer.jar" "$API/documents/$DOC_ID")"
-[ "$(field "$SEEN" documentNumber)" = "$DOC_NUMBER" ] || fail "viewer sees the wrong document"
-echo "OK — viewer reads $DOC_NUMBER (released documents are public to all authenticated users)"
+[ "$(field "$SEEN" status)" = "released" ] || fail "document is not released"
+[ "$(field "$SEEN" currentVersionId)" = "$V1_ID" ] || fail "released version is not current"
+echo "OK — viewer reads $DOC_NUMBER, released with version 1 current"
 
 step "10. Bonus: create a second ADMIN via roles on create (break-glass account)"
 ADMIN2="$(mut "$TMP/admin.jar" -X POST "$API/users" \

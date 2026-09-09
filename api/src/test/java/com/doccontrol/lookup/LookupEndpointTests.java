@@ -183,7 +183,8 @@ class LookupEndpointTests {
         departmentMembership.setId(new UserDepartmentId(user.getId(), qa.getId()));
         departmentMembership.setUser(user);
         departmentMembership.setDepartment(qa);
-        userDepartmentRepository.save(departmentMembership);
+        userDepartmentRepository.saveAndFlush(departmentMembership);
+        user.getDepartments().add(departmentMembership);
 
         for (String roleName : roleNames) {
             Role role = roleRepository.findByName(roleName).orElseThrow();
@@ -191,7 +192,8 @@ class LookupEndpointTests {
             membership.setId(new UserRoleId(user.getId(), role.getId()));
             membership.setUser(user);
             membership.setRole(role);
-            userRoleRepository.save(membership);
+            userRoleRepository.saveAndFlush(membership);
+        user.getRoles().add(membership);
         }
         return email;
     }

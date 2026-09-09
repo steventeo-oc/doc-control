@@ -85,14 +85,14 @@ class DocumentNumberConcurrencyTests {
         departmentMembership.setId(new UserDepartmentId(creatorId, qa.getId()));
         departmentMembership.setUser(creator);
         departmentMembership.setDepartment(qa);
-        userDepartmentRepository.save(departmentMembership);
+        userDepartmentRepository.saveAndFlush(departmentMembership);
 
         // the creator must be a member of the temp department it creates in
         UserDepartment creatorDeptMembership = new UserDepartment();
         creatorDeptMembership.setId(new UserDepartmentId(creatorId, deptId));
         creatorDeptMembership.setUser(creator);
         creatorDeptMembership.setDepartment(departmentRepository.findById(deptId).orElseThrow());
-        userDepartmentRepository.save(creatorDeptMembership);
+        userDepartmentRepository.saveAndFlush(creatorDeptMembership);
 
         Authentication creatorAuth = new UsernamePasswordAuthenticationToken(
                 new AppUserPrincipal(creatorId, creator.getEmail(), "x", true,

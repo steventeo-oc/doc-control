@@ -27,6 +27,7 @@ import java.util.ArrayList;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 
 @Service
 public class DocumentService {
@@ -50,6 +51,7 @@ public class DocumentService {
     private final DocumentSequenceService documentSequenceService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+    private final com.doccontrol.workflow.ReviewerAccess reviewerAccess;
 
     public DocumentService(DocumentRepository documentRepository,
                            DocumentVersionRepository documentVersionRepository,
@@ -59,7 +61,8 @@ public class DocumentService {
                            com.doccontrol.identity.UserDepartmentRepository userDepartmentRepository,
                            DocumentSequenceService documentSequenceService,
                            AuditService auditService,
-                           CurrentUserProvider currentUserProvider) {
+                           CurrentUserProvider currentUserProvider,
+                           com.doccontrol.workflow.ReviewerAccess reviewerAccess) {
         this.documentRepository = documentRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.documentTypeRepository = documentTypeRepository;
@@ -69,6 +72,11 @@ public class DocumentService {
         this.documentSequenceService = documentSequenceService;
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
+        this.reviewerAccess = reviewerAccess;
+    }
+
+    private List<String> reviewerRoleNames() {
+        return currentUserProvider.getCurrentUserRoleNames();
     }
 
     @Transactional
@@ -161,12 +169,24 @@ public class DocumentService {
             parts.add((root, query, cb) -> cb.like(cb.lower(root.get("name")), "%" + needle + "%"));
         }
         // Permission filtering happens here, in the query — not hidden in the
-        // frontend (CLAUDE.md convention 4).
+        // frontend (CLAUDE.md convention 4). Assigned reviewers also see the
+        // drafts they are reviewing (provisional visibility rule).
         if (!currentUserProvider.isAdmin()) {
             Integer userId = currentUserProvider.getCurrentUserId();
-            parts.add((root, query, cb) -> cb.or(
-                    root.get("status").in(PUBLIC_STATUSES),
-                    cb.equal(root.get("owner").get("id"), userId)));
+            Set<Integer> reviewing = reviewerAccess.reviewerVisibleDocumentIds(
+                    userId, reviewerRoleNames());
+            Set<Integer> myDepartments = currentUserDepartmentIds();
+            parts.add((root, query, cb) -> {
+                Predicate base = cb.or(
+                        root.get("status").in(PUBLIC_STATUSES),
+                        cb.equal(root.get("owner").get("id"), userId),
+                        myDepartments.isEmpty()
+                                ? cb.disjunction()
+                                : root.get("department").get("id").in(myDepartments));
+                return reviewing.isEmpty()
+                        ? base
+                        : cb.or(base, root.get("id").in(reviewing));
+            });
         }
 
         Specification<Document> spec = Specification.allOf(parts);
@@ -179,16 +199,6 @@ public class DocumentService {
     public DocumentDto update(Integer id, UpdateDocumentRequest request) {
         Document document = findVisible(id);
         requireCanModify(document);
-
-        // Status override is admin-only and rejected explicitly — never
-        // silently dropped (Sprint 1 stopgap, see CLAUDE.md checklist).
-        DocumentStatus newStatus = null;
-        if (request.status() != null) {
-            if (!currentUserProvider.isAdmin()) {
-                throw new ForbiddenException("Only admins can change document status.");
-            }
-            newStatus = PersistentEnums.fromValue(DocumentStatus.class, request.status());
-        }
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
@@ -217,60 +227,6 @@ public class DocumentService {
             auditService.record("document", id, "updated", Map.of("before", before, "after", after));
         }
 
-        if (newStatus != null) {
-            // Releasing (or approving) a document is what moves the public
-            // version pointer: it re-points current_version_id at the latest
-            // version, including a re-release of an already-released document
-            // (that is how an uploaded draft gets published). Uploads never
-            // move the pointer themselves.
-            boolean statusChanged = newStatus != document.getStatus();
-            boolean makingPublic = PUBLIC_STATUSES.contains(newStatus);
-            Integer pointerBefore = document.getCurrentVersion() == null ? null : document.getCurrentVersion().getId();
-            Integer pointerAfter = pointerBefore;
-
-            if (makingPublic) {
-                DocumentVersion latest = documentVersionRepository
-                        .findTopByDocument_IdOrderByVersionNumberDesc(id)
-                        .orElse(null);
-                if (latest != null) {
-                    DocumentVersion previousCurrent = document.getCurrentVersion();
-                    if (!latest.equals(previousCurrent)) {
-                        document.setCurrentVersion(latest);
-                        pointerAfter = latest.getId();
-                    }
-                    // Version lifecycle: the newly-current version becomes
-                    // "current", the previously-current one becomes
-                    // "superseded", and versions never pointed to stay
-                    // "draft". Idempotent, so it also normalizes rows created
-                    // before this rule existed.
-                    if (latest.getStatus() != DocumentVersionStatus.CURRENT) {
-                        latest.setStatus(DocumentVersionStatus.CURRENT);
-                    }
-                    if (previousCurrent != null && !previousCurrent.equals(latest)
-                            && previousCurrent.getStatus() != DocumentVersionStatus.SUPERSEDED) {
-                        previousCurrent.setStatus(DocumentVersionStatus.SUPERSEDED);
-                    }
-                }
-            }
-
-            if (statusChanged) {
-                DocumentStatus previous = document.getStatus();
-                document.setStatus(newStatus);
-                Map<String, Object> statusBefore = new LinkedHashMap<>();
-                statusBefore.put("status", previous == null ? "unknown" : previous.getValue());
-                statusBefore.put("current_version_id", pointerBefore);
-                Map<String, Object> statusAfter = new LinkedHashMap<>();
-                statusAfter.put("status", newStatus.getValue());
-                statusAfter.put("current_version_id", pointerAfter);
-                auditService.record("document", id, "status_changed",
-                        Map.of("before", statusBefore, "after", statusAfter));
-            } else if (!pointerBefore.equals(pointerAfter)) {
-                // re-release of an already-public document: the pointer moved
-                auditService.record("document", id, "updated", Map.of(
-                        "before", Map.of("current_version_id", pointerBefore),
-                        "after", Map.of("current_version_id", pointerAfter)));
-            }
-        }
         return DocumentDto.from(document);
     }
 
@@ -307,7 +263,13 @@ public class DocumentService {
         Document document = documentRepository.findById(id)
                 .orElseThrow(() -> new NotFoundException("Document " + id + " not found."));
         boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
-        if (!isOwner && !currentUserProvider.isAdmin() && !PUBLIC_STATUSES.contains(document.getStatus())) {
+        boolean isReviewer = !currentUserProvider.isAdmin()
+                && reviewerAccess.isReviewer(currentUserProvider.getCurrentUserId(),
+                        reviewerRoleNames(), document.getId());
+        boolean isDepartmentMember = currentUserDepartmentIds()
+                .contains(document.getDepartment().getId());
+        if (!isOwner && !isReviewer && !isDepartmentMember && !currentUserProvider.isAdmin()
+                && !PUBLIC_STATUSES.contains(document.getStatus())) {
             throw new NotFoundException("Document " + id + " not found.");
         }
         return document;
@@ -331,8 +293,52 @@ public class DocumentService {
         return department;
     }
 
+    /**
+     * Publishes an approved version (Phase 2b): identical pointer/status/
+     * audit semantics the admin status override used, now driven by the
+     * workflow engine when an approval completes.
+     */
+    @Transactional
+    public void promoteVersion(DocumentVersion version) {
+        Document document = version.getDocument();
+        DocumentVersion previous = document.getCurrentVersion();
+        Integer pointerBefore = previous == null ? null : previous.getId();
+
+        if (!version.equals(previous)) {
+            document.setCurrentVersion(version);
+        }
+        if (version.getStatus() != DocumentVersionStatus.CURRENT) {
+            version.setStatus(DocumentVersionStatus.CURRENT);
+        }
+        if (previous != null && !previous.equals(version)
+                && previous.getStatus() != DocumentVersionStatus.SUPERSEDED) {
+            previous.setStatus(DocumentVersionStatus.SUPERSEDED);
+        }
+
+        if (document.getStatus() != DocumentStatus.RELEASED) {
+            DocumentStatus previousStatus = document.getStatus();
+            document.setStatus(DocumentStatus.RELEASED);
+            Map<String, Object> before = new LinkedHashMap<>();
+            before.put("status", previousStatus == null ? "unknown" : previousStatus.getValue());
+            before.put("current_version_id", pointerBefore);
+            Map<String, Object> after = new LinkedHashMap<>();
+            after.put("status", DocumentStatus.RELEASED.getValue());
+            after.put("current_version_id", version.getId());
+            auditService.record("document", document.getId(), "status_changed",
+                    Map.of("before", before, "after", after));
+        } else if (!pointerBefore.equals(version.getId())) {
+            auditService.record("document", document.getId(), "updated", Map.of(
+                    "before", Map.of("current_version_id", pointerBefore),
+                    "after", Map.of("current_version_id", version.getId())));
+        }
+    }
+
     private Specification<Document> notDeleted() {
         return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
+    }
+
+    private java.util.Set<Integer> currentUserDepartmentIds() {
+        return currentUserProvider.getCurrentUserDepartmentIds();
     }
 
     private void requireDepartmentMember(Department department) {

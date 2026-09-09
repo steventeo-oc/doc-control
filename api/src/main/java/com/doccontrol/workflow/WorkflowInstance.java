@@ -18,7 +18,12 @@ import org.hibernate.annotations.CreationTimestamp;
 
 import java.time.LocalDateTime;
 
-/** One approval run per document version. */
+/**
+ * Thin link between a document version and the Flowable process instance
+ * that runs its approval (Phase 2b). Task/assignee state lives in Flowable;
+ * this row exists for domain correlation, ISO audit, and the notification
+ * job.
+ */
 @Entity
 @Table(name = "workflow_instance")
 @Getter
@@ -34,13 +39,9 @@ public class WorkflowInstance {
     @JoinColumn(name = "document_version_id", nullable = false)
     private DocumentVersion documentVersion;
 
-    @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "template_id", nullable = false)
-    private WorkflowTemplate template;
-
-    @ManyToOne(fetch = FetchType.LAZY)
-    @JoinColumn(name = "current_stage_id")
-    private WorkflowStage currentStage;
+    /** Flowable process instance id; null between row creation and engine start. */
+    @Column(name = "process_instance_id")
+    private String processInstanceId;
 
     private WorkflowInstanceStatus status;
 

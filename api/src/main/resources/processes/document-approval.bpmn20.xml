@@ -1,0 +1,26 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<definitions xmlns="http://www.omg.org/spec/BPMN/20100524/MODEL"
+             xmlns:flowable="http://flowable.org/bpmn"
+             xmlns:xsi="http://www.w3.org/2001/XMLSchema-instance"
+             id="approval-definitions"
+             targetNamespace="http://doccontrol.workflow">
+  <!-- Confirmed shape (QA): single stage, parallel, 100% required.
+       One task instance per chosen assignee slot ("user:<id>" or
+       "role:<name>"); the process ends when every slot completes, which
+       is exactly the 100% rule. Assignment and due dates are applied by
+       SlotAssignmentListener on task creation. -->
+  <process id="documentApproval" isExecutable="true">
+    <startEvent id="start"/>
+    <sequenceFlow id="f1" sourceRef="start" targetRef="review"/>
+    <userTask id="review" name="Review document version">
+      <bpmn:extensionElements xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
+        <flowable:taskListener event="create" delegateExpression="${slotAssignmentListener}"/>
+      </bpmn:extensionElements>
+      <multiInstanceLoopCharacteristics isSequential="false"
+                                        flowable:collection="${assigneeSlots}"
+                                        flowable:elementVariable="slot"/>
+    </userTask>
+    <sequenceFlow id="f2" sourceRef="review" targetRef="end"/>
+    <endEvent id="end"/>
+  </process>
+</definitions>

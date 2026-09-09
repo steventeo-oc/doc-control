@@ -34,21 +34,14 @@ spring:
       max-file-size: 50MB
       max-request-size: 55MB
 
-server:
-  port: 8080
-  # The API is mounted under /api so the SPA owns every other path — without
-  # this, browser deep-links like /documents/42 would collide with the API
-  # route /documents/{id} at the reverse proxy. The API spec's resource paths
-  # (e.g. /auth/login) are unchanged relative to this mount.
-  servlet:
-    context-path: /api
-    session:
-      cookie:
-        # Mitigates classic cross-site POSTs while CSRF is disabled for the
-        # API (see SecurityConfig) — revisit when the web frontend is wired up.
-        same-site: "lax"
-
 doccontrol:
+  workflow:
+    # Escalation/reminder tuning confirmed with QA; overridable via
+    # DOCCONTROL_WORKFLOW_* env vars (see WorkflowProperties).
+    due-business-days: 3
+    reminder-before-days: 1
+    escalate-after-overdue-days: 2
+
   storage:
     # Defaults match docker-compose.yml's minio service on localhost (dev).
     # Inside compose the api container must override the endpoint:
@@ -63,6 +56,7 @@ doccontrol:
     access-key: doccontrol
     secret-key: changeme_in_env_file
     bucket: doccontrol
+
   bootstrap:
     # Initial admin account, created on first startup ONLY if the user table
     # is empty. Override the password via DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD
@@ -74,3 +68,24 @@ doccontrol:
 app:
   cors:
     allowed-origins: http://localhost:3000
+
+server:
+  port: 8080
+  # The API is mounted under /api so the SPA owns every other path — without
+  # this, browser deep-links like /documents/42 would collide with the API
+  # route /documents/{id} at the reverse proxy. The API spec's resource paths
+  # (e.g. /auth/login) are unchanged relative to this mount.
+  servlet:
+    context-path: /api
+    session:
+      cookie:
+        # Mitigates classic cross-site POSTs while CSRF tokens do the real
+        # work (see SecurityConfig).
+        same-site: "lax"
+
+flowable:
+  # Embedded engine (Phase 2b): shares our DataSource and transactions; its
+  # ACT_* schema is auto-created. No async executor — the process is fully
+  # synchronous and reminders/escalation are our own scheduled job.
+  database-schema-update: "true"
+  async-executor-activate: false

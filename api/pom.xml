@@ -62,6 +62,14 @@
             <version>8.5.17</version>
         </dependency>
 
+        <!-- Phase 2b: embedded BPMN engine (process engine only, not the
+             full multi-engine starter) -->
+        <dependency>
+            <groupId>org.flowable</groupId>
+            <artifactId>flowable-spring-boot-starter-process</artifactId>
+            <version>8.0.0</version>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

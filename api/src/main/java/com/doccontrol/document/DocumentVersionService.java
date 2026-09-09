@@ -72,10 +72,23 @@ public class DocumentVersionService {
         return DocumentVersionDto.from(version);
     }
 
+    /**
+     * Version history is owner/admin-only beyond the current version: normal
+     * viewers of a released document see exactly the version the public sees
+     * (pilot finding — drafts in the history leaked unapproved content).
+     */
     @Transactional(readOnly = true)
     public List<DocumentVersionDto> list(Integer documentId) {
         Document document = documentService.requireVisible(documentId);
-        return versionRepository.findAllByDocumentIdOrderByVersionNumberAsc(document.getId()).stream()
+        if (documentService.canModify(document)) {
+            return versionRepository.findAllByDocumentIdOrderByVersionNumberAsc(document.getId()).stream()
+                    .map(DocumentVersionDto::from)
+                    .toList();
+        }
+        if (document.getCurrentVersion() == null) {
+            return List.of();
+        }
+        return java.util.stream.Stream.of(document.getCurrentVersion())
                 .map(DocumentVersionDto::from)
                 .toList();
     }
@@ -98,10 +111,18 @@ public class DocumentVersionService {
     }
 
     private DocumentVersion findVisibleVersion(Integer documentId, Integer versionId) {
-        documentService.requireVisible(documentId);
+        Document document = documentService.requireVisible(documentId);
         DocumentVersion version = versionRepository.findById(versionId)
                 .orElseThrow(() -> new NotFoundException("Version " + versionId + " not found."));
         if (!version.getDocument().getId().equals(documentId)) {
+            throw new NotFoundException("Version " + versionId + " not found.");
+        }
+        // Non-owner/non-admin viewers only know about the version the public
+        // sees — anything else 404s (existence not leaked), matching the
+        // document-level visibility pattern.
+        if (!documentService.canModify(document)
+                && document.getCurrentVersion() != null
+                && !versionId.equals(document.getCurrentVersion().getId())) {
             throw new NotFoundException("Version " + versionId + " not found.");
         }
         return version;

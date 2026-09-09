@@ -135,6 +135,12 @@ the data model doc — resolved here so they're answered once, not re-asked.
   (This deliberately deviates from the API spec's create-document example,
   which shows current_version_id set on a draft; that example predates this
   decision.) Sprint 3's promote endpoint will own this properly.
+- **Version history visibility (pilot finding #2)** — for non-owner/non-admin
+  viewers of a visible document, the version list shows exactly the current
+  version, and version detail/download for any other version id returns 404
+  (existence not leaked). Owners and admins see the full history. Draft
+  versions of a released document are therefore not enumerable or
+  downloadable by normal users.
 - **Confirmed low-stakes assumptions**: Java 21 + Spring Boot 3.x; Maven;
   session-cookie auth via Spring Security; `audit_log.details` as Postgres
   `jsonb`; seed roles limited to `Admin` and `User` for now (role names like

@@ -264,6 +264,27 @@ class DocumentVersionEndpointTests {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(v1Body)).isEqualTo("v1 body");
 
+        // version history beyond the current version is owner/admin-only:
+        // the viewer's list shows exactly the current version, and the draft
+        // 404s on detail and download (existence not leaked)
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(viewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(v1Id));
+        mockMvc.perform(get("/documents/{id}/versions/{versionId}", doc.id(), v2Id).session(viewerSession))
+                .andExpect(status().isNotFound());
+        mockMvc.perform(
+                        get("/documents/{id}/versions/{versionId}/download", doc.id(), v2Id).session(viewerSession))
+                .andExpect(status().isNotFound());
+
+        // owner and admin keep the full history
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(2));
+
         // admin re-releases (status already released) — now the draft publishes
         mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
                         .contentType("application/json")
@@ -280,6 +301,12 @@ class DocumentVersionEndpointTests {
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(v2Body)).isEqualTo("v2 body");
+
+        // and their version list now shows exactly v2
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(viewerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.length()").value(1))
+                .andExpect(jsonPath("$[0].id").value(v2Id));
 
         // the pointer move is audited
         assertThat(auditLogRepository.findAll())

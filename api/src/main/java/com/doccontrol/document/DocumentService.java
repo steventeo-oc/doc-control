@@ -105,10 +105,15 @@ public class DocumentService {
 
     /** Owner-or-admin gate shared with the version endpoints. */
     public void requireCanModify(Document document) {
-        boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
-        if (!isOwner && !currentUserProvider.isAdmin()) {
+        if (!canModify(document)) {
             throw new ForbiddenException("Only the document owner or an admin can modify this document.");
         }
+    }
+
+    /** True when the caller owns the document or is an admin. */
+    public boolean canModify(Document document) {
+        boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
+        return isOwner || currentUserProvider.isAdmin();
     }
 
     @Transactional(readOnly = true)

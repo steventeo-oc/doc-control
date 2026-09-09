@@ -1,0 +1,281 @@
+* {
+  box-sizing: border-box;
+}
+
+body {
+  margin: 0;
+  font-family:
+    system-ui,
+    -apple-system,
+    'Segoe UI',
+    Roboto,
+    sans-serif;
+  font-size: 14px;
+  color: #1c2733;
+  background: #f4f6f8;
+}
+
+.layout {
+  min-height: 100vh;
+  display: flex;
+  flex-direction: column;
+}
+
+.topbar {
+  display: flex;
+  align-items: center;
+  gap: 24px;
+  padding: 0 24px;
+  height: 52px;
+  background: #16324f;
+  color: #fff;
+}
+
+.topbar .brand {
+  font-weight: 700;
+  letter-spacing: 0.02em;
+}
+
+.topbar nav {
+  display: flex;
+  gap: 4px;
+  flex: 1;
+}
+
+.topbar nav a {
+  color: #c6d3e0;
+  text-decoration: none;
+  padding: 6px 12px;
+  border-radius: 4px;
+}
+
+.topbar nav a:hover {
+  background: rgba(255, 255, 255, 0.12);
+  color: #fff;
+}
+
+.topbar nav a.active {
+  background: rgba(255, 255, 255, 0.18);
+  color: #fff;
+}
+
+.session {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+}
+
+.session small {
+  opacity: 0.7;
+}
+
+.content {
+  flex: 1;
+  padding: 24px;
+  max-width: 1100px;
+  width: 100%;
+  margin: 0 auto;
+}
+
+.page-loading {
+  padding: 48px;
+  text-align: center;
+  color: #66788a;
+}
+
+h1 {
+  font-size: 20px;
+  margin: 0 0 16px;
+}
+
+h2 {
+  font-size: 16px;
+  margin: 24px 0 8px;
+}
+
+.card {
+  background: #fff;
+  border: 1px solid #dde4ea;
+  border-radius: 6px;
+  padding: 16px;
+  margin-bottom: 16px;
+}
+
+table.data {
+  width: 100%;
+  border-collapse: collapse;
+  background: #fff;
+  border: 1px solid #dde4ea;
+  border-radius: 6px;
+  overflow: hidden;
+}
+
+table.data th,
+table.data td {
+  text-align: left;
+  padding: 8px 12px;
+  border-bottom: 1px solid #edf1f4;
+}
+
+table.data th {
+  background: #f0f3f6;
+  font-size: 12px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #55677a;
+}
+
+table.data tr:last-child td {
+  border-bottom: none;
+}
+
+form.stack {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  max-width: 420px;
+}
+
+form.inline {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+}
+
+label {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+  color: #55677a;
+}
+
+input,
+select {
+  font: inherit;
+  padding: 6px 8px;
+  border: 1px solid #c3cdd6;
+  border-radius: 4px;
+  background: #fff;
+  min-width: 120px;
+}
+
+button {
+  font: inherit;
+  padding: 6px 14px;
+  border: 1px solid #c3cdd6;
+  border-radius: 4px;
+  background: #fff;
+  cursor: pointer;
+}
+
+button:hover {
+  background: #f0f3f6;
+}
+
+button.primary {
+  background: #1a6fb5;
+  border-color: #1a6fb5;
+  color: #fff;
+}
+
+button.primary:hover {
+  background: #155a94;
+}
+
+button.danger {
+  color: #a02020;
+  border-color: #d8a0a0;
+}
+
+.error-banner {
+  background: #fdecec;
+  border: 1px solid #eabbbb;
+  color: #8f1d1d;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.success-banner {
+  background: #eaf6ec;
+  border: 1px solid #b5dcbc;
+  color: #1d5c26;
+  border-radius: 4px;
+  padding: 8px 12px;
+  margin: 8px 0;
+}
+
+.badge {
+  display: inline-block;
+  padding: 2px 8px;
+  border-radius: 10px;
+  font-size: 12px;
+  background: #e8ecf0;
+  color: #44566a;
+}
+
+.badge.released,
+.badge.approved {
+  background: #e2f2e5;
+  color: #1d5c26;
+}
+
+.badge.draft {
+  background: #fdf3dd;
+  color: #7a5b13;
+}
+
+.badge.in_review {
+  background: #e3edfb;
+  color: #1d4f8f;
+}
+
+.badge.superseded,
+.badge.obsolete {
+  background: #f3e6e6;
+  color: #7a2e2e;
+}
+
+.filters {
+  display: flex;
+  gap: 8px;
+  align-items: end;
+  flex-wrap: wrap;
+  margin-bottom: 12px;
+}
+
+.pagination {
+  display: flex;
+  gap: 8px;
+  align-items: center;
+  margin-top: 12px;
+  color: #55677a;
+}
+
+.muted {
+  color: #7b8a99;
+  font-size: 12px;
+}
+
+.meta-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fill, minmax(220px, 1fr));
+  gap: 8px 24px;
+}
+
+.meta-grid div {
+  padding: 4px 0;
+}
+
+.meta-grid dt {
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.04em;
+  color: #7b8a99;
+}
+
+.meta-grid dd {
+  margin: 2px 0 0;
+}

@@ -10,6 +10,12 @@ entity layer; endpoints come with the API work).
 - Spring Data JPA with `ddl-auto=validate` — Hibernate only verifies that the
   entities match the migrated schema; it never alters it
 
+**API mount:** all endpoints live under `/api` (`server.servlet.context-path`)
+so the SPA owns every other path — browser deep links like `/documents/42`
+reach the React app, not the API. The spec's resource paths (`/auth/login`,
+`/documents`, …) are unchanged relative to that mount, so the API base URL in
+deployment is `http://host:8080/api`.
+
 ## Layout
 
 ```

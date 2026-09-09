@@ -44,31 +44,34 @@ services:
       timeout: 5s
       retries: 5
 
-  # api:
-  #   build: ./api            # Spring Boot app — uncomment once the
-  #   container_name: doccontrol-api        # project skeleton exists
-  #   restart: unless-stopped
-  #   depends_on:
-  #     postgres:
-  #       condition: service_healthy
-  #     minio:
-  #       condition: service_healthy
-  #   environment:
-  #     SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/doccontrol
-  #     SPRING_DATASOURCE_USERNAME: doccontrol
-  #     SPRING_DATASOURCE_PASSWORD: changeme_in_env_file
-  #     MINIO_ENDPOINT: http://minio:9000
-  #   ports:
-  #     - "8080:8080"
+  api:
+    build: ./api
+    container_name: doccontrol-api
+    restart: unless-stopped
+    depends_on:
+      postgres:
+        condition: service_healthy
+      minio:
+        condition: service_healthy
+    environment:
+      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/doccontrol
+      SPRING_DATASOURCE_USERNAME: doccontrol
+      SPRING_DATASOURCE_PASSWORD: changeme_in_env_file
+      DOCCONTROL_STORAGE_ENDPOINT: http://minio:9000
+      # Set these for anything beyond local dev (see CLAUDE.md go-live checklist):
+      # DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ...
+      # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
+    ports:
+      - "8080:8080"
 
-  # web:
-  #   build: ./web            # React app
-  #   container_name: doccontrol-web
-  #   restart: unless-stopped
-  #   depends_on:
-  #     - api
-  #   ports:
-  #     - "3000:80"
+  web:
+    build: ./web
+    container_name: doccontrol-web
+    restart: unless-stopped
+    depends_on:
+      - api
+    ports:
+      - "3000:80"
 
 volumes:
   postgres_data:

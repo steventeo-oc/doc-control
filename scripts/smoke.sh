@@ -103,11 +103,10 @@ api -b "$TMP/admin.jar" -o "$TMP/downloaded.txt" "$API/documents/$DOC_ID/version
 grep -q "Rev B" "$TMP/downloaded.txt" || fail "downloaded content does not match"
 echo "OK — downloaded file contains the Rev B content"
 
-step "7. The draft is invisible to the second user (404 — existence not leaked)"
+step "7. A department member can see their department's draft (Phase 2a member visibility)"
 code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$API/documents/$DOC_ID")"
-[ "$code" = "404" ] || fail "expected 404 for hidden draft, got $code"
-echo "OK (404 as expected)"
-
+[ "$code" = "200" ] || fail "expected 200 for department member viewing draft, got $code"
+echo "OK (200 — the viewer is a member of the document's department)"
 step "8. Owner starts the approval workflow; the viewer is the assigned reviewer"
 VIEWER_ID="$(field "$USER_JSON" id)"
 V1_ID="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/versions" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"

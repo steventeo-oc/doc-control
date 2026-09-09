@@ -128,3 +128,22 @@ the data model doc — resolved here so they're answered once, not re-asked.
   session-cookie auth via Spring Security; `audit_log.details` as Postgres
   `jsonb`; seed roles limited to `Admin` and `User` for now (role names like
   "QA Reviewer" arrive with Sprint 3 workflow work, not before).
+
+## Go-live checklist (running list — add to this, don't just note gaps in chat)
+
+Items discovered during implementation that must be resolved before a real
+deployment, even if they don't block Sprint 1 development itself:
+
+- [ ] **Admin password rotation**: no endpoint exists yet to change the
+  bootstrap admin's password after first startup. Fold a minimal
+  password-change capability into the Users/roles resource work — don't
+  ship Sprint 1 as "complete" without it. Until then, the account is stuck
+  with whatever `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` was set to at first
+  startup.
+- [ ] **Confirm `DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD` and
+  `DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL` are actually overridden** at real
+  deployment time — the checked-in defaults (`admin@doccontrol.local` /
+  `changeme_admin`) are dev-only and must never reach a real environment.
+- [ ] **CSRF is currently disabled** (`SecurityConfig`, Sprint 1) — fine for
+  now with `SameSite=Lax` cookies and no frontend yet, but revisit once the
+  React frontend lands and is making real cross-origin-capable requests.

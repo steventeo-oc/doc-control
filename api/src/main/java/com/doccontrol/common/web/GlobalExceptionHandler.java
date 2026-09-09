@@ -25,6 +25,11 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
     }
 
+    @ExceptionHandler(ForbiddenException.class)
+    ProblemDetail forbidden(ForbiddenException ex) {
+        return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
+    }
+
     @ExceptionHandler({BadCredentialsException.class, DisabledException.class})
     ProblemDetail badCredentials(Exception ex) {
         // Deliberately vague: don't reveal whether the account exists or is disabled.

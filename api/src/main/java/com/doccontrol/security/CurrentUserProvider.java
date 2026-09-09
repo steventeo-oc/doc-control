@@ -23,9 +23,24 @@ public class CurrentUserProvider {
      * inside a transaction.
      */
     public User getCurrentUser() {
+        return userRepository.getReferenceById(getCurrentUserId());
+    }
+
+    public Integer getCurrentUserId() {
+        return principal().getUserId();
+    }
+
+    /** True when the caller holds the Admin role (checked on authorities, no DB hit). */
+    public boolean isAdmin() {
+        Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
+        return authentication != null && authentication.getAuthorities().stream()
+                .anyMatch(authority -> "ROLE_ADMIN".equals(authority.getAuthority()));
+    }
+
+    private AppUserPrincipal principal() {
         Authentication authentication = SecurityContextHolder.getContext().getAuthentication();
         if (authentication != null && authentication.getPrincipal() instanceof AppUserPrincipal principal) {
-            return userRepository.getReferenceById(principal.getUserId());
+            return principal;
         }
         throw new ResponseStatusException(HttpStatus.UNAUTHORIZED, "No authenticated user.");
     }

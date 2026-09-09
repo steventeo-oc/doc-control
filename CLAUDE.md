@@ -188,11 +188,16 @@ deployment, even if they don't block Sprint 1 development itself:
   note: an admin cannot change their own roles, so the second admin is the
   only way back if the primary account is ever locked out.
 - [ ] **File upload limits & storage config are dev defaults** —
-  `spring.servlet.multipart.*` in `application.yml` allows 50MB files for
-  local development; confirm production-appropriate limits, and confirm
-  MinIO credentials/bucket policy (`doccontrol.storage.*` /
-  `MINIO_ROOT_*`) are overridden from the checked-in dev defaults at real
-  deployment time.
+  `spring.servlet.multipart.*` currently allows 50MB. Proposal in
+  `application.yml`: 25MB if only office documents are in scope, **100MB
+  (110MB request) if large CAD/DWG drawings are** — confirm by measuring the
+  largest real artifact in the old read-only Alfresco archive before
+  deciding. Storage: override MinIO credentials at deployment
+  (`MINIO_ROOT_*` for the container, `DOCCONTROL_STORAGE_ACCESS_KEY/SECRET_KEY`
+  for the api) and **create a dedicated MinIO user** for the api with
+  read/write on the `doccontrol` bucket only — the api should never use the
+  root account. Serve MinIO behind TLS; switch the api's storage endpoint to
+  https accordingly.
 
 ## Sprint 3 design note (captured early, not yet acted on)
 

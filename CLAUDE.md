@@ -134,7 +134,10 @@ the data model doc — resolved here so they're answered once, not re-asked.
   document used to drag the public version pointer to unreviewed content.
   (This deliberately deviates from the API spec's create-document example,
   which shows current_version_id set on a draft; that example predates this
-  decision.) Sprint 3's promote endpoint will own this properly.
+  decision.) Sprint 3's promote endpoint will own this properly. On each
+  release the newly-current version's status becomes `current` and the
+  previously-current version becomes `superseded`; versions never pointed to
+  stay `draft`.
 - **Version history visibility (pilot finding #2)** — for non-owner/non-admin
   viewers of a visible document, the version list shows exactly the current
   version, and version detail/download for any other version id returns 404

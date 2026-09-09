@@ -209,9 +209,24 @@ public class DocumentService {
                 DocumentVersion latest = documentVersionRepository
                         .findTopByDocument_IdOrderByVersionNumberDesc(id)
                         .orElse(null);
-                if (latest != null && !latest.equals(document.getCurrentVersion())) {
-                    document.setCurrentVersion(latest);
-                    pointerAfter = latest.getId();
+                if (latest != null) {
+                    DocumentVersion previousCurrent = document.getCurrentVersion();
+                    if (!latest.equals(previousCurrent)) {
+                        document.setCurrentVersion(latest);
+                        pointerAfter = latest.getId();
+                    }
+                    // Version lifecycle: the newly-current version becomes
+                    // "current", the previously-current one becomes
+                    // "superseded", and versions never pointed to stay
+                    // "draft". Idempotent, so it also normalizes rows created
+                    // before this rule existed.
+                    if (latest.getStatus() != DocumentVersionStatus.CURRENT) {
+                        latest.setStatus(DocumentVersionStatus.CURRENT);
+                    }
+                    if (previousCurrent != null && !previousCurrent.equals(latest)
+                            && previousCurrent.getStatus() != DocumentVersionStatus.SUPERSEDED) {
+                        previousCurrent.setStatus(DocumentVersionStatus.SUPERSEDED);
+                    }
                 }
             }
 

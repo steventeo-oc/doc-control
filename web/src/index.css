@@ -217,7 +217,8 @@ button.danger {
 }
 
 .badge.released,
-.badge.approved {
+.badge.approved,
+.badge.current {
   background: #e2f2e5;
   color: #1d5c26;
 }

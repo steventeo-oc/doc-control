@@ -236,12 +236,14 @@ class DocumentVersionEndpointTests {
                 DocumentVersionDto[].class);
         Integer v1Id = versions[0].id();
 
-        // release it
+        // release it — v1 becomes the current version
         mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentVersionId").value(v1Id));
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
+                .andExpect(jsonPath("$[0].status").value("current"));
 
         // upload v2 as a draft — the pointer must NOT move
         MvcResult v2 = mockMvc.perform(multipart("/documents/{id}/versions", doc.id())
@@ -252,6 +254,12 @@ class DocumentVersionEndpointTests {
                 .andExpect(jsonPath("$.versionNumber").value(2))
                 .andReturn();
         Integer v2Id = objectMapper.readValue(v2.getResponse().getContentAsString(), DocumentVersionDto.class).id();
+
+        // the draft upload changed no statuses: v1 stays current, v2 stays draft
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
+                .andExpect(jsonPath("$.length()").value(2))
+                .andExpect(jsonPath("$[0].status").value("current"))
+                .andExpect(jsonPath("$[1].status").value("draft"));
 
         // the normal user still sees v1 as the current version, and its content
         mockMvc.perform(get("/documents/{id}", doc.id()).session(viewerSession))
@@ -285,12 +293,16 @@ class DocumentVersionEndpointTests {
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2));
 
-        // admin re-releases (status already released) — now the draft publishes
+        // admin re-releases (status already released) — now the draft publishes:
+        // v2 becomes current, v1 becomes superseded
         mockMvc.perform(patch("/documents/" + doc.id()).session(adminSession)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "released"))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.currentVersionId").value(v2Id));
+        mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
+                .andExpect(jsonPath("$[0].status").value("superseded"))
+                .andExpect(jsonPath("$[1].status").value("current"));
 
         // the normal user now sees v2 as current, with its content
         mockMvc.perform(get("/documents/{id}", doc.id()).session(viewerSession))

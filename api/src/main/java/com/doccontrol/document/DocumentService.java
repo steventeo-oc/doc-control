@@ -46,6 +46,7 @@ public class DocumentService {
     private final DocumentTypeRepository documentTypeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
+    private final com.doccontrol.identity.UserDepartmentRepository userDepartmentRepository;
     private final DocumentSequenceService documentSequenceService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
@@ -55,6 +56,7 @@ public class DocumentService {
                            DocumentTypeRepository documentTypeRepository,
                            DepartmentRepository departmentRepository,
                            UserRepository userRepository,
+                           com.doccontrol.identity.UserDepartmentRepository userDepartmentRepository,
                            DocumentSequenceService documentSequenceService,
                            AuditService auditService,
                            CurrentUserProvider currentUserProvider) {
@@ -63,6 +65,7 @@ public class DocumentService {
         this.documentTypeRepository = documentTypeRepository;
         this.departmentRepository = departmentRepository;
         this.userRepository = userRepository;
+        this.userDepartmentRepository = userDepartmentRepository;
         this.documentSequenceService = documentSequenceService;
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
@@ -72,6 +75,8 @@ public class DocumentService {
     public DocumentDto create(Integer documentTypeId, Integer departmentId, String name) {
         DocumentType type = requireActiveType(documentTypeId);
         Department department = requireActiveDepartment(departmentId);
+        // Phase 2a: only members of a department (or admins) create in it
+        requireDepartmentMember(department);
 
         // The number allocation and the document insert share one transaction:
         // the counter row lock guarantees distinct numbers under concurrency,
@@ -110,10 +115,22 @@ public class DocumentService {
         }
     }
 
-    /** True when the caller owns the document or is an admin. */
+    /**
+     * Phase 2a permission rule: admins are unrestricted; otherwise only
+     * members of the document's department may modify it (create/edit/upload/
+     * trash). Ownership no longer grants edit rights by itself — ownership
+     * transfers are restricted to department members, so owners remain
+     * members.
+     *
+     * Extension seam: named-user overrides (roadmap #3, "Later") plug in here
+     * as an additional clause backed by an override table alongside this
+     * department rule — not a replacement of it.
+     */
     public boolean canModify(Document document) {
-        boolean isOwner = document.getOwner().getId().equals(currentUserProvider.getCurrentUserId());
-        return isOwner || currentUserProvider.isAdmin();
+        if (currentUserProvider.isAdmin()) {
+            return true;
+        }
+        return isDepartmentMember(document.getDepartment().getId());
     }
 
     @Transactional(readOnly = true)
@@ -185,6 +202,12 @@ public class DocumentService {
             User newOwner = userRepository.findById(request.ownerUserId())
                     .filter(User::isActive)
                     .orElseThrow(() -> new NotFoundException("User " + request.ownerUserId() + " not found."));
+            // keep the invariant that the owner can edit the document: the new
+            // owner must belong to the document's department
+            if (!isDepartmentMember(newOwner.getId(), document.getDepartment().getId())) {
+                throw new ForbiddenException(
+                        "The new owner must be a member of department '" + document.getDepartment().getCode() + "'.");
+            }
             before.put("owner_user_id", document.getOwner().getId());
             after.put("owner_user_id", newOwner.getId());
             document.setOwner(newOwner);
@@ -310,5 +333,21 @@ public class DocumentService {
 
     private Specification<Document> notDeleted() {
         return (root, query, cb) -> cb.isNull(root.get("deletedAt"));
+    }
+
+    private void requireDepartmentMember(Department department) {
+        if (!currentUserProvider.isAdmin() && !isDepartmentMember(department.getId())) {
+            throw new ForbiddenException("Only members of department '" + department.getCode()
+                    + "' can create documents in it.");
+        }
+    }
+
+    private boolean isDepartmentMember(Integer departmentId) {
+        return isDepartmentMember(currentUserProvider.getCurrentUserId(), departmentId);
+    }
+
+    private boolean isDepartmentMember(Integer userId, Integer departmentId) {
+        return userDepartmentRepository.existsById(
+                new com.doccontrol.identity.UserDepartmentId(userId, departmentId));
     }
 }

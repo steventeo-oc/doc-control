@@ -7,6 +7,8 @@ import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
 import com.doccontrol.identity.UserDepartmentId;
+import com.doccontrol.identity.UserDepartment;
+import com.doccontrol.identity.UserDepartmentId;
 import com.doccontrol.identity.UserDepartmentRepository;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.identity.UserRole;
@@ -95,6 +97,7 @@ class DocumentEndpointTests {
     void createGeneratesDocumentNumberFromCounter() throws Exception {
         Department dept = tempDepartment("D1");
         MockHttpSession session = loginAs(createUser("creator@doccontrol.test", "User"));
+        addMembership("creator@doccontrol.test", dept);
 
         mockMvc.perform(multipart("/documents").session(session)
                         .param("document_type_id", String.valueOf(sopTypeId()))
@@ -118,6 +121,7 @@ class DocumentEndpointTests {
     void draftIsHiddenFromOtherUsersUntilReleased() throws Exception {
         Department dept = tempDepartment("D2");
         createUser("author@doccontrol.test", "User");
+        addMembership("author@doccontrol.test", dept);
         createUser("outsider@doccontrol.test", "User");
         MockHttpSession authorSession = loginAs("author@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("outsider@doccontrol.test");
@@ -157,6 +161,7 @@ class DocumentEndpointTests {
     void onlyOwnerOrAdminCanModify() throws Exception {
         Department dept = tempDepartment("D3");
         createUser("modauthor@doccontrol.test", "User");
+        addMembership("modauthor@doccontrol.test", dept);
         createUser("modoutsider@doccontrol.test", "User");
         MockHttpSession authorSession = loginAs("modauthor@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("modoutsider@doccontrol.test");
@@ -192,6 +197,7 @@ class DocumentEndpointTests {
     void softDeleteHidesAndRestoreBringsBack() throws Exception {
         Department dept = tempDepartment("D4");
         createUser("deleter@doccontrol.test", "User");
+        addMembership("deleter@doccontrol.test", dept);
         MockHttpSession session = loginAs("deleter@doccontrol.test");
 
         Integer documentId = createDocument(session, dept.getId(), "Trash Me");
@@ -219,6 +225,8 @@ class DocumentEndpointTests {
         Department deptA = tempDepartment("A");
         Department deptB = tempDepartment("B");
         createUser("filter@doccontrol.test", "User");
+        addMembership("filter@doccontrol.test", deptA);
+        addMembership("filter@doccontrol.test", deptB);
         MockHttpSession session = loginAs("filter@doccontrol.test");
 
         Integer inSop = createDocument(session, deptA.getId(), "Quarterly Review Checklist");
@@ -253,6 +261,7 @@ class DocumentEndpointTests {
     void adminStatusOverrideMakesDocumentPublicAndIsAudited() throws Exception {
         Department dept = tempDepartment("S");
         createUser("soauthor@doccontrol.test", "User");
+        addMembership("soauthor@doccontrol.test", dept);
         createUser("sooutsider@doccontrol.test", "User");
         MockHttpSession authorSession = loginAs("soauthor@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("sooutsider@doccontrol.test");
@@ -296,6 +305,7 @@ class DocumentEndpointTests {
     void onlyAdminsCanChangeStatus() throws Exception {
         Department dept = tempDepartment("N");
         createUser("ownera@doccontrol.test", "User");
+        addMembership("ownera@doccontrol.test", dept);
         createUser("outsidern@doccontrol.test", "User");
         MockHttpSession ownerSession = loginAs("ownera@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("outsidern@doccontrol.test");
@@ -329,6 +339,7 @@ class DocumentEndpointTests {
     void invalidStatusValueIsRejected() throws Exception {
         Department dept = tempDepartment("I");
         createUser("invalid@doccontrol.test", "User");
+        addMembership("invalid@doccontrol.test", dept);
         MockHttpSession session = loginAs("invalid@doccontrol.test");
         Integer documentId = createDocument(session, dept.getId(), "Bad Status");
 
@@ -336,6 +347,95 @@ class DocumentEndpointTests {
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(Map.of("status", "bogus"))))
                 .andExpect(status().isBadRequest());
+    }
+
+    @Test
+    void nonMembersCannotCreateInADepartmentAndAdminsRemainUnrestricted() throws Exception {
+        Department dept = tempDepartment("P");
+        createUser("pmember@doccontrol.test", "User");
+        createUser("poutsider@doccontrol.test", "User");
+        addMembership("pmember@doccontrol.test", dept);
+        MockHttpSession member = loginAs("pmember@doccontrol.test");
+        MockHttpSession outsider = loginAs("poutsider@doccontrol.test");
+
+        // non-member cannot create in the department
+        mockMvc.perform(multipart("/documents").session(outsider)
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Not Allowed"))
+                .andExpect(status().isForbidden());
+
+        // member can
+        Integer documentId = createDocument(member, dept.getId(), "Member Doc");
+
+        // a released document is visible to the non-member, but still not editable
+        Document document = documentRepository.findById(documentId).orElseThrow();
+        document.setStatus(DocumentStatus.RELEASED);
+        entityManager.flush();
+        mockMvc.perform(get("/documents/" + documentId).session(outsider))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/documents/" + documentId).with(csrf()).session(outsider)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("name", "Nope"))))
+                .andExpect(status().isForbidden());
+
+        // admins remain unrestricted
+        mockMvc.perform(multipart("/documents").with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
+                        .param("document_type_id", String.valueOf(sopTypeId()))
+                        .param("department_id", String.valueOf(dept.getId()))
+                        .param("name", "Admin Created"))
+                .andExpect(status().isCreated());
+    }
+
+    @Test
+    void multiDepartmentMemberCanEditInBothAndOwnershipTransferIsDepartmentScoped() throws Exception {
+        Department deptA = tempDepartment("MA");
+        Department deptB = tempDepartment("MB");
+        createUser("dual@doccontrol.test", "User");
+        createUser("memberb@doccontrol.test", "User");
+        createUser("membera@doccontrol.test", "User");
+        addMembership("dual@doccontrol.test", deptA);
+        addMembership("dual@doccontrol.test", deptB);
+        addMembership("memberb@doccontrol.test", deptB);
+        addMembership("membera@doccontrol.test", deptA);
+        MockHttpSession dual = loginAs("dual@doccontrol.test");
+
+        Integer docA = createDocument(dual, deptA.getId(), "In A");
+        Integer docB = createDocument(dual, deptB.getId(), "In B");
+
+        // a member of both departments can edit in both
+        mockMvc.perform(patch("/documents/" + docA).with(csrf()).session(dual)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("name", "A Renamed"))))
+                .andExpect(status().isOk());
+        mockMvc.perform(patch("/documents/" + docB).with(csrf()).session(dual)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("name", "B Renamed"))))
+                .andExpect(status().isOk());
+
+        // ownership transfer to a non-member of the document's department is rejected
+        Integer memberBId = userRepository.findByEmailIgnoreCase("memberb@doccontrol.test").orElseThrow().getId();
+        mockMvc.perform(patch("/documents/" + docA).with(csrf()).session(dual)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("ownerUserId", memberBId))))
+                .andExpect(status().isForbidden());
+
+        // transfer to a department member succeeds
+        Integer memberAId = userRepository.findByEmailIgnoreCase("membera@doccontrol.test").orElseThrow().getId();
+        mockMvc.perform(patch("/documents/" + docA).with(csrf()).session(dual)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("ownerUserId", memberAId))))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.ownerUserId").value(memberAId));
+    }
+
+    private void addMembership(String email, Department department) {
+        User user = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        UserDepartment membership = new UserDepartment();
+        membership.setId(new UserDepartmentId(user.getId(), department.getId()));
+        membership.setUser(user);
+        membership.setDepartment(department);
+        userDepartmentRepository.save(membership);
     }
 
     private Integer sopTypeId() {

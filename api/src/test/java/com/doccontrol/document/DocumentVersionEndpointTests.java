@@ -7,6 +7,8 @@ import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
 import com.doccontrol.identity.UserDepartmentId;
+import com.doccontrol.identity.UserDepartment;
+import com.doccontrol.identity.UserDepartmentId;
 import com.doccontrol.identity.UserDepartmentRepository;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.identity.UserRole;
@@ -100,6 +102,7 @@ class DocumentVersionEndpointTests {
     void uploadTwoVersionsListAndDownloadRoundtrip() throws Exception {
         Department dept = tempDepartment("V");
         createUser("vers@doccontrol.test", "User");
+        addMembership("vers@doccontrol.test", dept);
         MockHttpSession session = loginAs("vers@doccontrol.test");
         Integer docId = createDocument(session, dept.getId(), "Versioned Doc");
 
@@ -148,6 +151,7 @@ class DocumentVersionEndpointTests {
     void createWithFileMakesVersionOneImmediately() throws Exception {
         Department dept = tempDepartment("W");
         createUser("withfile@doccontrol.test", "User");
+        addMembership("withfile@doccontrol.test", dept);
         MockHttpSession session = loginAs("withfile@doccontrol.test");
 
         MvcResult created = mockMvc.perform(multipart("/documents")
@@ -178,6 +182,7 @@ class DocumentVersionEndpointTests {
     void hiddenDraftsVersionsAreInvisibleToOthers() throws Exception {
         Department dept = tempDepartment("X");
         createUser("hider@doccontrol.test", "User");
+        addMembership("hider@doccontrol.test", dept);
         createUser("peeker@doccontrol.test", "User");
         MockHttpSession hider = loginAs("hider@doccontrol.test");
         MockHttpSession peeker = loginAs("peeker@doccontrol.test");
@@ -200,6 +205,7 @@ class DocumentVersionEndpointTests {
     void visibleButNotYoursUploadIsForbidden() throws Exception {
         Department dept = tempDepartment("Y");
         createUser("relowner@doccontrol.test", "User");
+        addMembership("relowner@doccontrol.test", dept);
         createUser("reloutsider@doccontrol.test", "User");
         MockHttpSession ownerSession = loginAs("relowner@doccontrol.test");
         MockHttpSession outsiderSession = loginAs("reloutsider@doccontrol.test");
@@ -225,6 +231,7 @@ class DocumentVersionEndpointTests {
         Department dept = tempDepartment("R");
         createUser("relowner@doccontrol.test", "User");
         createUser("relviewer@doccontrol.test", "User");
+        addMembership("relowner@doccontrol.test", dept);
         MockHttpSession ownerSession = loginAs("relowner@doccontrol.test");
         MockHttpSession viewerSession = loginAs("relviewer@doccontrol.test");
         MockHttpSession adminSession = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
@@ -337,6 +344,15 @@ class DocumentVersionEndpointTests {
                         && entry.getDetails() != null
                         && Map.of("current_version_id", v1Id).equals(entry.getDetails().get("before"))
                         && Map.of("current_version_id", v2Id).equals(entry.getDetails().get("after")));
+    }
+
+    private void addMembership(String email, Department department) {
+        User user = userRepository.findByEmailIgnoreCase(email).orElseThrow();
+        UserDepartment membership = new UserDepartment();
+        membership.setId(new UserDepartmentId(user.getId(), department.getId()));
+        membership.setUser(user);
+        membership.setDepartment(department);
+        userDepartmentRepository.save(membership);
     }
 
     private Integer sopTypeId() {

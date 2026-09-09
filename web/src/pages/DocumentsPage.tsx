@@ -3,8 +3,10 @@ import { Link } from 'react-router-dom';
 import { documentApi, lookupApi } from '../api/resources';
 import type { Department, DocumentSummary, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
 
 export default function DocumentsPage() {
+  const { user, isAdmin } = useAuth();
   const [page, setPage] = useState<PageResult | null>(null);
   const [types, setTypes] = useState<DocumentType[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -157,7 +159,10 @@ export default function DocumentsPage() {
               <option value="" disabled>
                 Choose department…
               </option>
-              {departments.map((d) => (
+              {(isAdmin
+                ? departments
+                : departments.filter((d) => user?.departments.some((ud) => ud.id === d.id))
+              ).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.code} — {d.label}
                 </option>

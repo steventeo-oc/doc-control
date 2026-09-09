@@ -5,6 +5,10 @@ version: "3.9"
 # This file is a starting point, not final production config — production
 # should add resource limits, restart policies tuned for the real server,
 # and TLS termination at the reverse proxy.
+#
+# Host ports are overridable via env (compose reads .env or the shell), e.g.
+# when the dev machine already runs local Postgres/MinIO on the defaults:
+#   POSTGRES_HOST_PORT=15432 MINIO_HOST_PORT=19000 MINIO_CONSOLE_HOST_PORT=19001 docker compose up -d
 
 services:
   postgres:
@@ -16,7 +20,7 @@ services:
       POSTGRES_USER: doccontrol
       POSTGRES_PASSWORD: changeme_in_env_file
     ports:
-      - "5432:5432"
+      - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -34,8 +38,8 @@ services:
       MINIO_ROOT_USER: doccontrol
       MINIO_ROOT_PASSWORD: changeme_in_env_file
     ports:
-      - "9000:9000"   # S3 API
-      - "9001:9001"   # Web console
+      - "${MINIO_HOST_PORT:-9000}:9000"   # S3 API
+      - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"   # Web console
     volumes:
       - minio_data:/data
     healthcheck:

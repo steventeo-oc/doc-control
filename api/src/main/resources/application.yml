@@ -22,3 +22,22 @@ spring:
 
 server:
   port: 8080
+  servlet:
+    session:
+      cookie:
+        # Mitigates classic cross-site POSTs while CSRF is disabled for the
+        # API (see SecurityConfig) — revisit when the web frontend is wired up.
+        same-site: "lax"
+
+doccontrol:
+  bootstrap:
+    # Initial admin account, created on first startup ONLY if the user table
+    # is empty. Override the password via DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD
+    # in any real deployment — the checked-in default is for local dev only.
+    admin-email: admin@doccontrol.local
+    admin-password: changeme_admin
+    admin-department: QA
+
+app:
+  cors:
+    allowed-origins: http://localhost:3000

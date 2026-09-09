@@ -21,7 +21,7 @@ it happens over a REST API call, never a shared database.
 | Layer | Choice |
 |---|---|
 | Backend | Java + Spring Boot |
-| Workflow engine | Camunda or Flowable (Spring-native BPMN) — **Sprint 3+, not Sprint 1** |
+| Workflow engine | **Flowable 8.0.0** (embedded, Spring-native BPMN) — Sprint 3+, not before; chosen over Camunda because Camunda 7 is EOL-bound and Camunda 8's distributed architecture doesn't fit a single-VM deployment (verified via the bounded spike) |
 | Frontend | React + TypeScript |
 | Database | PostgreSQL |
 | File storage | MinIO (S3-compatible, self-hosted) |

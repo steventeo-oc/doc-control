@@ -53,6 +53,15 @@ doccontrol:
     reminder-before-days: 5
     escalate-after-overdue-days: 2
 
+  acknowledgment:
+    # Read & understood acknowledgment (Phase 2d, confirmed with QA):
+    # department-scoped, record-only; window deliberately separate from the
+    # approval thresholds — longer and lower-stakes. Overridable via
+    # DOCCONTROL_ACKNOWLEDGMENT_* env vars.
+    window-business-days: 7
+    reminder-before-days: 2
+    escalate-after-overdue-days: 2
+
   storage:
     # Defaults match docker-compose.yml's minio service on localhost (dev).
     # Inside compose the api container must override the endpoint:

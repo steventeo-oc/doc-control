@@ -22,4 +22,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Query("SELECT DISTINCT u FROM User u JOIN u.roles ur JOIN ur.role r " +
             "WHERE r.name = 'Admin' AND u.active = true")
     List<User> findActiveAdmins();
+
+    /** Active members of a department — the acknowledgment population (Phase 2d). */
+    @Query("SELECT DISTINCT u FROM User u JOIN u.departments ud " +
+            "WHERE ud.id.departmentId = :departmentId AND u.active = true")
+    List<User> findActiveByDepartmentId(@Param("departmentId") Integer departmentId);
 }

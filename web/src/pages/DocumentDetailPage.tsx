@@ -1,15 +1,21 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { downloadFile } from '../api/client';
-import { documentApi } from '../api/resources';
-import type { DocumentDetail, DocumentVersion } from '../api/types';
-import { DOCUMENT_STATUSES } from '../api/types';
+import { documentApi, userApi, workflowApi, type AssigneeInput } from '../api/resources';
+import type { DocumentDetail, DocumentVersion, UserRow } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
+/**
+ * Phase 2b retired the admin status override — releases happen only through
+ * the approval engine, so this page has no release shortcut. What it offers
+ * instead: sending a draft version for approval, starting a periodic-review
+ * re-approval of a released document, and (Phase 2d) the acknowledgment
+ * panel.
+ */
 export default function DocumentDetailPage() {
   const { id } = useParams();
   const documentId = Number(id);
-  const { isAdmin } = useAuth();
+  const { user, isAdmin } = useAuth();
 
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
@@ -17,6 +23,13 @@ export default function DocumentDetailPage() {
   const [notice, setNotice] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
   const [uploadNotes, setUploadNotes] = useState('');
+
+  // Approval assignment (ad-hoc, per instance): a named user or a role.
+  // The user list is admin-only, so non-admin owners pick by role name.
+  const [users, setUsers] = useState<UserRow[] | null>(null);
+  const [assigneeMode, setAssigneeMode] = useState<'user' | 'role'>('role');
+  const [reviewerUserId, setReviewerUserId] = useState<number | ''>('');
+  const [roleName, setRoleName] = useState('');
 
   const load = useCallback(() => {
     documentApi
@@ -50,10 +63,6 @@ export default function DocumentDetailPage() {
     run(() => documentApi.update(documentId, { name: newName }), 'Name updated.');
   }
 
-  function handleStatus(status: string) {
-    run(() => documentApi.update(documentId, { status }), `Status changed to ${status}.`);
-  }
-
   function handleUpload(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const data = new FormData(event.currentTarget);
@@ -81,6 +90,54 @@ export default function DocumentDetailPage() {
 
   function handleRestore() {
     run(() => documentApi.restore(documentId), 'Restored from trash.');
+  }
+
+  // Mirrors the server's Phase 2a rule (admin, or member of the document's
+  // department) — the server enforces it; this only shapes the UI.
+  const canModify =
+    !!doc &&
+    (isAdmin || !!user?.departments.some((department) => department.id === doc.departmentId));
+
+  useEffect(() => {
+    // admin-only endpoint; non-admins fall back to role-name assignment
+    if (canModify && users === null) {
+      userApi
+        .list()
+        .then(setUsers)
+        .catch(() => setUsers([]));
+    }
+  }, [canModify, users]);
+
+  function buildAssignees(): AssigneeInput[] {
+    return assigneeMode === 'user' && reviewerUserId !== ''
+      ? [{ type: 'USER', userId: reviewerUserId }]
+      : [{ type: 'ROLE', roleName: roleName.trim() }];
+  }
+
+  function handleStartApproval(event: FormEvent) {
+    event.preventDefault();
+    const draft = latestDraftVersion();
+    if (!draft) {
+      setError('No draft version to send for approval.');
+      return;
+    }
+    run(
+      () => workflowApi.startApproval(documentId, draft.id, buildAssignees()),
+      `Approval started for v${draft.versionNumber} — reviewers will see it under My tasks.`,
+    );
+  }
+
+  function handleStartReviewApproval() {
+    run(
+      () => workflowApi.startReviewApproval(documentId, buildAssignees()),
+      'Periodic review re-approval started — reviewers will see it flagged under My tasks.',
+    );
+  }
+
+  function latestDraftVersion(): DocumentVersion | undefined {
+    return versions
+      .filter((version) => version.status === 'draft')
+      .sort((a, b) => b.versionNumber - a.versionNumber)[0];
   }
 
   if (error && !doc) {
@@ -128,6 +185,29 @@ export default function DocumentDetailPage() {
             <dt>Current version</dt>
             <dd>{doc.currentVersionId ? versions.find((v) => v.id === doc.currentVersionId)?.versionNumber ?? doc.currentVersionId : '—'}</dd>
           </div>
+          {doc.status === 'approved' && doc.pendingEffectiveDate && (
+            <div>
+              <dt>Pending effective</dt>
+              <dd>
+                <span className="badge approved">approved</span> takes effect {doc.pendingEffectiveDate}
+              </dd>
+            </div>
+          )}
+          {doc.lastReviewedAt && (
+            <div>
+              <dt>Last reviewed</dt>
+              <dd>{doc.lastReviewedAt}</dd>
+            </div>
+          )}
+          {doc.nextReviewDue && (
+            <div>
+              <dt>Next review due</dt>
+              <dd>
+                {doc.nextReviewDue}{' '}
+                {doc.reviewOverdue && <span className="badge overdue">review overdue</span>}
+              </dd>
+            </div>
+          )}
           <div>
             <dt>Created</dt>
             <dd>{new Date(doc.createdAt).toLocaleString()}</dd>
@@ -147,18 +227,6 @@ export default function DocumentDetailPage() {
             <input value={newName} maxLength={255} onChange={(e) => setNewName(e.target.value)} />
           </label>
           <button type="submit">Save name</button>
-          {isAdmin && (
-            <label>
-              Status override (admin)
-              <select value={doc.status} onChange={(e) => handleStatus(e.target.value)}>
-                {DOCUMENT_STATUSES.map((s) => (
-                  <option key={s} value={s}>
-                    {s}
-                  </option>
-                ))}
-              </select>
-            </label>
-          )}
           {doc.deletedAt ? (
             <button type="button" onClick={handleRestore}>
               Restore from trash
@@ -171,6 +239,79 @@ export default function DocumentDetailPage() {
         </form>
       </div>
 
+      {canModify && !doc.deletedAt && (doc.status === 'draft' || doc.status === 'released') && (
+        <div className="card">
+          <h2>Approval</h2>
+          <form className="inline" onSubmit={handleStartApproval}>
+            <label>
+              Assignee
+              <select
+                value={assigneeMode}
+                onChange={(e) => setAssigneeMode(e.target.value as 'user' | 'role')}
+              >
+                <option value="role">By role</option>
+                <option value="user" disabled={!users?.length}>
+                  By user
+                </option>
+              </select>
+            </label>
+            {assigneeMode === 'user' ? (
+              <label>
+                Reviewer
+                <select
+                  value={reviewerUserId}
+                  onChange={(e) => setReviewerUserId(Number(e.target.value))}
+                  required
+                >
+                  <option value="" disabled>
+                    Choose a reviewer…
+                  </option>
+                  {(users ?? []).map((candidate) => (
+                    <option key={candidate.id} value={candidate.id}>
+                      {candidate.name} ({candidate.email})
+                    </option>
+                  ))}
+                </select>
+              </label>
+            ) : (
+              <label>
+                Role (candidate group)
+                <input
+                  value={roleName}
+                  placeholder="e.g. ENG Manager"
+                  onChange={(e) => setRoleName(e.target.value)}
+                  required
+                />
+              </label>
+            )}
+            {doc.status === 'draft' && latestDraftVersion() && (
+              <button className="primary" type="submit">
+                Send v{latestDraftVersion()!.versionNumber} for approval
+              </button>
+            )}
+          </form>
+          {doc.status === 'released' && (
+            <form
+              className="inline"
+              onSubmit={(event) => {
+                event.preventDefault();
+                handleStartReviewApproval();
+              }}
+            >
+              <button className="primary" type="submit">
+                Start periodic review re-approval
+              </button>
+              <span className="muted">
+                Re-approves the current released version — no new content, the review clock resets.
+              </span>
+            </form>
+          )}
+          {assigneeMode === 'user' && !users?.length && (
+            <p className="muted">The user list is only available to admins — assign by role instead.</p>
+          )}
+        </div>
+      )}
+
       <h2>Versions</h2>
       <table className="data">
         <thead>
@@ -178,7 +319,9 @@ export default function DocumentDetailPage() {
             <th>#</th>
             <th>File</th>
             <th>Status</th>
+            <th>Effective</th>
             <th>Change notes</th>
+            <th>Change reference</th>
             <th>Uploaded by</th>
             <th>At</th>
             <th />
@@ -192,7 +335,9 @@ export default function DocumentDetailPage() {
               <td>
                 <span className={`badge ${version.status}`}>{version.status}</span>
               </td>
+              <td className="muted">{version.effectiveAt ?? '—'}</td>
               <td>{version.changeNotes ?? '—'}</td>
+              <td className="muted">{version.changeReference ?? '—'}</td>
               <td>{version.uploadedByName}</td>
               <td className="muted">{new Date(version.uploadedAt).toLocaleString()}</td>
               <td>
@@ -209,7 +354,7 @@ export default function DocumentDetailPage() {
           ))}
           {versions.length === 0 && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={9} className="muted">
                 No versions uploaded yet.
               </td>
             </tr>

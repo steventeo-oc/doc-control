@@ -1,10 +1,14 @@
 package com.doccontrol.document;
 
 import com.doccontrol.audit.AuditService;
+import com.doccontrol.audit.NotificationLog;
+import com.doccontrol.audit.NotificationLogRepository;
 import com.doccontrol.common.domain.PersistentEnums;
 import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
+import com.doccontrol.config.ReviewProperties;
+import com.doccontrol.notification.NotificationSender;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.lookup.Department;
@@ -22,6 +26,7 @@ import org.springframework.data.jpa.domain.Specification;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.LinkedHashMap;
@@ -52,6 +57,9 @@ public class DocumentService {
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
     private final com.doccontrol.workflow.ReviewerAccess reviewerAccess;
+    private final ReviewProperties reviewProperties;
+    private final NotificationSender notificationSender;
+    private final NotificationLogRepository notificationLogRepository;
 
     public DocumentService(DocumentRepository documentRepository,
                            DocumentVersionRepository documentVersionRepository,
@@ -62,7 +70,10 @@ public class DocumentService {
                            DocumentSequenceService documentSequenceService,
                            AuditService auditService,
                            CurrentUserProvider currentUserProvider,
-                           com.doccontrol.workflow.ReviewerAccess reviewerAccess) {
+                           com.doccontrol.workflow.ReviewerAccess reviewerAccess,
+                           ReviewProperties reviewProperties,
+                           NotificationSender notificationSender,
+                           NotificationLogRepository notificationLogRepository) {
         this.documentRepository = documentRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.documentTypeRepository = documentTypeRepository;
@@ -73,6 +84,9 @@ public class DocumentService {
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
         this.reviewerAccess = reviewerAccess;
+        this.reviewProperties = reviewProperties;
+        this.notificationSender = notificationSender;
+        this.notificationLogRepository = notificationLogRepository;
     }
 
     private List<String> reviewerRoleNames() {
@@ -294,12 +308,16 @@ public class DocumentService {
     }
 
     /**
-     * Publishes an approved version (Phase 2b): identical pointer/status/
-     * audit semantics the admin status override used, now driven by the
-     * workflow engine when an approval completes.
+     * Publishes an approved version (Phase 2b, extended by Phase 2c): the
+     * pointer/status/audit semantics the engine drives on approval, now with
+     * effectivity and the review clock. The version takes effect on
+     * {@code effectiveDate} (the approval date for immediate releases, the
+     * chosen date when the daily job flips a deferred one); the review clock
+     * resets at effectiveness — the one rule that covers approvals,
+     * re-approvals, and flips alike.
      */
     @Transactional
-    public void promoteVersion(DocumentVersion version) {
+    public void promoteVersion(DocumentVersion version, LocalDate effectiveDate, User actor) {
         Document document = version.getDocument();
         DocumentVersion previous = document.getCurrentVersion();
         Integer pointerBefore = previous == null ? null : previous.getId();
@@ -314,6 +332,7 @@ public class DocumentService {
                 && previous.getStatus() != DocumentVersionStatus.SUPERSEDED) {
             previous.setStatus(DocumentVersionStatus.SUPERSEDED);
         }
+        version.setEffectiveAt(effectiveDate);
 
         if (document.getStatus() != DocumentStatus.RELEASED) {
             DocumentStatus previousStatus = document.getStatus();
@@ -324,13 +343,110 @@ public class DocumentService {
             Map<String, Object> after = new LinkedHashMap<>();
             after.put("status", DocumentStatus.RELEASED.getValue());
             after.put("current_version_id", version.getId());
-            auditService.record("document", document.getId(), "status_changed",
+            after.put("effective_at", effectiveDate.toString());
+            auditService.recordAs(actor, "document", document.getId(), "status_changed",
                     Map.of("before", before, "after", after));
         } else if (!pointerBefore.equals(version.getId())) {
-            auditService.record("document", document.getId(), "updated", Map.of(
+            auditService.recordAs(actor, "document", document.getId(), "updated", Map.of(
                     "before", Map.of("current_version_id", pointerBefore),
                     "after", Map.of("current_version_id", version.getId())));
         }
+        resetReviewClock(document, effectiveDate, actor);
+    }
+
+    /**
+     * Records an approval outcome whose effectivity is deferred (Phase 2c):
+     * document and version become "approved" — a visible state distinct from
+     * released — but the public version pointer does not move until the
+     * daily job flips it on the effective date (amends the pilot-era
+     * pointer rule; see plan-back flag F2). Any older still-pending version
+     * is retired first: at most one pending-effective promotion per document
+     * (decision D2).
+     */
+    @Transactional
+    public void approveVersionPendingEffectivity(DocumentVersion version, LocalDate effectiveDate, User actor) {
+        Document document = version.getDocument();
+        for (DocumentVersion stale : documentVersionRepository
+                .findAllByDocumentIdAndStatus(document.getId(), DocumentVersionStatus.APPROVED)) {
+            if (!stale.getId().equals(version.getId())) {
+                stale.setStatus(DocumentVersionStatus.SUPERSEDED);
+                auditService.recordAs(actor, "document_version", stale.getId(),
+                        "superseded_before_effective", Map.of(
+                                "document_number", document.getDocumentNumber(),
+                                "version_number", stale.getVersionNumber(),
+                                "effective_at", String.valueOf(stale.getEffectiveAt())));
+                notifyOwnerOfSupersededPending(document, stale);
+            }
+        }
+
+        DocumentStatus previousStatus = document.getStatus();
+        version.setStatus(DocumentVersionStatus.APPROVED);
+        version.setEffectiveAt(effectiveDate);
+        document.setStatus(DocumentStatus.APPROVED);
+
+        // LinkedHashMap, not Map.of: current_version_id is legitimately null
+        // for a first approval (no released version yet).
+        Map<String, Object> before = new LinkedHashMap<>();
+        before.put("status", previousStatus == null ? "unknown" : previousStatus.getValue());
+        before.put("current_version_id", document.getCurrentVersion() == null
+                ? null : document.getCurrentVersion().getId());
+        Map<String, Object> after = new LinkedHashMap<>(before);
+        after.put("status", DocumentStatus.APPROVED.getValue());
+        after.put("pending_effective_at", effectiveDate.toString());
+        auditService.recordAs(actor, "document", document.getId(), "status_changed",
+                Map.of("before", before, "after", after));
+    }
+
+    /**
+     * The one review-clock reset rule (Phase 2c): the clock restarts when
+     * content becomes effective — on approval/re-approval completion day, or
+     * on the effective date for deferred outcomes. Consumes any pending
+     * review reset (decision: the newest certification wins).
+     */
+    @Transactional
+    public void resetReviewClock(Document document, LocalDate certifiedOn, User actor) {
+        document.setLastReviewedAt(certifiedOn);
+        document.setNextReviewDue(reviewProperties.intervalMonths() > 0
+                ? certifiedOn.plusMonths(reviewProperties.intervalMonths())
+                : null);
+        document.setPendingReviewEffectiveAt(null);
+        auditService.recordAs(actor, "document", document.getId(), "review_clock_reset", Map.of(
+                "last_reviewed_at", certifiedOn.toString(),
+                "next_review_due", document.getNextReviewDue() == null
+                        ? "none" : document.getNextReviewDue().toString()));
+    }
+
+    /**
+     * A re-approval completed with a future effective date (Phase 2c): the
+     * in-effect version stays in effect, and the review clock resets on the
+     * chosen date via the daily job — not now.
+     */
+    @Transactional
+    public void schedulePendingReviewReset(Document document, LocalDate effectiveDate, User actor) {
+        document.setPendingReviewEffectiveAt(effectiveDate);
+        auditService.recordAs(actor, "document", document.getId(), "review_reset_scheduled", Map.of(
+                "effective_at", effectiveDate.toString()));
+    }
+
+    private void notifyOwnerOfSupersededPending(Document document, DocumentVersion retired) {
+        User owner = document.getOwner();
+        String subject = "Pending approval superseded: " + document.getDocumentNumber()
+                + " v" + retired.getVersionNumber();
+        String body = "Version " + retired.getVersionNumber() + " was approved with effect from "
+                + retired.getEffectiveAt() + " but a newer approval outcome was recorded first, "
+                + "so it never took effect. No action needed.";
+        notificationSender.send(owner, subject, body);
+
+        NotificationLog entry = new NotificationLog();
+        entry.setKind("PENDING_SUPERSEDED");
+        entry.setDocument(document);
+        entry.setDocumentVersion(retired);
+        entry.setDedupKey("pending-superseded:version=" + retired.getId());
+        entry.setRecipient(owner);
+        entry.setSubject(subject);
+        entry.setNotificationDate(java.time.LocalDate.now());
+        entry.setChannel("log");
+        notificationLogRepository.save(entry);
     }
 
     private Specification<Document> notDeleted() {

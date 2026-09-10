@@ -27,13 +27,23 @@ public class AuditService {
 
     @Transactional(propagation = Propagation.MANDATORY)
     public void record(String entityType, Integer entityId, String action, Map<String, Object> details) {
-        User performedBy = currentUserProvider.getCurrentUser();
+        recordAs(currentUserProvider.getCurrentUser(), entityType, entityId, action, details);
+    }
 
+    /**
+     * Same contract as {@link #record}, with an explicit actor — used by
+     * sweep-driven mutations running outside any security context (the
+     * System user, see {@link SystemActor}). Still MANDATORY: the entry is
+     * part of the same transaction as the change it records.
+     */
+    @Transactional(propagation = Propagation.MANDATORY)
+    public void recordAs(User actor, String entityType, Integer entityId, String action,
+                         Map<String, Object> details) {
         AuditLog entry = new AuditLog();
         entry.setEntityType(entityType);
         entry.setEntityId(entityId);
         entry.setAction(action);
-        entry.setPerformedBy(performedBy);
+        entry.setPerformedBy(actor);
         entry.setDetails(details);
         auditLogRepository.save(entry);
     }

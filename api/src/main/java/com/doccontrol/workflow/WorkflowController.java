@@ -13,6 +13,7 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
+import java.time.LocalDate;
 import java.util.List;
 
 @RestController
@@ -44,13 +45,15 @@ public class WorkflowController {
         return workflowService.instanceTasks(id);
     }
 
-    public record CompleteTaskRequest(@NotNull Boolean approved, String comment) {
+    public record CompleteTaskRequest(@NotNull Boolean approved, String comment,
+                                      LocalDate effectiveDate) {
     }
 
     @PostMapping("/workflow-tasks/{taskId}/complete")
     public WorkflowInstanceDto complete(@PathVariable String taskId,
                                         @Valid @RequestBody CompleteTaskRequest request) {
-        return workflowService.complete(taskId, request.approved(), request.comment());
+        return workflowService.complete(taskId, request.approved(), request.comment(),
+                request.effectiveDate());
     }
 
     public record DelegateTaskRequest(@NotNull Integer toUserId) {

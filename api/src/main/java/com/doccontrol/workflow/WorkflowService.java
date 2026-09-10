@@ -26,6 +26,7 @@ import org.flowable.task.api.Task;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
@@ -126,13 +127,24 @@ public class WorkflowService {
         return toDto(instance);
     }
 
-    /** Reviewer action: approve or reject. Rejection ends the whole approval. */
+    /**
+     * Reviewer action: approve or reject. Rejection ends the whole approval.
+     * An approver may attach a future {@code requestedEffectiveDate} (Phase
+     * 2c) — only the completion that ends the process uses it; absent or
+     * same-day means immediate, exactly the pre-2c behavior.
+     */
     @Transactional
-    public WorkflowInstanceDto complete(String taskId, boolean approved, String comment) {
+    public WorkflowInstanceDto complete(String taskId, boolean approved, String comment,
+                                        LocalDate requestedEffectiveDate) {
+        if (approved && requestedEffectiveDate != null
+                && requestedEffectiveDate.isBefore(LocalDate.now())) {
+            throw new ConflictException("The effective date cannot be in the past.");
+        }
         Task task = requireTask(taskId);
         WorkflowInstance instance = requireInstance(task.getProcessInstanceId());
         Document document = documentService.requireVisible(instance.getDocumentVersion().getDocument().getId());
         requireTaskAccess(task, document);
+        User actor = currentUserProvider.getCurrentUser();
 
         if (task.getAssignee() == null) {
             taskService.setAssignee(taskId, String.valueOf(currentUserProvider.getCurrentUserId()));
@@ -147,15 +159,26 @@ public class WorkflowService {
                     .processInstanceId(instance.getProcessInstanceId())
                     .count() == 0;
             if (processEnded) {
-                // every slot approved: promote the version (pointer, statuses,
-                // document release, audit) and close the instance
-                documentService.promoteVersion(instance.getDocumentVersion());
+                // every slot approved: apply the outcome and close the instance.
+                // Immediate = promote (pointer, statuses, release, audit) exactly
+                // as before Phase 2c; deferred = approved-but-not-yet-effective.
+                LocalDate today = LocalDate.now();
+                boolean deferred = requestedEffectiveDate != null && requestedEffectiveDate.isAfter(today);
+                if (deferred) {
+                    documentService.approveVersionPendingEffectivity(
+                            instance.getDocumentVersion(), requestedEffectiveDate, actor);
+                } else {
+                    documentService.promoteVersion(instance.getDocumentVersion(), today, actor);
+                }
                 instance.setStatus(WorkflowInstanceStatus.COMPLETED);
                 instance.setCompletedAt(LocalDateTime.now());
                 auditService.record("workflow_instance", instance.getId(), "completed", Map.of(
                         "document_number", document.getDocumentNumber(),
                         "version_number", instance.getDocumentVersion().getVersionNumber(),
-                        "approved_by", currentUserProvider.getCurrentUserId()));
+                        "approved_by", currentUserProvider.getCurrentUserId(),
+                        "effective_at", deferred
+                                ? requestedEffectiveDate.toString()
+                                : today.toString()));
             } else {
                 auditService.record("workflow_instance", instance.getId(), "task_approved", Map.of(
                         "task_id", taskId,

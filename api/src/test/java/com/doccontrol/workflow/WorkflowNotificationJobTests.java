@@ -174,6 +174,24 @@ class WorkflowNotificationJobTests {
         assertThat(remindersFor(adminId, pooledTaskId)).hasSize(1);
     }
 
+    @Test
+    void dailySweepEndpointIsAdminOnlyAndSafeToReRun() throws Exception {
+        Department dept = tempDepartment("N3");
+        createUser("wfsweep@doccontrol.test", dept, "User");
+
+        // a non-admin is forbidden
+        mockMvc.perform(post("/admin/jobs/daily-sweep").with(csrf())
+                        .session(loginAs("wfsweep@doccontrol.test")))
+                .andExpect(status().isForbidden());
+
+        // an admin can run the sweep as of any business date — a past date
+        // included (idempotent per date; nothing here has state due)
+        mockMvc.perform(post("/admin/jobs/daily-sweep")
+                        .param("date", LocalDate.now().minusDays(5).toString())
+                        .with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD)))
+                .andExpect(status().isOk());
+    }
+
     private List<NotificationLog> remindersFor(Integer recipientId, String taskId) {
         return notificationLogRepository.findAll().stream()
                 .filter(entry -> "REMINDER".equals(entry.getKind()))

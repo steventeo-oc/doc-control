@@ -55,7 +55,7 @@ public class SecurityConfig {
                 // the admin-only /users/** surface
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/users/*/password")
                     .authenticated()
-                .requestMatchers("/users/**", "/roles").hasRole("ADMIN")
+                .requestMatchers("/users/**", "/roles", "/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling
                 .authenticationEntryPoint(new HttpStatusEntryPoint(HttpStatus.UNAUTHORIZED))

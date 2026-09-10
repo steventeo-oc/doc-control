@@ -14,7 +14,25 @@
   2d (read & understood acknowledgment) — implemented per the approved
   `Phase2c_2d_Design_PlanBack.md`; the daily job now runs four ordered
   phases (flip → approval reminders → review notices → acknowledgment
-  notices) and is idempotent per business date (test-proven).
+  notices), each item in its own transaction with re-fetched entities (a
+  real cron would otherwise hit lazy-init/detached failures — caught by
+  smoke testing), and is idempotent per business date (test-proven).
+  `scripts/smoke.sh` sections 11–14 cover the lifecycle flows; an
+  admin-only `POST /admin/jobs/daily-sweep?date=…` triggers the sweep as
+  of a business date (that's how the smoke simulates the flip). The SPA
+  now has the workflow UI: My tasks page (approve/reject with an optional
+  effective-date picker, re-approval badge), send-for-approval /
+  start-re-approval actions and the acknowledgment panel with grants on
+  the document page (the retired admin status override was removed from
+  it). Known gap: non-admin owners can only assign reviewers by ROLE name
+  — the user list endpoint is admin-only, so the by-user picker renders
+  for admins (a small reviewer-enumeration endpoint is the later fix).
+  Two latent CSRF bugs were found by real-browser testing and fixed: the
+  SPA login fetch bypassed the CSRF header, and the XSRF-TOKEN cookie was
+  scoped to Path=/api so the SPA's JS could never read it. Browsers that
+  visited before the cookie-path fix keep a stale Path=/api XSRF-TOKEN
+  cookie that blocks login until it is cleared (session cookie — closing
+  the browser clears it).
 - **In progress / next**: the **Microsoft Graph sender** for notifications —
   waiting on the owner's Azure app registration + sender mailbox
   (operational). Nothing else is mid-flight; Phase 2e remains off-limits.
@@ -26,7 +44,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 53 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 54 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL
@@ -36,9 +54,8 @@
   stack (a background `wsl -e bash -c "sleep N"` works).
 - **Deployment target**: `docker compose up -d --build` serves the SPA at
   localhost:3000 with the API under the `/api` mount; stack rebuilt from
-  main on 2026-09-10 (reminder job confirmed in the image at class level)
-  and `scripts/smoke.sh` passed end-to-end against it, workflow release
-  included.
+  main on 2026-09-10 with Phase 2c/2d and the full smoke (sections 1–14,
+  browser-verified UI) passing against it.
 - **Verification habit**: `scripts/smoke.sh` walks the full flow (including
   the workflow release) end-to-end; run it after any stack rebuild.
 

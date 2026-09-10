@@ -21,6 +21,7 @@ export default function AcknowledgmentPanel(props: {
   const [notice, setNotice] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
   const [grantUserId, setGrantUserId] = useState<number | ''>('');
+  const [accessRefresh, setAccessRefresh] = useState(0);
 
   const load = useCallback(() => {
     acknowledgmentApi
@@ -71,7 +72,7 @@ export default function AcknowledgmentPanel(props: {
       .then(() => {
         setNotice('Status access granted.');
         setGrantUserId('');
-        load();
+        setAccessRefresh((n) => n + 1);
       })
       .catch((err: Error) => setError(err.message));
   }
@@ -135,7 +136,7 @@ export default function AcknowledgmentPanel(props: {
             <div>
               <h3>Status access</h3>
               <ul>
-                <AccessList documentId={props.documentId} onChanged={load} />
+                <AccessList documentId={props.documentId} refreshKey={accessRefresh} />
               </ul>
               <form className="inline" onSubmit={handleGrant}>
                 {users && users.length > 0 ? (
@@ -177,7 +178,7 @@ export default function AcknowledgmentPanel(props: {
   );
 }
 
-function AccessList(props: { documentId: number; onChanged: () => void }) {
+function AccessList(props: { documentId: number; refreshKey: number }) {
   const [access, setAccess] = useState<{ userId: number; userName: string }[] | null>(null);
   const [error, setError] = useState<string | null>(null);
 
@@ -188,16 +189,15 @@ function AccessList(props: { documentId: number; onChanged: () => void }) {
       .catch(() => setAccess([]));
   }, [props.documentId]);
 
-  useEffect(load, [load]);
+  // reloads on mount, after a revoke (internal), and after a grant (the
+  // refreshKey bumps)
+  useEffect(load, [load, props.refreshKey]);
 
   function revoke(userId: number) {
     setError(null);
     acknowledgmentApi
       .revoke(props.documentId, userId)
-      .then(() => {
-        load();
-        props.onChanged();
-      })
+      .then(() => load())
       .catch((err: Error) => setError(err.message));
   }
 

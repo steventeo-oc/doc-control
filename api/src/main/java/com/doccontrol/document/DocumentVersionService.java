@@ -39,7 +39,8 @@ public class DocumentVersionService {
 
     @Transactional
     public DocumentVersionDto upload(Integer documentId, String fileName, String contentType,
-                                     long size, InputStream content, String changeNotes) {
+                                     long size, InputStream content, String changeNotes,
+                                     String changeReference) {
         Document document = documentService.requireVisible(documentId);
         documentService.requireCanModify(document);
 
@@ -54,6 +55,9 @@ public class DocumentVersionService {
         version.setFileReference(fileReference);
         version.setStatus(DocumentVersionStatus.DRAFT);
         version.setChangeNotes(changeNotes);
+        // Phase 2c (Should priority): free-text Change/CAPA reference, recorded
+        // as-is — never validated against an external system.
+        version.setChangeReference(changeReference);
         version.setUploadedBy(currentUserProvider.getCurrentUser());
         versionRepository.save(version);
 

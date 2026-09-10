@@ -190,6 +190,51 @@ class WorkflowEffectivityTests {
         assertThat(notices.get(0).getDocumentVersion().getId()).isEqualTo(v2Id);
     }
 
+    @Test
+    void reviewOverdueIsDerivedAndFilterable() throws Exception {
+        Department dept = tempDepartment("E4");
+        createUser("effowner4@doccontrol.test", dept, "User");
+        createUser("effrev4@doccontrol.test", dept, "User");
+        MockHttpSession owner = loginAs("effowner4@doccontrol.test");
+
+        Integer docId = createDocumentWithFile(owner, dept.getId(), "Overdue Filter Doc");
+        Integer v1Id = firstVersionId(docId, owner);
+        Integer instanceId = startApproval(owner, docId, v1Id, reviewer("effrev4@doccontrol.test"));
+        completeTask("effrev4@doccontrol.test", taskIdOf(instanceId), true, null);
+
+        // not overdue yet
+        mockMvc.perform(get("/documents").param("review_overdue", "true").session(owner))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    String body = result.getResponse().getContentAsString();
+                    org.assertj.core.api.Assertions.assertThat(body).doesNotContain("Overdue Filter Doc");
+                });
+
+        Document document = documentRepository.findById(docId).orElseThrow();
+        document.setNextReviewDue(LocalDate.now().minusDays(1));
+        documentRepository.save(document);
+
+        mockMvc.perform(get("/documents").param("review_overdue", "true").session(owner))
+                .andExpect(status().isOk())
+                .andExpect(result -> {
+                    String body = result.getResponse().getContentAsString();
+                    org.assertj.core.api.Assertions.assertThat(body).contains("Overdue Filter Doc");
+                });
+
+        // the detail shape carries the review fields and the pending-effective date is null once released
+        DocumentDto detail = getDocument(docId, owner);
+        assertThat(detail.reviewOverdue()).isTrue();
+        assertThat(detail.pendingEffectiveDate()).isNull();
+        assertThat(detail.nextReviewDue()).isEqualTo(LocalDate.now().minusDays(1));
+    }
+
+    private DocumentDto getDocument(Integer id, MockHttpSession session) throws Exception {
+        MvcResult result = mockMvc.perform(get("/documents/{id}", id).session(session))
+                .andExpect(status().isOk())
+                .andReturn();
+        return objectMapper.readValue(result.getResponse().getContentAsString(), DocumentDto.class);
+    }
+
     // ---- helpers (mirroring the other workflow test classes) ----
 
     private Map<String, ?> reviewer(String email) {

@@ -109,6 +109,19 @@ public class Document {
     @Column(name = "pending_review_effective_at")
     private LocalDate pendingReviewEffectiveAt;
 
+    /**
+     * Derived, never stored (Phase 2c): the in-effect content's review is
+     * past due. True only while the document actually has in-effect content
+     * (released, or approved pending a future effective date) — a missed
+     * review is cleared solely by a completed re-approval resetting the
+     * clock.
+     */
+    @jakarta.persistence.Transient
+    public boolean isReviewOverdue() {
+        return nextReviewDue != null && nextReviewDue.isBefore(java.time.LocalDate.now())
+                && (status == DocumentStatus.RELEASED || status == DocumentStatus.APPROVED);
+    }
+
     @OneToMany(mappedBy = "document", fetch = FetchType.LAZY)
     private List<DocumentVersion> versions = new ArrayList<>();
 }

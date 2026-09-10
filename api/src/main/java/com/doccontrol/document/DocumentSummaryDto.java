@@ -1,5 +1,6 @@
 package com.doccontrol.document;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /** List-row shape of a document (GET /documents). */
@@ -12,6 +13,8 @@ public record DocumentSummaryDto(
         String departmentCode,
         Integer ownerUserId,
         String ownerName,
+        LocalDate nextReviewDue,
+        boolean reviewOverdue,
         LocalDateTime createdAt,
         LocalDateTime updatedAt) {
 
@@ -25,6 +28,8 @@ public record DocumentSummaryDto(
                 document.getDepartment().getCode(),
                 document.getOwner().getId(),
                 document.getOwner().getName(),
+                document.getNextReviewDue(),
+                document.isReviewOverdue(),
                 document.getCreatedAt(),
                 document.getUpdatedAt());
     }

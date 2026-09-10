@@ -1,5 +1,6 @@
 package com.doccontrol.document;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /** API shape of a document version (list, detail). */
@@ -9,6 +10,8 @@ public record DocumentVersionDto(
         Integer versionNumber,
         String status,
         String changeNotes,
+        String changeReference,
+        LocalDate effectiveAt,
         String fileName,
         Integer uploadedByUserId,
         String uploadedByName,
@@ -23,6 +26,8 @@ public record DocumentVersionDto(
                 version.getVersionNumber(),
                 version.getStatus() == null ? null : version.getStatus().getValue(),
                 version.getChangeNotes(),
+                version.getChangeReference(),
+                version.getEffectiveAt(),
                 fileName,
                 version.getUploadedBy().getId(),
                 version.getUploadedBy().getName(),

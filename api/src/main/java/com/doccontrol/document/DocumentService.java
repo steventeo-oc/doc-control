@@ -163,7 +163,7 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
-                                 String q, int page, int pageSize) {
+                                 String q, Boolean reviewOverdue, int page, int pageSize) {
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100),
                 Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
 
@@ -181,6 +181,18 @@ public class DocumentService {
         if (q != null && !q.isBlank()) {
             String needle = q.toLowerCase();
             parts.add((root, query, cb) -> cb.like(cb.lower(root.get("name")), "%" + needle + "%"));
+        }
+        if (reviewOverdue != null) {
+            // same derivation as Document.isReviewOverdue, in-query: the
+            // in-effect content's review is past due
+            LocalDate today = LocalDate.now();
+            parts.add((root, query, cb) -> {
+                Predicate overdue = cb.and(
+                        cb.isNotNull(root.get("nextReviewDue")),
+                        cb.lessThan(root.get("nextReviewDue"), today),
+                        root.get("status").in(List.of(DocumentStatus.RELEASED, DocumentStatus.APPROVED)));
+                return reviewOverdue ? overdue : cb.not(overdue);
+            });
         }
         // Permission filtering happens here, in the query — not hidden in the
         // frontend (CLAUDE.md convention 4). Assigned reviewers also see the

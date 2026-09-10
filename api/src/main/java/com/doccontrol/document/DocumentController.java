@@ -33,9 +33,10 @@ public class DocumentController {
             @RequestParam(required = false) String department,
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean review_overdue,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
-        return documentService.list(type, department, status, q, page, pageSize);
+        return documentService.list(type, department, status, q, review_overdue, page, pageSize);
     }
 
     /**
@@ -56,7 +57,7 @@ public class DocumentController {
         DocumentDto created = documentService.create(documentTypeId, departmentId, name.trim());
         if (file != null && !file.isEmpty()) {
             documentVersionService.upload(created.id(), file.getOriginalFilename(), file.getContentType(),
-                    file.getSize(), file.getInputStream(), null);
+                    file.getSize(), file.getInputStream(), null, null);
         }
         return ResponseEntity
                 .created(URI.create("/documents/" + created.id()))

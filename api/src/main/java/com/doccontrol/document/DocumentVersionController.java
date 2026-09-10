@@ -34,12 +34,13 @@ public class DocumentVersionController {
     @PostMapping(value = "/documents/{id}/versions", consumes = MediaType.MULTIPART_FORM_DATA_VALUE)
     public DocumentVersionDto upload(@PathVariable Integer id,
                                      @RequestParam("file") MultipartFile file,
-                                     @RequestParam(value = "change_notes", required = false) String changeNotes) throws IOException {
+                                     @RequestParam(value = "change_notes", required = false) String changeNotes,
+                                     @RequestParam(value = "change_reference", required = false) String changeReference) throws IOException {
         if (file == null || file.isEmpty()) {
             throw new IllegalArgumentException("file is required");
         }
         return versionService.upload(id, file.getOriginalFilename(), file.getContentType(),
-                file.getSize(), file.getInputStream(), changeNotes);
+                file.getSize(), file.getInputStream(), changeNotes, changeReference);
     }
 
     @GetMapping("/documents/{id}/versions/{versionId}")

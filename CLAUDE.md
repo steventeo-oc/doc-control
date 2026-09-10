@@ -24,10 +24,12 @@
   effective-date picker, re-approval badge), send-for-approval /
   start-re-approval actions and the acknowledgment panel with grants on
   the document page (the retired admin status override was removed from
-  it). Known gap: non-admin owners can only assign reviewers by ROLE name
-  — the user list endpoint is admin-only, so the by-user picker renders
-  for admins (a small reviewer-enumeration endpoint is the later fix).
-  Two latent CSRF bugs were found by real-browser testing and fixed: the
+  it). Reviewer assignment is available to every modifier: the
+  document-scoped `GET /documents/{id}/reviewer-candidates` picklist
+  (minimal fields, gated by the same canModify rule as starting an
+  approval) serves the by-user picker for non-admin owners — `/users`
+  itself stays admin-only. Two latent CSRF bugs were found by real-browser
+  testing and fixed: the
   SPA login fetch bypassed the CSRF header, and the XSRF-TOKEN cookie was
   scoped to Path=/api so the SPA's JS could never read it. Browsers that
   visited before the cookie-path fix keep a stale Path=/api XSRF-TOKEN

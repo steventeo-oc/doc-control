@@ -19,6 +19,7 @@ import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 import org.hibernate.annotations.UpdateTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.List;
@@ -87,6 +88,26 @@ public class Document {
     /** Soft delete (CLAUDE.md schema decisions); null means not trashed. */
     @Column(name = "deleted_at")
     private LocalDateTime deletedAt;
+
+    /**
+     * Periodic-review clock (Phase 2c): when the in-effect content was last
+     * certified (approval, re-approval, or effective-date flip), and when the
+     * next review is due. Overdue is derived (next_review_due before today),
+     * never stored. The clock resets when a version becomes effective.
+     */
+    @Column(name = "last_reviewed_at")
+    private LocalDate lastReviewedAt;
+
+    @Column(name = "next_review_due")
+    private LocalDate nextReviewDue;
+
+    /**
+     * A re-approval's chosen future effective date (Phase 2c): the daily job
+     * consumes it on that date to reset the review clock. Null when nothing
+     * is pending.
+     */
+    @Column(name = "pending_review_effective_at")
+    private LocalDate pendingReviewEffectiveAt;
 
     @OneToMany(mappedBy = "document", fetch = FetchType.LAZY)
     private List<DocumentVersion> versions = new ArrayList<>();

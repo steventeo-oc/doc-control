@@ -15,6 +15,7 @@ import lombok.NoArgsConstructor;
 import lombok.Setter;
 import org.hibernate.annotations.CreationTimestamp;
 
+import java.time.LocalDate;
 import java.time.LocalDateTime;
 
 /**
@@ -55,6 +56,22 @@ public class DocumentVersion {
 
     @Column(name = "change_notes")
     private String changeNotes;
+
+    /**
+     * Optional free-text Change Request / CAPA / Deviation reference
+     * (Phase 2c, Should priority) — recorded as-is, never validated against
+     * an external system.
+     */
+    @Column(name = "change_reference")
+    private String changeReference;
+
+    /**
+     * The date this version takes (or took) effect: the approval date for
+     * immediate releases, the approver-chosen date for deferred ones
+     * (Phase 2c). Immutable once effective.
+     */
+    @Column(name = "effective_at")
+    private LocalDate effectiveAt;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "uploaded_by", nullable = false)

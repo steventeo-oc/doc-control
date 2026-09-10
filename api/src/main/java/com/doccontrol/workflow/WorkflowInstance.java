@@ -45,6 +45,13 @@ public class WorkflowInstance {
 
     private WorkflowInstanceStatus status;
 
+    /**
+     * APPROVAL (draft-version approval) or REAPPROVAL (periodic-review
+     * re-approval of the current version) — Phase 2c. Defaults to APPROVAL;
+     * the DB column carries the same default for pre-existing rows.
+     */
+    private WorkflowInstanceKind kind = WorkflowInstanceKind.APPROVAL;
+
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
     @JoinColumn(name = "started_by", nullable = false)
     private User startedBy;

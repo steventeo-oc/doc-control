@@ -26,6 +26,10 @@ export interface DocumentFilters {
 }
 
 export const authApi = {
+  // POST through the shared client so the CSRF double-submit header is
+  // attached — a raw fetch here gets 401-rejected by Spring Security.
+  login: (email: string, password: string) =>
+    api.post<void>('/auth/login', { email, password }),
   me: () => api.get<UserSummary>('/auth/me'),
   logout: () => api.post<void>('/auth/logout'),
 };

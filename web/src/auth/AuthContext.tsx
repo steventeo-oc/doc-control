@@ -32,17 +32,8 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const login = useCallback(async (email: string, password: string) => {
     // The backend sets a session cookie; /auth/me afterwards gives the profile.
-    await fetch('/api/auth/login', {
-      method: 'POST',
-      credentials: 'include',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password }),
-    }).then(async (res) => {
-      if (!res.ok) {
-        const body = await res.json().catch(() => null);
-        throw new ApiError(res.status, body?.detail ?? 'Login failed');
-      }
-    });
+    // Must go through the shared client: the login POST needs the CSRF header.
+    await authApi.login(email, password);
     setUser(await authApi.me());
   }, []);
 

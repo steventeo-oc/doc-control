@@ -29,15 +29,20 @@ import java.util.List;
 public class SecurityConfig {
 
     // CSRF: double-submit cookie scheme for the SPA (frontend reads the
-    // XSRF-TOKEN cookie and echoes it in X-XSRF-TOKEN). SameSite=Lax stays on
-    // as defense in depth. See SpaCsrfTokenRequestHandler and CsrfCookieFilter.
+    // XSRF-TOKEN cookie and echoes it in X-XSRF-TOKEN). The cookie path must
+    // be "/" — the repository's default is the servlet context path (/api),
+    // which hides the cookie from the SPA's JS on page paths like /login.
+    // SameSite=Lax stays on as defense in depth. See
+    // SpaCsrfTokenRequestHandler and CsrfCookieFilter.
     @Bean
     SecurityFilterChain securityFilterChain(HttpSecurity http,
                                             CorsConfigurationSource corsConfigurationSource) throws Exception {
+        CookieCsrfTokenRepository csrfTokenRepository = CookieCsrfTokenRepository.withHttpOnlyFalse();
+        csrfTokenRepository.setCookiePath("/");
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
             .csrf(csrf -> csrf
-                .csrfTokenRepository(CookieCsrfTokenRepository.withHttpOnlyFalse())
+                .csrfTokenRepository(csrfTokenRepository)
                 .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
             .addFilterAfter(new CsrfCookieFilter(), AnonymousAuthenticationFilter.class)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))

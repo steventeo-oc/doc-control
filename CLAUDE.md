@@ -1,5 +1,34 @@
 # Project Brief — Document Control System
 
+## Current State (read this first — updated at end of each work session)
+
+- **Done**: Sprint 1 (auth, lookups, documents + MinIO-backed versions,
+  users/roles) — complete and piloted, with pilot fixes (version-pointer
+  semantics, version-history visibility, CSRF enabled, credential guards).
+  Phase 2a (multi-department users, department-scoped create/edit).
+  Phase 2b core: **Flowable 8.0.0** embedded approval flow (ad-hoc parallel
+  reviewers, 100% promotion, rejection, delegation, pooled role tasks,
+  reviewer visibility) **and** the daily reminder/escalation job (log-only
+  sender). The Sprint 1 status-override stopgap is retired.
+- **In progress / next**: the **Microsoft Graph sender** for notifications —
+  waiting on the owner's Azure app registration + sender mailbox
+  (operational). Nothing else is mid-flight; do not start Phase 2c/2d/2e.
+- **Where things run (this dev machine)**: no Docker on Windows — Docker
+  Engine lives inside WSL2 (run compose via `wsl -e bash -c "cd
+  '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && sudo docker compose
+  up -d --build"`, with `POSTGRES_HOST_PORT=15432 MINIO_HOST_PORT=19000
+  MINIO_CONSOLE_HOST_PORT=19001` to avoid port collisions). Tests need a
+  live database: local dev Postgres cluster on **5434**
+  (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
+  workflow/notification tests also need MinIO on **9000**
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 41 tests green.
+- **Deployment target**: `docker compose up -d --build` serves the SPA at
+  localhost:3000 with the API under the `/api` mount; the running stack is
+  one rebuild behind main (the reminder job is not in the image yet) —
+  rebuild at the start of the next work session.
+- **Verification habit**: `scripts/smoke.sh` walks the full flow (including
+  the workflow release) end-to-end; run it after any stack rebuild.
+
 Read this file first. It orients you to the project; the two linked docs are
 the detailed technical reference. Ask before deviating from anything stated
 here as a decision (not a suggestion) — these were made deliberately after

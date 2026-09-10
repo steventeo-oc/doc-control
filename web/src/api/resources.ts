@@ -1,5 +1,8 @@
 import { api } from './client';
 import type {
+  AcknowledgmentAccess,
+  AcknowledgmentRecord,
+  AcknowledgmentStatus,
   Department,
   DocumentDetail,
   DocumentTier,
@@ -9,6 +12,8 @@ import type {
   RoleRow,
   UserRow,
   UserSummary,
+  WorkflowInstance,
+  WorkflowTask,
 } from './types';
 
 export interface DocumentFilters {
@@ -64,12 +69,53 @@ export const documentApi = {
   softDelete: (id: number) => api.delete(`/documents/${id}`),
   restore: (id: number) => api.post<DocumentDetail>(`/documents/${id}/restore`),
   versions: (id: number) => api.get<DocumentVersion[]>(`/documents/${id}/versions`),
-  uploadVersion: (id: number, file: File, changeNotes: string | null) => {
+  uploadVersion: (id: number, file: File, changeNotes: string | null, changeReference: string | null) => {
     const form = new FormData();
     form.set('file', file);
     if (changeNotes) form.set('change_notes', changeNotes);
+    if (changeReference) form.set('change_reference', changeReference);
     return api.postForm<DocumentVersion>(`/documents/${id}/versions`, form);
   },
+};
+
+export interface AssigneeInput {
+  type: 'USER' | 'ROLE';
+  userId?: number;
+  roleName?: string;
+}
+
+export const workflowApi = {
+  myTasks: () => api.get<WorkflowTask[]>('/my/tasks'),
+  instance: (id: number) => api.get<WorkflowInstance>(`/workflow-instances/${id}`),
+  instanceTasks: (id: number) => api.get<WorkflowTask[]>(`/workflow-instances/${id}/tasks`),
+  startApproval: (documentId: number, versionId: number, assignees: AssigneeInput[]) =>
+    api.post<WorkflowInstance>(
+      `/documents/${documentId}/versions/${versionId}/workflow/start`,
+      { assignees },
+    ),
+  startReviewApproval: (documentId: number, assignees: AssigneeInput[]) =>
+    api.post<WorkflowInstance>(`/documents/${documentId}/review-approval`, { assignees }),
+  complete: (taskId: string, approved: boolean, comment: string | null, effectiveDate: string | null) =>
+    api.post<WorkflowInstance>(`/workflow-tasks/${taskId}/complete`, {
+      approved,
+      comment,
+      effectiveDate,
+    }),
+  delegate: (taskId: string, toUserId: number) =>
+    api.post<WorkflowInstance>(`/workflow-tasks/${taskId}/delegate`, { toUserId }),
+};
+
+export const acknowledgmentApi = {
+  acknowledge: (documentId: number) =>
+    api.post<AcknowledgmentRecord>(`/documents/${documentId}/acknowledge`),
+  status: (documentId: number) =>
+    api.get<AcknowledgmentStatus>(`/documents/${documentId}/acknowledgments`),
+  listAccess: (documentId: number) =>
+    api.get<AcknowledgmentAccess[]>(`/documents/${documentId}/acknowledgments/access`),
+  grant: (documentId: number, userId: number) =>
+    api.post<AcknowledgmentAccess>(`/documents/${documentId}/acknowledgments/access`, { userId }),
+  revoke: (documentId: number, userId: number) =>
+    api.delete(`/documents/${documentId}/acknowledgments/access/${userId}`),
 };
 
 export const userApi = {

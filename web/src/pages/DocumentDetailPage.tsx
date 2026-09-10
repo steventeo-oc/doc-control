@@ -63,7 +63,13 @@ export default function DocumentDetailPage() {
       return;
     }
     run(
-      () => documentApi.uploadVersion(documentId, file, (data.get('changeNotes') as string) || null),
+      () =>
+        documentApi.uploadVersion(
+          documentId,
+          file,
+          (data.get('changeNotes') as string) || null,
+          (data.get('changeReference') as string) || null,
+        ),
       'New version uploaded.',
     );
     setUploadNotes('');
@@ -225,6 +231,13 @@ export default function DocumentDetailPage() {
               value={uploadNotes}
               placeholder="What changed?"
               onChange={(e) => setUploadNotes(e.target.value)}
+            />
+          </label>
+          <label>
+            Change reference
+            <input
+              name="changeReference"
+              placeholder="Change request / CAPA reference (optional)"
             />
           </label>
           <button className="primary" type="submit">

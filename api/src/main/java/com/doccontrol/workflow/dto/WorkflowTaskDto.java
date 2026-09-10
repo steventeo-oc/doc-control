@@ -11,6 +11,7 @@ public record WorkflowTaskDto(
         String assigneeName,
         List<String> candidateGroups,
         boolean claimedByMe,
+        boolean reapproval,
         LocalDateTime dueDate,
         String documentNumber,
         Integer documentId,

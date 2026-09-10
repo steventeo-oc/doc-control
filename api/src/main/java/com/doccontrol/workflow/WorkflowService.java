@@ -6,6 +6,7 @@ import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
 import com.doccontrol.document.Document;
 import com.doccontrol.document.DocumentService;
+import com.doccontrol.document.DocumentStatus;
 import com.doccontrol.document.DocumentVersion;
 import com.doccontrol.document.DocumentVersionRepository;
 import com.doccontrol.document.DocumentVersionStatus;
@@ -79,42 +80,19 @@ public class WorkflowService {
         if (version.getStatus() != DocumentVersionStatus.DRAFT) {
             throw new ConflictException("Only draft versions can be sent for approval.");
         }
-        if (instanceRepository.existsByDocumentVersionIdAndStatus(versionId, WorkflowInstanceStatus.IN_PROGRESS)) {
-            throw new ConflictException("An approval is already in progress for this version.");
-        }
+        requireNoApprovalInFlight(document);
 
-        List<String> slots = new ArrayList<>();
-        List<String> slotDescriptions = new ArrayList<>();
-        for (StartApprovalRequest.AssigneeInput assignee : request.assignees()) {
-            switch (assignee.type().toUpperCase()) {
-                case "USER" -> {
-                    User user = userRepository.findById(assignee.userId())
-                            .filter(User::isActive)
-                            .orElseThrow(() -> new NotFoundException(
-                                    "Reviewer user " + assignee.userId() + " not found."));
-                    slots.add(SlotAssignmentListener.USER_PREFIX + user.getId());
-                    slotDescriptions.add(user.getEmail());
-                }
-                case "ROLE" -> {
-                    Role role = roleRepository.findByName(assignee.roleName())
-                            .orElseThrow(() -> new NotFoundException(
-                                    "Role '" + assignee.roleName() + "' not found."));
-                    slots.add(SlotAssignmentListener.ROLE_PREFIX + role.getName());
-                    slotDescriptions.add("role:" + role.getName());
-                }
-                default -> throw new ConflictException(
-                        "Assignee type must be USER or ROLE, got: " + assignee.type());
-            }
-        }
+        AssigneeSlots slots = resolveSlots(request);
 
         WorkflowInstance instance = new WorkflowInstance();
         instance.setDocumentVersion(version);
+        instance.setKind(WorkflowInstanceKind.APPROVAL);
         instance.setStatus(WorkflowInstanceStatus.IN_PROGRESS);
         instance.setStartedBy(currentUserProvider.getCurrentUser());
         instanceRepository.save(instance);
 
         ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(PROCESS_KEY, Map.of(
-                "assigneeSlots", slots,
+                "assigneeSlots", slots.names(),
                 "workflowInstanceId", instance.getId()));
         instance.setProcessInstanceId(processInstance.getId());
         instanceRepository.save(instance);
@@ -122,9 +100,97 @@ public class WorkflowService {
         auditService.record("workflow_instance", instance.getId(), "created", Map.of(
                 "document_number", document.getDocumentNumber(),
                 "version_number", version.getVersionNumber(),
-                "assignees", slotDescriptions));
+                "assignees", slots.descriptions()));
 
         return toDto(instance);
+    }
+
+    /**
+     * Periodic-review re-approval (Phase 2c): re-certifies the currently
+     * released version through the same single-stage parallel process. No
+     * content changes, so completion never moves the version pointer — it
+     * resets the review clock. Reviewers see the difference via the task
+     * name and the {@code reapproval} flag.
+     */
+    @Transactional
+    public WorkflowInstanceDto startReviewApproval(Integer documentId, StartApprovalRequest request) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanModify(document);
+
+        if (document.getStatus() != DocumentStatus.RELEASED) {
+            throw new ConflictException(
+                    "Only released documents can be re-approved for periodic review.");
+        }
+        DocumentVersion version = document.getCurrentVersion();
+        if (version == null) {
+            throw new ConflictException("The document has no current version to re-approve.");
+        }
+        requireNoApprovalInFlight(document);
+
+        AssigneeSlots slots = resolveSlots(request);
+
+        WorkflowInstance instance = new WorkflowInstance();
+        instance.setDocumentVersion(version);
+        instance.setKind(WorkflowInstanceKind.REAPPROVAL);
+        instance.setStatus(WorkflowInstanceStatus.IN_PROGRESS);
+        instance.setStartedBy(currentUserProvider.getCurrentUser());
+        instanceRepository.save(instance);
+
+        ProcessInstance processInstance = runtimeService.startProcessInstanceByKey(PROCESS_KEY, Map.of(
+                "assigneeSlots", slots.names(),
+                "workflowInstanceId", instance.getId(),
+                "reapproval", true));
+        instance.setProcessInstanceId(processInstance.getId());
+        instanceRepository.save(instance);
+
+        auditService.record("workflow_instance", instance.getId(), "created", Map.of(
+                "document_number", document.getDocumentNumber(),
+                "version_number", version.getVersionNumber(),
+                "kind", WorkflowInstanceKind.REAPPROVAL.getValue(),
+                "assignees", slots.descriptions()));
+
+        return toDto(instance);
+    }
+
+    /**
+     * At most one approval in flight per DOCUMENT (plan-back flag F6): a
+     * draft-version approval and a re-approval must not race on pointer and
+     * status at completion.
+     */
+    private void requireNoApprovalInFlight(Document document) {
+        if (!instanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("An approval is already in progress for this document.");
+        }
+    }
+
+    private AssigneeSlots resolveSlots(StartApprovalRequest request) {
+        List<String> names = new ArrayList<>();
+        List<String> descriptions = new ArrayList<>();
+        for (StartApprovalRequest.AssigneeInput assignee : request.assignees()) {
+            switch (assignee.type().toUpperCase()) {
+                case "USER" -> {
+                    User user = userRepository.findById(assignee.userId())
+                            .filter(User::isActive)
+                            .orElseThrow(() -> new NotFoundException(
+                                    "Reviewer user " + assignee.userId() + " not found."));
+                    names.add(SlotAssignmentListener.USER_PREFIX + user.getId());
+                    descriptions.add(user.getEmail());
+                }
+                case "ROLE" -> {
+                    Role role = roleRepository.findByName(assignee.roleName())
+                            .orElseThrow(() -> new NotFoundException(
+                                    "Role '" + assignee.roleName() + "' not found."));
+                    names.add(SlotAssignmentListener.ROLE_PREFIX + role.getName());
+                    descriptions.add("role:" + role.getName());
+                }
+                default -> throw new ConflictException(
+                        "Assignee type must be USER or ROLE, got: " + assignee.type());
+            }
+        }
+        return new AssigneeSlots(List.copyOf(names), List.copyOf(descriptions));
+    }
+
+    private record AssigneeSlots(List<String> names, List<String> descriptions) {
     }
 
     /**
@@ -161,10 +227,17 @@ public class WorkflowService {
             if (processEnded) {
                 // every slot approved: apply the outcome and close the instance.
                 // Immediate = promote (pointer, statuses, release, audit) exactly
-                // as before Phase 2c; deferred = approved-but-not-yet-effective.
+                // as before Phase 2c; deferred = approved-but-not-yet-effective;
+                // a re-approval never moves the pointer, it re-certifies.
                 LocalDate today = LocalDate.now();
                 boolean deferred = requestedEffectiveDate != null && requestedEffectiveDate.isAfter(today);
-                if (deferred) {
+                if (instance.getKind() == WorkflowInstanceKind.REAPPROVAL) {
+                    if (deferred) {
+                        documentService.schedulePendingReviewReset(document, requestedEffectiveDate, actor);
+                    } else {
+                        documentService.resetReviewClock(document, today, actor);
+                    }
+                } else if (deferred) {
                     documentService.approveVersionPendingEffectivity(
                             instance.getDocumentVersion(), requestedEffectiveDate, actor);
                 } else {
@@ -176,6 +249,7 @@ public class WorkflowService {
                         "document_number", document.getDocumentNumber(),
                         "version_number", instance.getDocumentVersion().getVersionNumber(),
                         "approved_by", currentUserProvider.getCurrentUserId(),
+                        "kind", instance.getKind().getValue(),
                         "effective_at", deferred
                                 ? requestedEffectiveDate.toString()
                                 : today.toString()));
@@ -185,7 +259,10 @@ public class WorkflowService {
                         "document_number", document.getDocumentNumber()));
             }
         } else {
-            // 100% required: a single rejection rejects the whole approval
+            // 100% required: a single rejection rejects the whole approval.
+            // A rejected re-approval leaves the document released (its content
+            // is unchanged and already in effect) — it simply stays
+            // review-overdue (plan-back flag F8).
             runtimeService.deleteProcessInstance(instance.getProcessInstanceId(),
                     "Rejected by reviewer " + currentUserProvider.getCurrentUser().getEmail());
             instance.setStatus(WorkflowInstanceStatus.REJECTED);
@@ -193,7 +270,8 @@ public class WorkflowService {
             auditService.record("workflow_instance", instance.getId(), "rejected", Map.of(
                     "document_number", document.getDocumentNumber(),
                     "version_number", instance.getDocumentVersion().getVersionNumber(),
-                    "rejected_by", currentUserProvider.getCurrentUserId()));
+                    "rejected_by", currentUserProvider.getCurrentUserId(),
+                    "kind", instance.getKind().getValue()));
         }
         return toDto(instance);
     }
@@ -316,6 +394,7 @@ public class WorkflowService {
                 version.getId(),
                 version.getVersionNumber(),
                 instance.getStatus() == null ? null : instance.getStatus().getValue(),
+                instance.getKind() == WorkflowInstanceKind.REAPPROVAL,
                 instance.getStartedBy().getName(),
                 instance.getStartedAt(),
                 instance.getCompletedAt(),
@@ -342,6 +421,7 @@ public class WorkflowService {
                 assigneeName,
                 candidateGroups,
                 task.getAssignee() != null && task.getAssignee().equals(String.valueOf(viewer.getId())),
+                instance != null && instance.getKind() == WorkflowInstanceKind.REAPPROVAL,
                 task.getDueDate() == null ? null : LocalDateTime.ofInstant(task.getDueDate().toInstant(),
                         java.time.ZoneId.systemDefault()),
                 instance == null ? null : instance.getDocumentVersion().getDocument().getDocumentNumber(),

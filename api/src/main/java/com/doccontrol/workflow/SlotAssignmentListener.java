@@ -28,6 +28,12 @@ public class SlotAssignmentListener implements TaskListener {
 
     @Override
     public void notify(DelegateTask delegateTask) {
+        // Phase 2c: a periodic-review re-approval must be visibly different
+        // from a first-time approval — the task name carries it into every
+        // task list, and the instance DTOs expose the reapproval flag.
+        if (Boolean.TRUE.equals(delegateTask.getVariable("reapproval"))) {
+            delegateTask.setName("Periodic review re-approval");
+        }
         String slot = (String) delegateTask.getVariable("slot");
         if (slot == null) {
             throw new IllegalStateException("Approval task created without an assignee slot");

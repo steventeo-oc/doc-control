@@ -11,6 +11,7 @@ public record WorkflowInstanceDto(
         Integer documentVersionId,
         Integer versionNumber,
         String status,
+        boolean reapproval,
         String startedByName,
         LocalDateTime startedAt,
         LocalDateTime completedAt,

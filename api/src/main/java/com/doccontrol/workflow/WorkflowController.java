@@ -35,6 +35,16 @@ public class WorkflowController {
                 .body(started);
     }
 
+    /** Periodic-review re-approval of the document's current released version (Phase 2c). */
+    @PostMapping("/documents/{documentId}/review-approval")
+    public ResponseEntity<WorkflowInstanceDto> startReviewApproval(@PathVariable Integer documentId,
+                                                                   @Valid @RequestBody StartApprovalRequest request) {
+        WorkflowInstanceDto started = workflowService.startReviewApproval(documentId, request);
+        return ResponseEntity
+                .created(URI.create("/workflow-instances/" + started.id()))
+                .body(started);
+    }
+
     @GetMapping("/workflow-instances/{id}")
     public WorkflowInstanceDto instance(@PathVariable Integer id) {
         return workflowService.get(id);

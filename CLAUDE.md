@@ -348,3 +348,14 @@ deployment, even if they don't block Sprint 1 development itself:
   read/write on the `doccontrol` bucket only — the api should never use the
   root account. Serve MinIO behind TLS; switch the api's storage endpoint to
   https accordingly.
+- [ ] **Confirm the daily-sweep audit story satisfies the auditor** — the
+  manual trigger (`POST /admin/jobs/daily-sweep`) writes a `daily_sweep`
+  audit row (who, when, which business date), and its item-level effects
+  are audited (flips/clock resets as the System user) plus every send in
+  `notification_log`. Scheduled (cron) runs have NO trigger-level audit row
+  — they are visible only through those item-level effects. Decide before
+  go-live whether that satisfies ISO 9001 evidence needs or whether
+  scheduled runs should also write trigger rows (a one-line change in
+  `WorkflowNotificationJob.runScheduled`); note the
+  `/audit-log`+`/audit-log/export` endpoints are Sprint 4 and are the
+  intended way to produce this evidence.

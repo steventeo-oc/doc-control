@@ -2,8 +2,16 @@ package com.doccontrol.workflow;
 
 import com.doccontrol.audit.NotificationLog;
 import com.doccontrol.audit.NotificationLogRepository;
+import com.doccontrol.audit.SystemActor;
+import com.doccontrol.config.ReviewProperties;
 import com.doccontrol.config.WorkflowProperties;
 import com.doccontrol.document.Document;
+import com.doccontrol.document.DocumentRepository;
+import com.doccontrol.document.DocumentService;
+import com.doccontrol.document.DocumentStatus;
+import com.doccontrol.document.DocumentVersion;
+import com.doccontrol.document.DocumentVersionRepository;
+import com.doccontrol.document.DocumentVersionStatus;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.notification.NotificationSender;
@@ -22,19 +30,23 @@ import java.util.ArrayList;
 import java.util.List;
 
 /**
- * Daily reminder/escalation sweep over pending approval tasks (Phase 2b,
- * confirmed with QA):
+ * The daily sweep (Phase 2b reminders/escalations + Phase 2c lifecycle
+ * phases), run as ordered phases so the day's effects compose:
  *
- * - a reminder goes to the reviewer when the task is due today or tomorrow;
- * - when a task is escalateAfterOverdueDays business days overdue, the
- *   document owner and all active admins are notified (once per task);
- * - pooled (role) tasks remind all current members of the role until
- *   someone claims the task;
- * - every send is recorded in notification_log, which also drives the
- *   per-day reminder / once-per-task escalation dedup.
+ * 1. flip approved versions whose effective date has arrived (state
+ *    mutation, audited as the System user) and apply pending review-clock
+ *    resets from deferred re-approvals;
+ * 2. approval-task reminders and escalations (Phase 2b, unchanged);
+ * 3. periodic-review notifications (Phase 2c): REVIEW_DUE to the owner in
+ *    the reminder window, REVIEW_OVERDUE to owner + admins once the review
+ *    is escalateAfterOverdueDays business days past due.
  *
- * Sends go through {@link NotificationSender} — the log-only stub today,
- * Microsoft Graph once the Azure app registration exists.
+ * Every phase is idempotent for a given business date — safe to run twice:
+ * the flip and clock reset are one-way state transitions, and every
+ * notification dedups via notification_log (per day, or once per cycle via
+ * a stable dedup_key). Sends go through {@link NotificationSender} — the
+ * log-only stub today, Microsoft Graph once the Azure app registration
+ * exists.
  */
 @Component
 public class WorkflowNotificationJob {
@@ -47,19 +59,34 @@ public class WorkflowNotificationJob {
     private final NotificationLogRepository notificationLogRepository;
     private final NotificationSender notificationSender;
     private final WorkflowProperties properties;
+    private final ReviewProperties reviewProperties;
+    private final DocumentService documentService;
+    private final DocumentRepository documentRepository;
+    private final DocumentVersionRepository documentVersionRepository;
+    private final SystemActor systemActor;
 
     public WorkflowNotificationJob(TaskService taskService,
                                    WorkflowInstanceRepository instanceRepository,
                                    UserRepository userRepository,
                                    NotificationLogRepository notificationLogRepository,
                                    NotificationSender notificationSender,
-                                   WorkflowProperties properties) {
+                                   WorkflowProperties properties,
+                                   ReviewProperties reviewProperties,
+                                   DocumentService documentService,
+                                   DocumentRepository documentRepository,
+                                   DocumentVersionRepository documentVersionRepository,
+                                   SystemActor systemActor) {
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
         this.userRepository = userRepository;
         this.notificationLogRepository = notificationLogRepository;
         this.notificationSender = notificationSender;
         this.properties = properties;
+        this.reviewProperties = reviewProperties;
+        this.documentService = documentService;
+        this.documentRepository = documentRepository;
+        this.documentVersionRepository = documentVersionRepository;
+        this.systemActor = systemActor;
     }
 
     @Scheduled(cron = "${doccontrol.workflow.reminder-cron:0 0 7 * * *}")
@@ -68,6 +95,8 @@ public class WorkflowNotificationJob {
     }
 
     void run(LocalDate today) {
+        flipDueVersions(today);
+
         List<WorkflowInstance> instances = instanceRepository
                 .findByStatus(WorkflowInstanceStatus.IN_PROGRESS);
         for (WorkflowInstance instance : instances) {
@@ -79,6 +108,115 @@ public class WorkflowNotificationJob {
                         instance.getId(), e.getMessage());
             }
         }
+
+        sweepReviewOverdue(today);
+    }
+
+    /**
+     * Phase 1 — effectivity flips and deferred review-clock resets. Each
+     * item runs in its own transaction (the service methods are
+     * transactional); a failure is logged and the sweep moves on. Both
+     * transitions are one-way, so a re-run on the same date finds nothing.
+     */
+    private void flipDueVersions(LocalDate today) {
+        User system = systemActor.get();
+        for (DocumentVersion version : documentVersionRepository
+                .findAllByStatusAndEffectiveAtLessThanEqualAndDocument_DeletedAtIsNull(
+                        DocumentVersionStatus.APPROVED, today)) {
+            try {
+                documentService.promoteVersion(version, version.getEffectiveAt(), system);
+                log.info("Effective-date flip applied: {} v{} effective {}",
+                        version.getDocument().getDocumentNumber(),
+                        version.getVersionNumber(), version.getEffectiveAt());
+            } catch (Exception e) {
+                log.warn("Effective-date flip failed for version {}: {}",
+                        version.getId(), e.getMessage());
+            }
+        }
+        for (Document document : documentRepository
+                .findAllByPendingReviewEffectiveAtLessThanEqualAndDeletedAtIsNull(today)) {
+            try {
+                documentService.resetReviewClock(document, document.getPendingReviewEffectiveAt(), system);
+                log.info("Review clock reset applied: {} effective {}",
+                        document.getDocumentNumber(), document.getPendingReviewEffectiveAt());
+            } catch (Exception e) {
+                log.warn("Review clock reset failed for document {}: {}",
+                        document.getId(), e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Phase 3 — periodic-review notifications (Phase 2c). The owner is
+     * responsible; escalation to owner + admins mirrors the approval shape.
+     */
+    private void sweepReviewOverdue(LocalDate today) {
+        if (reviewProperties.intervalMonths() <= 0) {
+            return; // review tracking switched off
+        }
+        List<Document> documents = documentRepository
+                .findAllByNextReviewDueIsNotNullAndDeletedAtIsNullAndStatusIn(
+                        List.of(DocumentStatus.RELEASED, DocumentStatus.APPROVED));
+        for (Document document : documents) {
+            try {
+                sweepDocumentReview(document, today);
+            } catch (Exception e) {
+                log.warn("Review sweep failed for document {}: {}",
+                        document.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private void sweepDocumentReview(Document document, LocalDate today) {
+        LocalDate due = document.getNextReviewDue();
+        int overdueDays = BusinessDays.overdueBusinessDays(due, today);
+        int untilDue = BusinessDays.businessDaysUntil(today, due);
+
+        if (overdueDays >= reviewProperties.escalateAfterOverdueDays()) {
+            // dedup_key carries the due date: a re-approval reset starts a new
+            // cycle with a new key, so the next overdue cycle escalates again
+            String dedupKey = "review-overdue:doc=" + document.getId() + ":due=" + due;
+            List<User> targets = new ArrayList<>(List.of(document.getOwner()));
+            targets.addAll(userRepository.findActiveAdmins());
+            for (User recipient : targets) {
+                notifyDocument(document, "REVIEW_OVERDUE", recipient, today, dedupKey,
+                        "Overdue review: " + document.getDocumentNumber(),
+                        "The periodic review was due " + due + " and is now " + overdueDays
+                                + " business day(s) overdue. Clear it by completing a review re-approval.");
+            }
+        } else if (overdueDays == 0 && untilDue <= reviewProperties.reminderBeforeDays()) {
+            notifyDocument(document, "REVIEW_DUE", document.getOwner(), today, null,
+                    "Review due soon: " + document.getDocumentNumber(),
+                    "The periodic review is due " + due + ".");
+        }
+    }
+
+    /**
+     * Document-anchored notification (Phase 2c): dedups per day when no
+     * dedup_key is given, or once per cycle via the key.
+     */
+    private void notifyDocument(Document document, String kind, User recipient,
+                                LocalDate notificationDate, String dedupKey,
+                                String subject, String body) {
+        boolean alreadySent = dedupKey != null
+                ? notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
+                        kind, dedupKey, recipient.getId())
+                : notificationLogRepository.existsByKindAndDocumentIdAndRecipientIdAndNotificationDate(
+                        kind, document.getId(), recipient.getId(), notificationDate);
+        if (alreadySent) {
+            return;
+        }
+        notificationSender.send(recipient, subject, body);
+
+        NotificationLog entry = new NotificationLog();
+        entry.setKind(kind);
+        entry.setDocument(document);
+        entry.setDedupKey(dedupKey);
+        entry.setRecipient(recipient);
+        entry.setSubject(subject);
+        entry.setNotificationDate(notificationDate);
+        entry.setChannel("log");
+        notificationLogRepository.save(entry);
     }
 
     private void sweepInstance(WorkflowInstance instance, LocalDate today) {

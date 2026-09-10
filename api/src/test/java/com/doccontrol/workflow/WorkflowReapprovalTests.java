@@ -211,6 +211,43 @@ class WorkflowReapprovalTests {
                 .andExpect(status().isConflict());
     }
 
+    @Test
+    void reviewerCandidatesAreGatedByCanModifyNotAdmin() throws Exception {
+        Department dept = tempDepartment("R5");
+        Department otherDept = tempDepartment("R6");
+        createUser("reaowner5@doccontrol.test", dept, "User");   // non-admin owner
+        createUser("reamember5@doccontrol.test", dept, "User");  // non-admin member
+        createUser("outsider5@doccontrol.test", otherDept, "User");
+        MockHttpSession owner = loginAs("reaowner5@doccontrol.test");
+
+        Integer docId = createReleasedDocument(owner, dept.getId(), "Candidates Doc",
+                "reaowner5@doccontrol.test");
+
+        // a non-admin department member (not the owner) can list candidates
+        MvcResult memberView = mockMvc.perform(
+                        get("/documents/{id}/reviewer-candidates", docId)
+                                .session(loginAs("reamember5@doccontrol.test")))
+                .andExpect(status().isOk())
+                .andReturn();
+        String body = memberView.getResponse().getContentAsString();
+        assertThat(body).contains("reaowner5@doccontrol.test");
+        assertThat(body).contains("reamember5@doccontrol.test");
+
+        // the non-admin owner themselves
+        MvcResult ownerView = mockMvc.perform(
+                        get("/documents/{id}/reviewer-candidates", docId).session(owner))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(ownerView.getResponse().getContentAsString())
+                .contains("reamember5@doccontrol.test");
+
+        // a user outside the department: the released document is visible but
+        // they cannot modify it, so the picklist is forbidden
+        mockMvc.perform(get("/documents/{id}/reviewer-candidates", docId)
+                        .session(loginAs("outsider5@doccontrol.test")))
+                .andExpect(status().isForbidden());
+    }
+
     // ---- helpers (mirroring the other workflow test classes) ----
 
     /** Creates a document and releases version 1 through an immediate approval. */

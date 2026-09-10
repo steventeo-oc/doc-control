@@ -163,6 +163,21 @@ public class WorkflowService {
         }
     }
 
+    /**
+     * Reviewer picklist for the approval-start forms: every active user,
+     * minimal fields. Document-scoped so the gate is the same canModify rule
+     * as starting an approval itself — this is what lets non-admin owners
+     * assign reviewers by name (the /users list stays admin-only).
+     */
+    @Transactional(readOnly = true)
+    public List<com.doccontrol.workflow.dto.ReviewerCandidateDto> reviewerCandidates(Integer documentId) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanModify(document);
+        return userRepository.findAllByActiveTrueOrderByNameAsc().stream()
+                .map(com.doccontrol.workflow.dto.ReviewerCandidateDto::from)
+                .toList();
+    }
+
     private AssigneeSlots resolveSlots(StartApprovalRequest request) {
         List<String> names = new ArrayList<>();
         List<String> descriptions = new ArrayList<>();

@@ -1,5 +1,6 @@
 package com.doccontrol.workflow;
 
+import com.doccontrol.workflow.dto.ReviewerCandidateDto;
 import com.doccontrol.workflow.dto.StartApprovalRequest;
 import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowTaskDto;
@@ -43,6 +44,12 @@ public class WorkflowController {
         return ResponseEntity
                 .created(URI.create("/workflow-instances/" + started.id()))
                 .body(started);
+    }
+
+    /** Reviewer picklist for the assignee forms — gated like the start endpoints themselves. */
+    @GetMapping("/documents/{documentId}/reviewer-candidates")
+    public List<ReviewerCandidateDto> reviewerCandidates(@PathVariable Integer documentId) {
+        return workflowService.reviewerCandidates(documentId);
     }
 
     @GetMapping("/workflow-instances/{id}")

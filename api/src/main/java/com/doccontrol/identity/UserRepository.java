@@ -27,4 +27,7 @@ public interface UserRepository extends JpaRepository<User, Integer> {
     @Query("SELECT DISTINCT u FROM User u JOIN u.departments ud " +
             "WHERE ud.id.departmentId = :departmentId AND u.active = true")
     List<User> findActiveByDepartmentId(@Param("departmentId") Integer departmentId);
+
+    /** All active users, name-ordered — the reviewer picklist population. */
+    List<User> findAllByActiveTrueOrderByNameAsc();
 }

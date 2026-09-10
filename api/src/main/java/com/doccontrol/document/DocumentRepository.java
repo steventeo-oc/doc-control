@@ -13,4 +13,7 @@ public interface DocumentRepository extends JpaRepository<Document, Integer>, Jp
 
     /** In-effect documents with a live review clock — the daily review sweep's candidates. */
     List<Document> findAllByNextReviewDueIsNotNullAndDeletedAtIsNullAndStatusIn(List<DocumentStatus> statuses);
+
+    /** Released, non-trashed documents — the acknowledgment sweep's candidates. */
+    List<Document> findAllByStatusAndDeletedAtIsNull(DocumentStatus status);
 }

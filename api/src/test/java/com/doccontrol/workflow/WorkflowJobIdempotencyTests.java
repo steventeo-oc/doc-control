@@ -120,6 +120,9 @@ class WorkflowJobIdempotencyTests {
     @Autowired
     WorkflowNotificationJob job;
 
+    @Autowired
+    com.doccontrol.acknowledgment.AcknowledgmentService acknowledgmentService;
+
     @Test
     void jobIsIdempotentForAGivenBusinessDate() throws Exception {
         Department dept = tempDepartment("I1");
@@ -167,6 +170,22 @@ class WorkflowJobIdempotencyTests {
                 "idemownerD@doccontrol.test");
         startAndCompleteReviewApproval(sessionD, docD, "idemownerD@doccontrol.test", day);
 
+        // A department member who never acknowledges, plus two released docs
+        // with backdated effective dates so the acknowledgment phases fire on
+        // `day`: doc F's window closes 1 business day later (ACK_REMINDER),
+        // doc G's closed 2 business days ago (ACK_OVERDUE summary)
+        createUser("idemackmember@doccontrol.test", dept, "User");
+        createUser("idemownerF@doccontrol.test", dept, "User");
+        createUser("idemownerG@doccontrol.test", dept, "User");
+        MockHttpSession sessionF = loginAs("idemownerF@doccontrol.test");
+        MockHttpSession sessionG = loginAs("idemownerG@doccontrol.test");
+        Integer docF = createReleasedDocument(sessionF, dept.getId(), "Idempotency Ack Due Doc",
+                "idemownerF@doccontrol.test");
+        backdateEffectiveAt(docF, BusinessDays.addBusinessDays(day, -6));
+        Integer docG = createReleasedDocument(sessionG, dept.getId(), "Idempotency Ack Overdue Doc",
+                "idemownerG@doccontrol.test");
+        backdateEffectiveAt(docG, BusinessDays.addBusinessDays(day, -9));
+
         // ---- first run on `day`: every phase fires once ----
         job.run(day);
         Map<String, Long> notificationsAfterRun1 = notificationsByKind();
@@ -186,7 +205,15 @@ class WorkflowJobIdempotencyTests {
         assertThat(afterReset.getLastReviewedAt()).isEqualTo(day);
         assertThat(afterReset.getPendingReviewEffectiveAt()).isNull();
         // the day's notifications exist
-        assertThat(notificationsAfterRun1).containsKeys("REMINDER", "REVIEW_DUE", "REVIEW_OVERDUE");
+        assertThat(notificationsAfterRun1).containsKeys(
+                "REMINDER", "REVIEW_DUE", "REVIEW_OVERDUE", "ACK_REMINDER", "ACK_OVERDUE");
+        // one reminder per member of doc F's department who still owes one
+        // (the whole department owes — including the other docs' owners)
+        long docFOutstanding = acknowledgmentService
+                .outstandingUsers(documentRepository.findById(docF).orElseThrow())
+                .size();
+        assertThat(notificationsAfterRun1.get("ACK_REMINDER")).isEqualTo(docFOutstanding);
+        assertThat(notificationsAfterRun1.get("ACK_OVERDUE")).isGreaterThanOrEqualTo(1L);
 
         // ---- second run, same business date: nothing may change ----
         job.run(day);
@@ -216,6 +243,14 @@ class WorkflowJobIdempotencyTests {
                 .filter(entry -> entityType.equals(entry.getEntityType()))
                 .filter(entry -> action.equals(entry.getAction()))
                 .count();
+    }
+
+    /** Backdates the current version's effective date so the acknowledgment window fires on `day`. */
+    private void backdateEffectiveAt(Integer documentId, LocalDate effectiveAt) {
+        Document document = documentRepository.findById(documentId).orElseThrow();
+        DocumentVersion version = document.getCurrentVersion();
+        version.setEffectiveAt(effectiveAt);
+        documentVersionRepository.save(version);
     }
 
     private LocalDate taskDueDate(Integer instanceId) {

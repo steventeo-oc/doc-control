@@ -1,8 +1,10 @@
 package com.doccontrol.workflow;
 
+import com.doccontrol.acknowledgment.AcknowledgmentService;
 import com.doccontrol.audit.NotificationLog;
 import com.doccontrol.audit.NotificationLogRepository;
 import com.doccontrol.audit.SystemActor;
+import com.doccontrol.config.AcknowledgmentProperties;
 import com.doccontrol.config.ReviewProperties;
 import com.doccontrol.config.WorkflowProperties;
 import com.doccontrol.document.Document;
@@ -39,7 +41,10 @@ import java.util.List;
  * 2. approval-task reminders and escalations (Phase 2b, unchanged);
  * 3. periodic-review notifications (Phase 2c): REVIEW_DUE to the owner in
  *    the reminder window, REVIEW_OVERDUE to owner + admins once the review
- *    is escalateAfterOverdueDays business days past due.
+ *    is escalateAfterOverdueDays business days past due;
+ * 4. acknowledgment notifications (Phase 2d): ACK_REMINDER to department
+ *    members who still owe one near the window close, ACK_OVERDUE summary
+ *    to owner + admins past the close — record-only, nothing is gated.
  *
  * Every phase is idempotent for a given business date — safe to run twice:
  * the flip and clock reset are one-way state transitions, and every
@@ -60,10 +65,12 @@ public class WorkflowNotificationJob {
     private final NotificationSender notificationSender;
     private final WorkflowProperties properties;
     private final ReviewProperties reviewProperties;
+    private final AcknowledgmentProperties acknowledgmentProperties;
     private final DocumentService documentService;
     private final DocumentRepository documentRepository;
     private final DocumentVersionRepository documentVersionRepository;
     private final SystemActor systemActor;
+    private final AcknowledgmentService acknowledgmentService;
 
     public WorkflowNotificationJob(TaskService taskService,
                                    WorkflowInstanceRepository instanceRepository,
@@ -72,10 +79,12 @@ public class WorkflowNotificationJob {
                                    NotificationSender notificationSender,
                                    WorkflowProperties properties,
                                    ReviewProperties reviewProperties,
+                                   AcknowledgmentProperties acknowledgmentProperties,
                                    DocumentService documentService,
                                    DocumentRepository documentRepository,
                                    DocumentVersionRepository documentVersionRepository,
-                                   SystemActor systemActor) {
+                                   SystemActor systemActor,
+                                   AcknowledgmentService acknowledgmentService) {
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
         this.userRepository = userRepository;
@@ -83,10 +92,12 @@ public class WorkflowNotificationJob {
         this.notificationSender = notificationSender;
         this.properties = properties;
         this.reviewProperties = reviewProperties;
+        this.acknowledgmentProperties = acknowledgmentProperties;
         this.documentService = documentService;
         this.documentRepository = documentRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.systemActor = systemActor;
+        this.acknowledgmentService = acknowledgmentService;
     }
 
     @Scheduled(cron = "${doccontrol.workflow.reminder-cron:0 0 7 * * *}")
@@ -110,6 +121,7 @@ public class WorkflowNotificationJob {
         }
 
         sweepReviewOverdue(today);
+        sweepAcknowledgments(today);
     }
 
     /**
@@ -179,30 +191,95 @@ public class WorkflowNotificationJob {
             List<User> targets = new ArrayList<>(List.of(document.getOwner()));
             targets.addAll(userRepository.findActiveAdmins());
             for (User recipient : targets) {
-                notifyDocument(document, "REVIEW_OVERDUE", recipient, today, dedupKey,
+                notifyDocument(document, null, "REVIEW_OVERDUE", recipient, today, dedupKey,
                         "Overdue review: " + document.getDocumentNumber(),
                         "The periodic review was due " + due + " and is now " + overdueDays
                                 + " business day(s) overdue. Clear it by completing a review re-approval.");
             }
         } else if (overdueDays == 0 && untilDue <= reviewProperties.reminderBeforeDays()) {
-            notifyDocument(document, "REVIEW_DUE", document.getOwner(), today, null,
+            notifyDocument(document, null, "REVIEW_DUE", document.getOwner(), today, null,
                     "Review due soon: " + document.getDocumentNumber(),
                     "The periodic review is due " + due + ".");
         }
     }
 
     /**
-     * Document-anchored notification (Phase 2c): dedups per day when no
+     * Phase 4 — acknowledgment notifications (Phase 2d). Reminders go to
+     * each non-acknowledging department member near the window close; past
+     * the close, a once-per-version summary escalation goes to owner +
+     * admins. Record-only: acknowledgment stays open, nothing is gated.
+     */
+    private void sweepAcknowledgments(LocalDate today) {
+        List<Document> documents = documentRepository
+                .findAllByStatusAndDeletedAtIsNull(DocumentStatus.RELEASED);
+        for (Document document : documents) {
+            try {
+                sweepDocumentAcknowledgments(document, today);
+            } catch (Exception e) {
+                log.warn("Acknowledgment sweep failed for document {}: {}",
+                        document.getId(), e.getMessage());
+            }
+        }
+    }
+
+    private void sweepDocumentAcknowledgments(Document document, LocalDate today) {
+        List<User> outstanding = acknowledgmentService.outstandingUsers(document);
+        if (outstanding.isEmpty()) {
+            return;
+        }
+        LocalDate closesAt = acknowledgmentService.windowClosesAt(document);
+        if (closesAt == null) {
+            return;
+        }
+        DocumentVersion version = document.getCurrentVersion();
+        int untilClose = BusinessDays.businessDaysUntil(today, closesAt);
+        int overdueDays = BusinessDays.overdueBusinessDays(closesAt, today);
+
+        if (overdueDays == 0 && untilClose <= acknowledgmentProperties.reminderBeforeDays()) {
+            for (User member : outstanding) {
+                notifyDocument(document, version, "ACK_REMINDER", member, today, null,
+                        "Acknowledgment due soon: " + document.getDocumentNumber(),
+                        "Please read and acknowledge " + document.getDocumentNumber()
+                                + " v" + version.getVersionNumber()
+                                + " — the acknowledgment window closes " + closesAt + ".");
+            }
+        } else if (overdueDays >= acknowledgmentProperties.escalateAfterOverdueDays()) {
+            String names = outstanding.stream()
+                    .map(User::getName)
+                    .reduce((a, b) -> a + ", " + b)
+                    .orElse("");
+            List<User> targets = new ArrayList<>(List.of(document.getOwner()));
+            targets.addAll(userRepository.findActiveAdmins());
+            for (User recipient : targets) {
+                notifyDocument(document, version, "ACK_OVERDUE", recipient, today,
+                        "ack-overdue:version=" + version.getId(),
+                        "Overdue acknowledgments: " + document.getDocumentNumber(),
+                        outstanding.size() + " department member(s) have not acknowledged v"
+                                + version.getVersionNumber() + ": " + names
+                                + ". The window closed " + closesAt
+                                + ". Record-only — acknowledgment is still open.");
+            }
+        }
+    }
+
+    /**
+     * Document/version-anchored notification: dedups per day when no
      * dedup_key is given, or once per cycle via the key.
      */
-    private void notifyDocument(Document document, String kind, User recipient,
+    private void notifyDocument(Document document, DocumentVersion version, String kind, User recipient,
                                 LocalDate notificationDate, String dedupKey,
                                 String subject, String body) {
-        boolean alreadySent = dedupKey != null
-                ? notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
-                        kind, dedupKey, recipient.getId())
-                : notificationLogRepository.existsByKindAndDocumentIdAndRecipientIdAndNotificationDate(
-                        kind, document.getId(), recipient.getId(), notificationDate);
+        boolean alreadySent;
+        if (dedupKey != null) {
+            alreadySent = notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
+                    kind, dedupKey, recipient.getId());
+        } else if (version != null) {
+            alreadySent = notificationLogRepository.existsByKindAndDocumentVersionIdAndRecipientIdAndNotificationDate(
+                    kind, version.getId(), recipient.getId(), notificationDate);
+        } else {
+            alreadySent = notificationLogRepository.existsByKindAndDocumentIdAndRecipientIdAndNotificationDate(
+                    kind, document.getId(), recipient.getId(), notificationDate);
+        }
         if (alreadySent) {
             return;
         }
@@ -211,6 +288,7 @@ public class WorkflowNotificationJob {
         NotificationLog entry = new NotificationLog();
         entry.setKind(kind);
         entry.setDocument(document);
+        entry.setDocumentVersion(version);
         entry.setDedupKey(dedupKey);
         entry.setRecipient(recipient);
         entry.setSubject(subject);

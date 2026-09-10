@@ -24,6 +24,7 @@ import org.slf4j.LoggerFactory;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Component;
 import org.springframework.transaction.annotation.Transactional;
+import org.springframework.transaction.support.TransactionTemplate;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
@@ -49,9 +50,12 @@ import java.util.List;
  * Every phase is idempotent for a given business date — safe to run twice:
  * the flip and clock reset are one-way state transitions, and every
  * notification dedups via notification_log (per day, or once per cycle via
- * a stable dedup_key). Sends go through {@link NotificationSender} — the
- * log-only stub today, Microsoft Graph once the Azure app registration
- * exists.
+ * a stable dedup_key). Each item runs in its own transaction (via
+ * {@link TransactionTemplate}): the scheduled job executes outside any
+ * transaction, so entities must be re-fetched inside one — otherwise lazy
+ * relations fail and detached mutations are silently lost. Sends go through
+ * {@link NotificationSender} — the log-only stub today, Microsoft Graph
+ * once the Azure app registration exists.
  */
 @Component
 public class WorkflowNotificationJob {
@@ -71,6 +75,7 @@ public class WorkflowNotificationJob {
     private final DocumentVersionRepository documentVersionRepository;
     private final SystemActor systemActor;
     private final AcknowledgmentService acknowledgmentService;
+    private final TransactionTemplate transactionTemplate;
 
     public WorkflowNotificationJob(TaskService taskService,
                                    WorkflowInstanceRepository instanceRepository,
@@ -84,7 +89,8 @@ public class WorkflowNotificationJob {
                                    DocumentRepository documentRepository,
                                    DocumentVersionRepository documentVersionRepository,
                                    SystemActor systemActor,
-                                   AcknowledgmentService acknowledgmentService) {
+                                   AcknowledgmentService acknowledgmentService,
+                                   TransactionTemplate transactionTemplate) {
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
         this.userRepository = userRepository;
@@ -98,6 +104,7 @@ public class WorkflowNotificationJob {
         this.documentVersionRepository = documentVersionRepository;
         this.systemActor = systemActor;
         this.acknowledgmentService = acknowledgmentService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @Scheduled(cron = "${doccontrol.workflow.reminder-cron:0 0 7 * * *}")
@@ -107,53 +114,77 @@ public class WorkflowNotificationJob {
 
     void run(LocalDate today) {
         flipDueVersions(today);
-
-        List<WorkflowInstance> instances = instanceRepository
-                .findByStatus(WorkflowInstanceStatus.IN_PROGRESS);
-        for (WorkflowInstance instance : instances) {
-            try {
-                sweepInstance(instance, today);
-            } catch (Exception e) {
-                // one broken instance must not stop the sweep
-                log.warn("Reminder/escalation sweep failed for instance {}: {}",
-                        instance.getId(), e.getMessage());
-            }
-        }
-
+        sweepApprovalTasks(today);
         sweepReviewOverdue(today);
         sweepAcknowledgments(today);
     }
 
     /**
-     * Phase 1 — effectivity flips and deferred review-clock resets. Each
-     * item runs in its own transaction (the service methods are
-     * transactional); a failure is logged and the sweep moves on. Both
+     * Phase 1 — effectivity flips and deferred review-clock resets. Both
      * transitions are one-way, so a re-run on the same date finds nothing.
      */
     private void flipDueVersions(LocalDate today) {
         User system = systemActor.get();
-        for (DocumentVersion version : documentVersionRepository
+        List<Integer> versionIds = documentVersionRepository
                 .findAllByStatusAndEffectiveAtLessThanEqualAndDocument_DeletedAtIsNull(
-                        DocumentVersionStatus.APPROVED, today)) {
+                        DocumentVersionStatus.APPROVED, today)
+                .stream().map(DocumentVersion::getId).toList();
+        for (Integer versionId : versionIds) {
             try {
-                documentService.promoteVersion(version, version.getEffectiveAt(), system);
-                log.info("Effective-date flip applied: {} v{} effective {}",
-                        version.getDocument().getDocumentNumber(),
-                        version.getVersionNumber(), version.getEffectiveAt());
+                // one transaction per item: the candidate ids above were read
+                // without one, and the entities must be managed (re-fetched)
+                // for lazy relations and dirty checking to work (see run()).
+                transactionTemplate.execute(tx -> {
+                    DocumentVersion version = documentVersionRepository.findById(versionId).orElseThrow();
+                    documentService.promoteVersion(version, version.getEffectiveAt(), system);
+                    log.info("Effective-date flip applied: {} v{} effective {}",
+                            version.getDocument().getDocumentNumber(),
+                            version.getVersionNumber(), version.getEffectiveAt());
+                    return null;
+                });
             } catch (Exception e) {
                 log.warn("Effective-date flip failed for version {}: {}",
-                        version.getId(), e.getMessage());
+                        versionId, e.getMessage());
             }
         }
-        for (Document document : documentRepository
-                .findAllByPendingReviewEffectiveAtLessThanEqualAndDeletedAtIsNull(today)) {
+        List<Integer> resetIds = documentRepository
+                .findAllByPendingReviewEffectiveAtLessThanEqualAndDeletedAtIsNull(today)
+                .stream().map(Document::getId).toList();
+        for (Integer documentId : resetIds) {
             try {
-                documentService.resetReviewClock(document, document.getPendingReviewEffectiveAt(), system);
-                log.info("Review clock reset applied: {} effective {}",
-                        document.getDocumentNumber(), document.getPendingReviewEffectiveAt());
+                transactionTemplate.execute(tx -> {
+                    Document document = documentRepository.findById(documentId).orElseThrow();
+                    documentService.resetReviewClock(document, document.getPendingReviewEffectiveAt(), system);
+                    log.info("Review clock reset applied: {} effective {}",
+                            document.getDocumentNumber(), document.getPendingReviewEffectiveAt());
+                    return null;
+                });
             } catch (Exception e) {
                 log.warn("Review clock reset failed for document {}: {}",
-                        document.getId(), e.getMessage());
+                        documentId, e.getMessage());
+            }
+        }
+    }
+
+    /**
+     * Phase 2 — approval-task reminders and escalations (Phase 2b rules,
+     * unchanged): reminders in the run-up to the due date, escalation to
+     * owner + admins once overdue.
+     */
+    private void sweepApprovalTasks(LocalDate today) {
+        List<Integer> instanceIds = instanceRepository
+                .findByStatus(WorkflowInstanceStatus.IN_PROGRESS)
+                .stream().map(WorkflowInstance::getId).toList();
+        for (Integer instanceId : instanceIds) {
+            try {
+                transactionTemplate.execute(tx -> {
+                    sweepInstance(instanceRepository.findById(instanceId).orElseThrow(), today);
+                    return null;
+                });
+            } catch (Exception e) {
+                // one broken instance must not stop the sweep
+                log.warn("Reminder/escalation sweep failed for instance {}: {}",
+                        instanceId, e.getMessage());
             }
         }
     }
@@ -166,15 +197,19 @@ public class WorkflowNotificationJob {
         if (reviewProperties.intervalMonths() <= 0) {
             return; // review tracking switched off
         }
-        List<Document> documents = documentRepository
+        List<Integer> documentIds = documentRepository
                 .findAllByNextReviewDueIsNotNullAndDeletedAtIsNullAndStatusIn(
-                        List.of(DocumentStatus.RELEASED, DocumentStatus.APPROVED));
-        for (Document document : documents) {
+                        List.of(DocumentStatus.RELEASED, DocumentStatus.APPROVED))
+                .stream().map(Document::getId).toList();
+        for (Integer documentId : documentIds) {
             try {
-                sweepDocumentReview(document, today);
+                transactionTemplate.execute(tx -> {
+                    sweepDocumentReview(documentRepository.findById(documentId).orElseThrow(), today);
+                    return null;
+                });
             } catch (Exception e) {
                 log.warn("Review sweep failed for document {}: {}",
-                        document.getId(), e.getMessage());
+                        documentId, e.getMessage());
             }
         }
     }
@@ -210,14 +245,19 @@ public class WorkflowNotificationJob {
      * admins. Record-only: acknowledgment stays open, nothing is gated.
      */
     private void sweepAcknowledgments(LocalDate today) {
-        List<Document> documents = documentRepository
-                .findAllByStatusAndDeletedAtIsNull(DocumentStatus.RELEASED);
-        for (Document document : documents) {
+        List<Integer> documentIds = documentRepository
+                .findAllByStatusAndDeletedAtIsNull(DocumentStatus.RELEASED)
+                .stream().map(Document::getId).toList();
+        for (Integer documentId : documentIds) {
             try {
-                sweepDocumentAcknowledgments(document, today);
+                transactionTemplate.execute(tx -> {
+                    sweepDocumentAcknowledgments(
+                            documentRepository.findById(documentId).orElseThrow(), today);
+                    return null;
+                });
             } catch (Exception e) {
                 log.warn("Acknowledgment sweep failed for document {}: {}",
-                        document.getId(), e.getMessage());
+                        documentId, e.getMessage());
             }
         }
     }

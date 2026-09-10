@@ -2,6 +2,7 @@ package com.doccontrol.workflow;
 
 import com.doccontrol.audit.AuditService;
 import org.springframework.format.annotation.DateTimeFormat;
+import org.springframework.transaction.support.TransactionTemplate;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RequestParam;
@@ -24,10 +25,13 @@ public class AdminJobsController {
 
     private final WorkflowNotificationJob job;
     private final AuditService auditService;
+    private final TransactionTemplate transactionTemplate;
 
-    public AdminJobsController(WorkflowNotificationJob job, AuditService auditService) {
+    public AdminJobsController(WorkflowNotificationJob job, AuditService auditService,
+                               TransactionTemplate transactionTemplate) {
         this.job = job;
         this.auditService = auditService;
+        this.transactionTemplate = transactionTemplate;
     }
 
     @PostMapping("/daily-sweep")
@@ -36,9 +40,14 @@ public class AdminJobsController {
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
         LocalDate swept = date == null ? LocalDate.now() : date;
         job.run(swept);
-        auditService.record("daily_sweep", 0, "triggered", Map.of(
-                "date", swept.toString(),
-                "triggered_by", "admin"));
+        // the trigger itself is audited in its own transaction — the sweep's
+        // per-item transactions have already committed
+        transactionTemplate.execute(tx -> {
+            auditService.record("daily_sweep", 0, "triggered", Map.of(
+                    "date", swept.toString(),
+                    "triggered_by", "admin"));
+            return null;
+        });
         return Map.of("date", swept.toString());
     }
 }

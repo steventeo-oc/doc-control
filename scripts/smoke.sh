@@ -133,5 +133,72 @@ code="$(api -b "$TMP/admin2.jar" -o /dev/null -w '%{http_code}' "$API/users")"
 [ "$code" = "200" ] || fail "second admin cannot list users (got $code)"
 echo "OK — second admin (id $ADMIN2_ID) can administer"
 
+step "11. Deferred approval: a future effective date parks the document in 'approved'"
+EFFECTIVE="$(date -d '+2 days' +%F)"
+printf 'Rev C — smoke test content.\n' > "$TMP/rev-c.txt"
+V3="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions" \
+  -F "file=@$TMP/rev-c.txt;type=text/plain" -F "change_notes=Smoke test revision C")"
+V3_ID="$(field "$V3" id)"
+INST2="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions/$V3_ID/workflow/start" \
+  -H "Content-Type: application/json" \
+  -d "{\"assignees\":[{\"type\":\"USER\",\"userId\":$VIEWER_ID}]}")"
+INST2_ID="$(field "$INST2" id)"
+TASK2_ID="$(api -b "$TMP/viewer.jar" "$API/workflow-instances/$INST2_ID/tasks" \
+  | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+mut "$TMP/viewer.jar" -X POST "$API/workflow-tasks/$TASK2_ID/complete" \
+  -H "Content-Type: application/json" \
+  -d "{\"approved\":true,\"comment\":\"Deferred smoke approval\",\"effectiveDate\":\"$EFFECTIVE\"}" > /dev/null
+DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
+[ "$(field "$DETAIL" status)" = "approved" ] || fail "deferred approval: expected status approved"
+[ "$(field "$DETAIL" currentVersionId)" = "$V1_ID" ] || fail "deferred approval: pointer must stay on the released version"
+[ "$(field "$DETAIL" pendingEffectiveDate)" = "$EFFECTIVE" ] || fail "pendingEffectiveDate mismatch"
+echo "OK — approved with effect from $EFFECTIVE; the public still sees version 1"
+
+step "12. The daily sweep flips it on the effective date (admin trigger; idempotent per date)"
+mut "$TMP/admin.jar" -X POST "$API/admin/jobs/daily-sweep?date=$EFFECTIVE" > /dev/null
+DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
+[ "$(field "$DETAIL" status)" = "released" ] || fail "flip: expected status released"
+[ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "flip: pointer should now be version 3"
+EXPECT_REVIEW="$(date -d "$EFFECTIVE +12 months" +%F)"
+[ "$(field "$DETAIL" nextReviewDue)" = "$EXPECT_REVIEW" ] || fail "flip: nextReviewDue should anchor to the effective date"
+mut "$TMP/admin.jar" -X POST "$API/admin/jobs/daily-sweep?date=$EFFECTIVE" > /dev/null
+DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
+[ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "second sweep on the same date must not change state"
+echo "OK — flipped to version 3, review due $EXPECT_REVIEW; re-running the sweep changed nothing"
+
+step "13. Periodic review re-approval is visibly flagged and re-certifies in place"
+INST3="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/review-approval" \
+  -H "Content-Type: application/json" \
+  -d "{\"assignees\":[{\"type\":\"USER\",\"userId\":$VIEWER_ID}]}")"
+INST3_ID="$(field "$INST3" id)"
+[ "$(field "$INST3" reapproval)" = "True" ] || fail "instance is not flagged as a re-approval"
+TASKS3="$(api -b "$TMP/viewer.jar" "$API/workflow-instances/$INST3_ID/tasks")"
+[ "$(printf '%s' "$TASKS3" | python -c "import sys,json;print(json.load(sys.stdin)[0]['name'])")" = "Periodic review re-approval" ] \
+  || fail "reviewer task is not visibly flagged as a re-approval"
+TASK3_ID="$(printf '%s' "$TASKS3" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+mut "$TMP/viewer.jar" -X POST "$API/workflow-tasks/$TASK3_ID/complete" \
+  -H "Content-Type: application/json" -d '{"approved":true,"comment":"Still accurate"}' > /dev/null
+DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
+[ "$(field "$DETAIL" status)" = "released" ] || fail "re-approval must not change the release state"
+[ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "re-approval must not move the version pointer"
+[ "$(field "$DETAIL" lastReviewedAt)" = "$(date +%F)" ] || fail "re-approval must reset the review clock to today"
+[ "$(field "$DETAIL" nextReviewDue)" = "$(date -d '+12 months' +%F)" ] || fail "nextReviewDue should anchor to today"
+echo "OK — re-approval completed; pointer unchanged, review clock reset"
+
+step "14. Read & understood acknowledgment: recorded once, reflected in status"
+ACKS="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/acknowledgments")"
+OUT_BEFORE="$(printf '%s' "$ACKS" | python -c "import sys,json;print(len(json.load(sys.stdin)['outstanding']))")"
+[ "$OUT_BEFORE" -ge 1 ] || fail "expected department members to be outstanding before acknowledging"
+ACK1="$(mut "$TMP/viewer.jar" -X POST "$API/documents/$DOC_ID/acknowledge")"
+[ "$(field "$ACK1" documentVersionId)" = "$V3_ID" ] || fail "acknowledged the wrong version"
+ACK2="$(mut "$TMP/viewer.jar" -X POST "$API/documents/$DOC_ID/acknowledge")"
+[ "$(field "$ACK2" id)" = "$(field "$ACK1" id)" ] || fail "acknowledge must be idempotent"
+ACKS="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/acknowledgments")"
+[ "$(printf '%s' "$ACKS" | python -c "import sys,json;print(len(json.load(sys.stdin)['outstanding']))")" = "$((OUT_BEFORE - 1))" ] \
+  || fail "outstanding should drop by exactly one after acknowledging"
+[ "$(printf '%s' "$ACKS" | python -c "import sys,json;print(len(json.load(sys.stdin)['acknowledged']))")" = "1" ] \
+  || fail "acknowledged should contain exactly the one record"
+echo "OK — department member acknowledged version 3 once (idempotent); $OUT_BEFORE members outstanding before, one fewer after"
+
 step "DONE — all checks passed"
-echo "Left behind: department $DEPT_CODE, document $DOC_NUMBER (released), two users."
+echo "Left behind: department $DEPT_CODE, document $DOC_NUMBER (released, v3 effective, acknowledged), three users."

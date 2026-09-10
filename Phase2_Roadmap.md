@@ -76,32 +76,52 @@ mailbox (operational).
 
 ## Phase 2c — Document lifecycle extensions
 
-- **Periodic scheduled review** (#10): documents need a review-due date
-  even without content changes — track it, and this is a natural companion
-  to 2b's reminder/escalation infrastructure (same notification mechanism
-  can flag overdue reviews, not just overdue approvals).
-- **Effective date separate from approval date** (#11): a document can be
-  approved now but scheduled to take effect later. Requires a new field
-  distinct from the existing status/approval timestamps — needs its own
-  small design pass, not an assumption that "approved" and "effective"
-  timestamps can be merged.
-- **Change Request / CAPA / Deviation reference** (#12): document changes
-  should be able to reference an external change-control record number.
-  For now this is likely a free-text or structured reference field, not a
-  full CAPA system — confirm scope before building; don't accidentally
-  build a second nonconformance system inside document control.
+**Status**: implemented and tested (2026-09-10) per the approved plan-back
+`Phase2c_2d_Design_PlanBack.md`.
+
+- **Periodic scheduled review** (#10): ONE review interval applies to every
+  document (not type-specific) — a configurable value, never hardcoded.
+  The document owner is responsible for the review. A missed review flags
+  the document as overdue, and the only way to clear the flag is
+  re-approval through the workflow engine; reviewers must visibly see that
+  a task is a re-approval (periodic review), not a first-time approval.
+  Reuses the Phase 2b reminder/escalation job and `notification_log` dedup
+  — new notification kinds, no new plumbing.
+- **Effective date separate from approval date** (#11): the approver may
+  set a future effective date when completing an approval (default:
+  immediate — current behavior unchanged). An approved-but-not-yet-
+  effective document gets its own visible state, distinct from released:
+  normal users keep seeing the previously-effective version as current
+  until the date arrives. A scheduled process flips the state on the
+  effective date — reusing the daily job's scheduling, not a new
+  mechanism.
+- **Change Request / CAPA / Deviation reference** (#12) — **downgraded
+  from Must to Should**: QA is no longer certain this is needed. If
+  built: a simple optional free-text reference field on a document change
+  (version upload), no validation against any external system, not a CAPA
+  system. Cheap to add alongside the 2c migration, or defer.
 
 ## Phase 2d — Read & understood acknowledgment
 
-A small, mostly independent feature (#13): staff must be able to formally
-acknowledge they've read and understood a new/updated released document,
-with that record tracked (who, which version, when). Effectively a
-lightweight training-record capability. Needs:
-- A new table (e.g. `document_acknowledgment`: user, document_version,
-  acknowledged_at).
-- A way to know *who* needs to acknowledge a given document — this needs a
-  real answer (all staff? department-scoped? role-scoped?) before building
-  — don't guess this one, it directly determines the data model.
+**Status**: implemented and tested (2026-09-10) per the approved plan-back
+`Phase2c_2d_Design_PlanBack.md`. Record-only audit evidence (#13) — NOT an
+enforcement gate; nothing is blocked by a missing acknowledgment.
+
+- **Scope**: the document's department — matches the existing department
+  model exactly (`user_department`), no new visibility carve-out. Every
+  new effective (released) version re-opens acknowledgment for the whole
+  department; a prior version's acknowledgment never carries forward.
+- **Window**: 7 business days by default, configurable — deliberately its
+  own threshold set, separate from the approval workflow's 3/1/2-day
+  knobs, since this is longer and lower-stakes. Reminders go to
+  non-acknowledging department members near the window close; overdue
+  non-acknowledgment escalates to owner + admin. Acknowledgments are still
+  accepted after the window (record-only) — the status just shows them as
+  overdue.
+- **Status visibility**: document owner and admins by default; owner/admin
+  can grant specific additional users view access to a given document's
+  acknowledgment status — a small per-document, per-user grant list, not a
+  role or department-level exception.
 
 ## Phase 2e — Distribution control
 
@@ -134,10 +154,10 @@ Captured so they aren't lost, not scheduled yet:
 - Stronger e-signature / re-authentication on approval (#21) — session
   login is sufficient; no regulatory driver for more requires this today.
 
-## Open items before Phase 2b design can start
+## Open items (updated 2026-09-10)
 
-- Confirm Camunda vs. Flowable spike outcome.
-- Confirm exactly who needs to receive change notifications (2e) — QA's
-  answer was explicitly tentative.
-- Confirm who needs to acknowledge a given document in 2d — all staff,
-  department-scoped, or role-scoped.
+- [x] Camunda vs. Flowable spike outcome — confirmed Flowable 8.0.0
+  (Phase 2b implemented).
+- [x] Who must acknowledge a document (2d) — confirmed: department-only.
+- [ ] Who receives change notifications (2e) — still tentative; 2e stays
+  not-started until the Graph sender lands AND this is answered.

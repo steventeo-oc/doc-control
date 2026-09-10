@@ -9,10 +9,15 @@
   Phase 2b core: **Flowable 8.0.0** embedded approval flow (ad-hoc parallel
   reviewers, 100% promotion, rejection, delegation, pooled role tasks,
   reviewer visibility) **and** the daily reminder/escalation job (log-only
-  sender). The Sprint 1 status-override stopgap is retired.
+  sender). The Sprint 1 status-override stopgap is retired. Phase 2c
+  (periodic review, effective dates, optional change reference) and Phase
+  2d (read & understood acknowledgment) — implemented per the approved
+  `Phase2c_2d_Design_PlanBack.md`; the daily job now runs four ordered
+  phases (flip → approval reminders → review notices → acknowledgment
+  notices) and is idempotent per business date (test-proven).
 - **In progress / next**: the **Microsoft Graph sender** for notifications —
   waiting on the owner's Azure app registration + sender mailbox
-  (operational). Nothing else is mid-flight; do not start Phase 2c/2d/2e.
+  (operational). Nothing else is mid-flight; Phase 2e remains off-limits.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2 (run compose via `wsl -e bash -c "cd
   '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && sudo docker compose
@@ -21,11 +26,19 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 41 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 53 tests green.
+- **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
+  password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
+  (work from an interactive WSL terminal, or pipe the password). The WSL
+  VM also idle-shuts down when nothing holds a session open, which stops
+  the whole compose stack; `restart: unless-stopped` brings it back on the
+  next `wsl` call, so keep a WSL session alive while working against the
+  stack (a background `wsl -e bash -c "sleep N"` works).
 - **Deployment target**: `docker compose up -d --build` serves the SPA at
-  localhost:3000 with the API under the `/api` mount; the running stack is
-  one rebuild behind main (the reminder job is not in the image yet) —
-  rebuild at the start of the next work session.
+  localhost:3000 with the API under the `/api` mount; stack rebuilt from
+  main on 2026-09-10 (reminder job confirmed in the image at class level)
+  and `scripts/smoke.sh` passed end-to-end against it, workflow release
+  included.
 - **Verification habit**: `scripts/smoke.sh` walks the full flow (including
   the workflow release) end-to-end; run it after any stack rebuild.
 
@@ -169,20 +182,23 @@ the data model doc — resolved here so they're answered once, not re-asked.
   #3, "Later") are designed to plug into `DocumentService.canModify` as an
   additional clause backed by an override table alongside the department
   rule — not a replacement of it.
-- **`current_version_id` semantics (resolved during the pilot)** — the
-  pointer means "the version the public sees". It is null until a
-  document's first release, and changes only via an explicit release: the
-  admin status override to `released`/`approved` re-points it at the latest
-  version, including a re-release of an already-released document (that is
-  how an uploaded draft gets published). Version uploads and document
-  creation never move the pointer — a pilot finding: uploading a draft to a
-  released document used to drag the public version pointer to unreviewed
-  content. (This deliberately deviates from the API spec's create-document
-  example, which shows current_version_id set on a draft; that example
-  predates this decision.) Sprint 3's promote endpoint will own this
-  properly. On each release the newly-current version's status becomes
-  `current` and the previously-current version becomes `superseded`;
-  versions never pointed to stay `draft`.
+- **`current_version_id` semantics (resolved during the pilot; amended in
+  Phase 2c)** — the pointer means "the version the public sees". It is null
+  until a document's first release. Version uploads and document creation
+  never move the pointer — a pilot finding: uploading a draft to a released
+  document used to drag the public version pointer to unreviewed content.
+  Since Phase 2b the engine owns the move (approval completion →
+  `promoteVersion`); **Phase 2c amendment (plan-back flag F2)**: an
+  approval completed with a future effective date leaves the document
+  `approved` with the pointer untouched, and the daily job's
+  effective-date flip moves the pointer on the chosen date. So the pointer
+  now moves via exactly two paths: an immediate approval completion, and
+  the scheduled flip. On each release the newly-current version's status
+  becomes `current` and the previously-current version becomes
+  `superseded`; an approved-not-yet-effective version is `approved`;
+  versions never pointed to stay `draft`. (This deliberately deviates from
+  the API spec's create-document example, which shows current_version_id
+  set on a draft; that example predates this decision.)
 - **Version history visibility (pilot finding #2)** — for non-owner/non-admin
   viewers of a visible document, the version list shows exactly the current
   version, and version detail/download for any other version id returns 404
@@ -222,6 +238,50 @@ thresholds, pooled tasks remind current role members until claimed,
 dedup via notification_log) on the log-only NotificationSender; the
 Microsoft Graph sender is the last Phase 2b piece (pending Azure app
 registration).
+
+## Phase 2c/2d design note (requirements confirmed with QA, implemented 2026-09-10)
+
+Full design in `Phase2c_2d_Design_PlanBack.md` (approved by the owner,
+flags F1–F8 as proposed). Key points:
+
+- **Periodic review**: ONE configurable interval for all documents
+  (`doccontrol.review.interval-months`, 0 = off) — never per-type. The
+  owner is responsible. The clock resets exactly when a version becomes
+  effective (immediate approval, effective-date flip, re-approval).
+  Overdue is derived (`next_review_due < today`), never stored, and the
+  ONLY way to clear it is a completed re-approval — reviewers see
+  "Periodic review re-approval" tasks (`POST /documents/{id}/review-approval`,
+  `reapproval` flag in workflow DTOs). A rejected re-approval leaves the
+  document released and still overdue.
+- **Effective date**: the approver may pass `effectiveDate` when
+  completing an approval task (default immediate = pre-2c behavior
+  bit-for-bit). Future date → document/version `approved` (visible state,
+  distinct from released; the pending version stays invisible to normal
+  users because it is not the current version); the daily job flips it on
+  the date. At most one pending-effective version per document (a newer
+  outcome retires the older one, audited `superseded_before_effective`).
+- **Change/CAPA reference** (#12): Should priority — optional free-text
+  `change_reference` on version upload, no validation.
+- **Acknowledgment (2d)**: department-scoped via live `user_department`
+  membership, record-only (nothing gated). Window 7 business days
+  (`doccontrol.acknowledgment.*` — deliberately separate knobs from the
+  approval 3/1/2). Per-version: every newly-effective version re-opens
+  acknowledgment; the (version, user) unique constraint is the
+  no-carry-forward rule. Status visible to owner/admin by default, plus
+  per-document per-user grants (`document_acknowledgment_access`);
+  acknowledge is idempotent and admins are NOT exempt from the
+  department-membership rule.
+- **The daily job** runs four ordered phases (flip → approval reminders →
+  review notices → acknowledgment notices) and is idempotent per business
+  date — `WorkflowJobIdempotencyTests` runs it three times on one date and
+  proves zero duplicate flips, notifications, or audit rows. Sweep-driven
+  state mutations are audited as the non-login System user (V6), so
+  `audit_log.performed_by` stays mandatory.
+- **Config**: `doccontrol.review.*` (12-month interval, 5/2 reminder and
+  escalation thresholds) and `doccontrol.acknowledgment.*` (7/2/2), all
+  env-overridable. Notifications: REVIEW_DUE, REVIEW_OVERDUE,
+  ACK_REMINDER, ACK_OVERDUE, PENDING_SUPERSEDED — all still via the
+  log-only sender until the Graph sender lands.
 
 Items discovered during implementation that must be resolved before a real
 deployment, even if they don't block Sprint 1 development itself:

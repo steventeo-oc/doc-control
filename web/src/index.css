@@ -239,6 +239,18 @@ button.danger {
   color: #7a2e2e;
 }
 
+/* Periodic-review re-approval tasks must be visibly distinct (Phase 2c) */
+.badge.reapproval {
+  background: #f0e6fb;
+  color: #5b2d8f;
+}
+
+/* Review overdue / acknowledgment overdue (Phase 2c/2d) */
+.badge.overdue {
+  background: #fbe6e0;
+  color: #99331a;
+}
+
 .filters {
   display: flex;
   gap: 8px;

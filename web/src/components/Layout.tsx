@@ -18,6 +18,7 @@ export default function Layout() {
           <NavLink to="/" end>
             Documents
           </NavLink>
+          <NavLink to="/tasks">My tasks</NavLink>
           <NavLink to="/lookups">Lookups</NavLink>
           {isAdmin && <NavLink to="/users">Users</NavLink>}
         </nav>

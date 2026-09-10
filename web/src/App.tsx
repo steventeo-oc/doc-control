@@ -4,6 +4,7 @@ import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
+import TasksPage from './pages/TasksPage';
 import LookupsPage from './pages/LookupsPage';
 import UsersPage from './pages/UsersPage';
 
@@ -32,6 +33,7 @@ export default function App() {
       >
         <Route index element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
+        <Route path="tasks" element={<TasksPage />} />
         <Route path="lookups" element={<LookupsPage />} />
         <Route path="users" element={<UsersPage />} />
       </Route>

@@ -251,6 +251,17 @@ button.danger {
   color: #99331a;
 }
 
+.ack-columns {
+  display: flex;
+  gap: 32px;
+  flex-wrap: wrap;
+}
+
+.ack-columns ul {
+  margin: 4px 0;
+  padding-left: 20px;
+}
+
 .filters {
   display: flex;
   gap: 8px;

@@ -4,6 +4,7 @@ import { downloadFile } from '../api/client';
 import { documentApi, userApi, workflowApi, type AssigneeInput } from '../api/resources';
 import type { DocumentDetail, DocumentVersion, UserRow } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import AcknowledgmentPanel from '../components/AcknowledgmentPanel';
 
 /**
  * Phase 2b retired the admin status override — releases happen only through
@@ -390,6 +391,14 @@ export default function DocumentDetailPage() {
           </button>
         </form>
       </div>
+
+      {doc && !doc.deletedAt && (
+        <AcknowledgmentPanel
+          documentId={doc.id}
+          documentStatus={doc.status}
+          canManage={isAdmin || doc.ownerUserId === user?.id}
+        />
+      )}
     </>
   );
 }

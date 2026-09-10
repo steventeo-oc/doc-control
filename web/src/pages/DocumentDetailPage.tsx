@@ -1,8 +1,8 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
 import { downloadFile } from '../api/client';
-import { documentApi, userApi, workflowApi, type AssigneeInput } from '../api/resources';
-import type { DocumentDetail, DocumentVersion, UserRow } from '../api/types';
+import { documentApi, workflowApi, type AssigneeInput } from '../api/resources';
+import type { DocumentDetail, DocumentVersion, ReviewerCandidate } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import AcknowledgmentPanel from '../components/AcknowledgmentPanel';
 
@@ -26,9 +26,10 @@ export default function DocumentDetailPage() {
   const [uploadNotes, setUploadNotes] = useState('');
 
   // Approval assignment (ad-hoc, per instance): a named user or a role.
-  // The user list is admin-only, so non-admin owners pick by role name.
-  const [users, setUsers] = useState<UserRow[] | null>(null);
-  const [assigneeMode, setAssigneeMode] = useState<'user' | 'role'>('role');
+  // The candidate list is gated by the same canModify rule as starting an
+  // approval, so non-admin owners assign reviewers by name too.
+  const [candidates, setCandidates] = useState<ReviewerCandidate[] | null>(null);
+  const [assigneeMode, setAssigneeMode] = useState<'user' | 'role'>('user');
   const [reviewerUserId, setReviewerUserId] = useState<number | ''>('');
   const [roleName, setRoleName] = useState('');
 
@@ -100,14 +101,14 @@ export default function DocumentDetailPage() {
     (isAdmin || !!user?.departments.some((department) => department.id === doc.departmentId));
 
   useEffect(() => {
-    // admin-only endpoint; non-admins fall back to role-name assignment
-    if (canModify && users === null) {
-      userApi
-        .list()
-        .then(setUsers)
-        .catch(() => setUsers([]));
+    // same gate as starting an approval itself — not an admin-only list
+    if (canModify && candidates === null) {
+      workflowApi
+        .reviewerCandidates(documentId)
+        .then(setCandidates)
+        .catch(() => setCandidates([]));
     }
-  }, [canModify, users]);
+  }, [canModify, candidates, documentId]);
 
   function buildAssignees(): AssigneeInput[] {
     return assigneeMode === 'user' && reviewerUserId !== ''
@@ -250,10 +251,8 @@ export default function DocumentDetailPage() {
                 value={assigneeMode}
                 onChange={(e) => setAssigneeMode(e.target.value as 'user' | 'role')}
               >
+                <option value="user">By user</option>
                 <option value="role">By role</option>
-                <option value="user" disabled={!users?.length}>
-                  By user
-                </option>
               </select>
             </label>
             {assigneeMode === 'user' ? (
@@ -267,7 +266,7 @@ export default function DocumentDetailPage() {
                   <option value="" disabled>
                     Choose a reviewer…
                   </option>
-                  {(users ?? []).map((candidate) => (
+                  {(candidates ?? []).map((candidate) => (
                     <option key={candidate.id} value={candidate.id}>
                       {candidate.name} ({candidate.email})
                     </option>
@@ -306,9 +305,6 @@ export default function DocumentDetailPage() {
                 Re-approves the current released version — no new content, the review clock resets.
               </span>
             </form>
-          )}
-          {assigneeMode === 'user' && !users?.length && (
-            <p className="muted">The user list is only available to admins — assign by role instead.</p>
           )}
         </div>
       )}

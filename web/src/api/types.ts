@@ -81,6 +81,12 @@ export interface DocumentVersion {
   uploadedAt: string;
 }
 
+export interface ReviewerCandidate {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface WorkflowTask {
   id: string;
   name: string;

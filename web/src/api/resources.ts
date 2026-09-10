@@ -9,6 +9,7 @@ import type {
   DocumentType,
   DocumentsPage,
   DocumentVersion,
+  ReviewerCandidate,
   RoleRow,
   UserRow,
   UserSummary,
@@ -92,6 +93,8 @@ export const workflowApi = {
   myTasks: () => api.get<WorkflowTask[]>('/my/tasks'),
   instance: (id: number) => api.get<WorkflowInstance>(`/workflow-instances/${id}`),
   instanceTasks: (id: number) => api.get<WorkflowTask[]>(`/workflow-instances/${id}/tasks`),
+  reviewerCandidates: (documentId: number) =>
+    api.get<ReviewerCandidate[]>(`/documents/${documentId}/reviewer-candidates`),
   startApproval: (documentId: number, versionId: number, assignees: AssigneeInput[]) =>
     api.post<WorkflowInstance>(
       `/documents/${documentId}/versions/${versionId}/workflow/start`,

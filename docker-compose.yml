@@ -62,19 +62,20 @@ services:
       SPRING_DATASOURCE_USERNAME: doccontrol
       SPRING_DATASOURCE_PASSWORD: changeme_in_env_file
       DOCCONTROL_STORAGE_ENDPOINT: http://minio:9000
+      # Microsoft Graph mail (Phase 2b): values come from the environment or
+      # .env (gitignored) — log-only unless enabled=true with the full set
+      # (tenant of the app registration; client id/secret of its Mail.Send
+      # app; the sending mailbox's SMTP address):
+      DOCCONTROL_NOTIFICATION_ENABLED: ${DOCCONTROL_NOTIFICATION_ENABLED:-false}
+      DOCCONTROL_NOTIFICATION_TENANT_ID: ${DOCCONTROL_NOTIFICATION_TENANT_ID:-}
+      DOCCONTROL_NOTIFICATION_CLIENT_ID: ${DOCCONTROL_NOTIFICATION_CLIENT_ID:-}
+      DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ${DOCCONTROL_NOTIFICATION_CLIENT_SECRET:-}
+      DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: ${DOCCONTROL_NOTIFICATION_SENDER_MAILBOX:-}
       # Set these for anything beyond local dev (see CLAUDE.md go-live checklist):
       # DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ...
       # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
       # SPRING_PROFILES_ACTIVE: prod   # startup hard-fails on default admin
       #                                # credentials under this profile
-      # Microsoft Graph mail (Phase 2b) — log-only until enabled=true with the
-      # Azure app registration values (tenant of the app registration; client
-      # id/secret of its Mail.Send app; the sending mailbox's SMTP address):
-      # DOCCONTROL_NOTIFICATION_ENABLED: "true"
-      # DOCCONTROL_NOTIFICATION_TENANT_ID: ...
-      # DOCCONTROL_NOTIFICATION_CLIENT_ID: ...
-      # DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ...
-      # DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: doccontrol@your-domain.com
     ports:
       - "8080:8080"
 

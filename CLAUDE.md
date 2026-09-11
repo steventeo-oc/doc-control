@@ -368,3 +368,13 @@ deployment, even if they don't block Sprint 1 development itself:
   `WorkflowNotificationJob.runScheduled`); note the
   `/audit-log`+`/audit-log/export` endpoints are Sprint 4 and are the
   intended way to produce this evidence.
+- [ ] **Graph accepts unroutable recipients at submission — delivery
+  failures bounce asynchronously to the sender mailbox.** A
+  `notification_log` row with channel `'graph'` proves Graph accepted the
+  message (202), NOT that it was delivered — verified 2026-09-11 when a
+  send to a `@doccontrol.local` placeholder was accepted and its
+  non-delivery report went to the sender mailbox. Before go-live: confirm
+  every real user's email address is routable (no placeholder
+  `@doccontrol.local`/`@doccontrol.test` accounts may survive into a real
+  deployment), and decide who monitors the sender mailbox for bounce
+  reports.

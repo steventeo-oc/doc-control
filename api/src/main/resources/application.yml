@@ -62,6 +62,25 @@ doccontrol:
     reminder-before-days: 2
     escalate-after-overdue-days: 2
 
+  watermark:
+    # Phase 2e (#15, plan-back approved): downloads of renditionable
+    # versions return a stamped PDF rendition — mark text by version
+    # status (flag F1), applied per request and never stored (F5). PDF
+    # originals are stamped directly; office types convert in the
+    # Gotenberg sidecar (LibreOffice headless in compose, flag F6).
+    # Non-renditionable types (DWG, .msg/.eml) pass through unstamped
+    # (F3); conversion failures fail closed as 503 (F4). NOTE: brand
+    # fonts are deliberately NOT baked into the sidecar image yet —
+    # pending owner confirmation whether real SOPs need them.
+    enabled: true
+    rendition-url: ${DOCCONTROL_WATERMARK_RENDITION_URL:http://gotenberg:3000}
+    rendition-timeout-seconds: 30
+    text:
+      current: "UNCONTROLLED IF PRINTED"
+      superseded: "SUPERSEDED — DO NOT USE"
+      draft: "DRAFT — UNCONTROLLED"
+      approved: "APPROVED — NOT YET IN EFFECT"
+
   storage:
     # Defaults match docker-compose.yml's minio service on localhost (dev).
     # Inside compose the api container must override the endpoint:

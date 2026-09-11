@@ -71,6 +71,10 @@ services:
       DOCCONTROL_NOTIFICATION_CLIENT_ID: ${DOCCONTROL_NOTIFICATION_CLIENT_ID:-}
       DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ${DOCCONTROL_NOTIFICATION_CLIENT_SECRET:-}
       DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: ${DOCCONTROL_NOTIFICATION_SENDER_MAILBOX:-}
+      # Phase 2e watermarking: office downloads convert to PDF in the
+      # Gotenberg sidecar (LibreOffice headless) and get stamped —
+      # rendition-url defaults to the compose service name:
+      DOCCONTROL_WATERMARK_RENDITION_URL: ${DOCCONTROL_WATERMARK_RENDITION_URL:-http://gotenberg:3000}
       # Set these for anything beyond local dev (see CLAUDE.md go-live checklist):
       # DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ...
       # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
@@ -87,6 +91,17 @@ services:
       - api
     ports:
       - "3000:80"
+
+  gotenberg:
+    # Phase 2e watermarking: LibreOffice headless behind one HTTP endpoint
+    # (POST /forms/libreoffice/convert) — the profile-lock/restart/timeout
+    # plumbing is solved upstream. Internal network only (no host ports);
+    # the api reaches it at http://gotenberg:3000. Budget ~0.5-1GiB RAM;
+    # conversions serialize per instance. Brand fonts are not baked in —
+    # confirmed unnecessary (SOPs use standard fonts only, 2026-09-11).
+    image: gotenberg/gotenberg:8-libreoffice
+    container_name: doccontrol-gotenberg
+    restart: unless-stopped
 
 volumes:
   postgres_data:

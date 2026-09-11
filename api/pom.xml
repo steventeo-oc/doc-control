@@ -70,6 +70,14 @@
             <version>8.0.0</version>
         </dependency>
 
+        <!-- Phase 2e watermarking: stamping the PDF rendition on download
+             (per the library spike; Apache 2.0, pulls fontbox) -->
+        <dependency>
+            <groupId>org.apache.pdfbox</groupId>
+            <artifactId>pdfbox</artifactId>
+            <version>3.0.8</version>
+        </dependency>
+
         <dependency>
             <groupId>org.projectlombok</groupId>
             <artifactId>lombok</artifactId>

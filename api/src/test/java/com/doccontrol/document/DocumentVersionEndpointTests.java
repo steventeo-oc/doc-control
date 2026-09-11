@@ -21,6 +21,14 @@ import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import jakarta.persistence.EntityManager;
 import com.doccontrol.CsrfTestSupport;
+import org.apache.pdfbox.Loader;
+import org.apache.pdfbox.pdmodel.PDDocument;
+import org.apache.pdfbox.pdmodel.PDPage;
+import org.apache.pdfbox.pdmodel.PDPageContentStream;
+import org.apache.pdfbox.pdmodel.common.PDRectangle;
+import org.apache.pdfbox.pdmodel.font.PDType1Font;
+import org.apache.pdfbox.pdmodel.font.Standard14Fonts;
+import org.apache.pdfbox.text.PDFTextStripper;
 import org.junit.jupiter.api.Test;
 import org.springframework.beans.factory.annotation.Autowired;
 import org.springframework.boot.test.autoconfigure.web.servlet.AutoConfigureMockMvc;
@@ -137,8 +145,11 @@ class DocumentVersionEndpointTests {
                 .andExpect(jsonPath("$[0].versionNumber").value(1))
                 .andExpect(jsonPath("$[1].changeNotes").value("second revision"));
 
-        // download round-trip: the exact bytes of version 1 come back
-        byte[] downloaded = mockMvc.perform(get("/documents/{id}/versions/{versionId}/download", docId, v1Id).session(session))
+        // download round-trip with original=true (the audited owner escape
+        // hatch, Phase 2e flag F2): the exact bytes of version 1 come back —
+        // the default download would return a stamped PDF rendition
+        byte[] downloaded = mockMvc.perform(get("/documents/{id}/versions/{versionId}/download", docId, v1Id)
+                        .param("original", "true").session(session))
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("procedure.txt")))
                 .andReturn().getResponse().getContentAsByteArray();
@@ -146,7 +157,9 @@ class DocumentVersionEndpointTests {
 
         assertThat(auditLogRepository.findAll())
                 .anyMatch(entry -> "document_version".equals(entry.getEntityType())
-                        && "created".equals(entry.getAction()));
+                        && "created".equals(entry.getAction()))
+                .anyMatch(entry -> "document_version".equals(entry.getEntityType())
+                        && "original_downloaded".equals(entry.getAction()));
     }
 
     @Test
@@ -263,9 +276,10 @@ class DocumentVersionEndpointTests {
         MockHttpSession viewerSession = loginAs("relviewer@doccontrol.test");
         MockHttpSession adminSession = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
 
-        // create with file (version 1)
+        // create with file (version 1) — a PDF, so the viewer's plain
+        // download below stamps directly without the rendition sidecar
         MvcResult created = mockMvc.perform(multipart("/documents")
-                        .file(new MockMultipartFile("file", "doc.txt", "text/plain", "v1 body".getBytes()))
+                        .file(new MockMultipartFile("file", "doc.pdf", "application/pdf", pdf("v1 body")))
                         .param("document_type_id", String.valueOf(sopTypeId()))
                         .param("department_id", String.valueOf(dept.getId()))
                         .param("name", "Public Doc")
@@ -311,7 +325,7 @@ class DocumentVersionEndpointTests {
 
         // upload v2 as a draft — the pointer must NOT move
         MvcResult v2 = mockMvc.perform(multipart("/documents/{id}/versions", doc.id())
-                        .file(new MockMultipartFile("file", "doc.txt", "text/plain", "v2 body".getBytes()))
+                        .file(new MockMultipartFile("file", "doc.pdf", "application/pdf", pdf("v2 body")))
                         .param("change_notes", "draft revision")
                         .session(ownerSession).with(csrf()))
                 .andExpect(status().isOk())
@@ -333,8 +347,9 @@ class DocumentVersionEndpointTests {
         byte[] v1Body = mockMvc.perform(
                         get("/documents/{id}/versions/{versionId}/download", doc.id(), v1Id).session(viewerSession))
                 .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "application/pdf"))
                 .andReturn().getResponse().getContentAsByteArray();
-        assertThat(new String(v1Body)).isEqualTo("v1 body");
+        assertThat(pdfText(v1Body)).contains("v1 body");
 
         // version history beyond the current version is owner/admin-only:
         // the viewer's list shows exactly the current version, and the draft
@@ -389,7 +404,7 @@ class DocumentVersionEndpointTests {
                         get("/documents/{id}/versions/{versionId}/download", doc.id(), v2Id).session(viewerSession))
                 .andExpect(status().isOk())
                 .andReturn().getResponse().getContentAsByteArray();
-        assertThat(new String(v2Body)).isEqualTo("v2 body");
+        assertThat(pdfText(v2Body)).contains("v2 body");
 
         // and their version list now shows exactly v2
         mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(viewerSession))
@@ -483,5 +498,30 @@ class DocumentVersionEndpointTests {
             throw new AssertionError("Expected a session after login");
         }
         return session;
+    }
+
+    /** Minimal one-page PDF fixture (Phase 2e: PDFs stamp directly, no sidecar). */
+    private byte[] pdf(String line) throws Exception {
+        try (PDDocument doc = new PDDocument()) {
+            PDPage page = new PDPage(PDRectangle.LETTER);
+            doc.addPage(page);
+            try (PDPageContentStream cs = new PDPageContentStream(doc, page)) {
+                cs.beginText();
+                cs.setFont(new PDType1Font(Standard14Fonts.FontName.HELVETICA), 11);
+                cs.newLineAtOffset(60, 700);
+                cs.showText(line);
+                cs.endText();
+            }
+            java.io.ByteArrayOutputStream out = new java.io.ByteArrayOutputStream();
+            doc.save(out);
+            return out.toByteArray();
+        }
+    }
+
+    /** Extracted text with whitespace normalized — the rotated mark extracts with line breaks. */
+    private String pdfText(byte[] pdf) throws Exception {
+        try (PDDocument doc = Loader.loadPDF(pdf)) {
+            return new PDFTextStripper().getText(doc).replaceAll("\\s+", " ");
+        }
     }
 }

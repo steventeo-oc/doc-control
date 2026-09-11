@@ -35,15 +35,46 @@
   XSRF-TOKEN cookie was scoped to Path=/api so the SPA's JS could never
   read it — browsers that visited before that fix keep a stale cookie
   that blocks login until cleared; closing the browser clears it).
-- **Pending (owner)**: rotate the Azure client secret (it passed through
-  chat during setup — NOT yet done). The new value goes into the
-  gitignored `.env`; after editing, the running api container needs
-  `docker compose up -d api` (no rebuild) or Graph token requests will
-  401 until then.
-- **In progress / next**: nothing mid-flight. Phase 2e (watermarking,
-  change notifications) has NOT started — blocked on one thing:
-  confirming with QA who should receive change notifications, replacing
-  their earlier tentative answer. The go-live checklist now includes the
+  Phase 2e change notifications (#16) are **implemented 2026-09-11
+  exactly per the approved plan-back**
+  (`Phase2e_Change_Notifications_PlanBack.md`): a `DOCUMENT_CHANGED`
+  notice goes to every active member of the document's department (live
+  `user_department` lookup, no exclusions) once per version when it
+  becomes effective — on immediate approval completion (first release
+  included) and on the daily job's effective-date flip; re-approvals and
+  deferred outcomes never notify. Sends are best-effort (flag F1: a mail
+  outage can never block or roll back an approval), and sweep phase 5 is
+  the exact per-version catch-up; `WorkflowChangeNotificationTests`
+  covers recipients, dedup, flip, re-approval silence, change-reference
+  rendering, and failure catch-up. Phase 2e watermarking (#15) is
+  **implemented 2026-09-11 exactly per the approved plan-back**
+  (`Phase2e_Watermarking_Design_PlanBack.md`): downloads of renditionable
+  versions return a stamped PDF rendition — mark text by version status
+  (current → "UNCONTROLLED IF PRINTED", plus SUPERSEDED / DRAFT / APPROVED
+  marks), applied per request and never stored. PDF originals stamp
+  directly via PDFBox 3.x; office types convert in the **Gotenberg
+  sidecar** (`gotenberg/gotenberg:8-libreoffice`, added to compose,
+  internal network only, ~0.5–1 GiB budget — headroom confirmed on this
+  machine); non-renditionable types (DWG, .msg/.eml) pass through
+  unstamped; rendition failures fail closed as 503 — never an unstamped
+  original; `?original=true` is the audited canModify-only escape hatch.
+  Brand fonts are a confirmed non-issue (owner, 2026-09-11): real SOPs
+  use standard fonts only, so nothing needs baking into the sidecar
+  image. `WatermarkServiceTests` / `WatermarkEndpointTests` /
+  `WatermarkDisabledTests` plus smoke section 15 (real sidecar
+  conversion) cover it.
+- **Pending (owner)**: nothing operational outstanding. Standing habit
+  (owner, 2026-09-11): full smoke runs go with
+  `DOCCONTROL_NOTIFICATION_ENABLED=false` in `.env` so the placeholder
+  smoke addresses don't bounce to the sender mailbox — flip it back to
+  `true` and `docker compose up -d api` afterwards (done this way for
+  the 2026-09-11 run). Secrets hygiene closed 2026-09-11: the Azure
+  client secret and the WSL sudo password were both rotated (the new
+  secret lives only in the gitignored `.env`).
+- **In progress / next**: nothing mid-flight — Phase 2e is complete
+  (both tracks, see Done above). Next up per the roadmap: the "Later"
+  backlog and the remaining go-live checklist decisions. The go-live
+  checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
   proves submission, not delivery) — it needs a decision before real
   rollout: a routable-email audit plus who watches the sender mailbox for
@@ -56,7 +87,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 54 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 78 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL
@@ -66,8 +97,9 @@
   stack (a background `wsl -e bash -c "sleep N"` works).
 - **Deployment target**: `docker compose up -d --build` serves the SPA at
   localhost:3000 with the API under the `/api` mount; stack rebuilt from
-  main on 2026-09-10 with Phase 2c/2d and the full smoke (sections 1–14,
-  browser-verified UI) passing against it.
+  main on 2026-09-11 with Phase 2e (change notifications, watermarking,
+  the gotenberg sidecar) and the full smoke (sections 1–15) passing
+  against it.
 - **Verification habit**: `scripts/smoke.sh` walks the full flow (including
   the workflow release) end-to-end; run it after any stack rebuild.
 

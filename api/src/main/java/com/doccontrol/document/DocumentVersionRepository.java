@@ -21,5 +21,9 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
     List<DocumentVersion> findAllByStatusAndEffectiveAtLessThanEqualAndDocument_DeletedAtIsNull(
             DocumentVersionStatus status, LocalDate effectiveAt);
 
+    /** Phase 2e catch-up: versions that became effective on the given date. */
+    List<DocumentVersion> findAllByStatusAndEffectiveAtAndDocument_DeletedAtIsNull(
+            DocumentVersionStatus status, LocalDate effectiveAt);
+
     Optional<DocumentVersion> findTopByDocument_IdOrderByVersionNumberDesc(Integer documentId);
 }

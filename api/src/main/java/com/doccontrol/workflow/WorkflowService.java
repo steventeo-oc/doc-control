@@ -257,6 +257,11 @@ public class WorkflowService {
                             instance.getDocumentVersion(), requestedEffectiveDate, actor);
                 } else {
                     documentService.promoteVersion(instance.getDocumentVersion(), today, actor);
+                    // Phase 2e change notice — immediate new-version approvals
+                    // only; re-approvals and deferred outcomes never notify
+                    // (plan-back flag F2). Best-effort, never throws (F1).
+                    documentService.notifyDepartmentOfChange(
+                            document, instance.getDocumentVersion(), today);
                 }
                 instance.setStatus(WorkflowInstanceStatus.COMPLETED);
                 instance.setCompletedAt(LocalDateTime.now());

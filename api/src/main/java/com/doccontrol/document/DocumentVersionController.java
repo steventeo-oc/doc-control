@@ -1,7 +1,10 @@
 package com.doccontrol.document;
 
 import com.doccontrol.storage.FileStorageService.DownloadedFile;
+import com.doccontrol.watermark.WatermarkService;
+import org.springframework.core.io.ByteArrayResource;
 import org.springframework.core.io.InputStreamResource;
+import org.springframework.core.io.Resource;
 import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
@@ -21,9 +24,12 @@ import java.util.List;
 public class DocumentVersionController {
 
     private final DocumentVersionService versionService;
+    private final WatermarkService watermarkService;
 
-    public DocumentVersionController(DocumentVersionService versionService) {
+    public DocumentVersionController(DocumentVersionService versionService,
+                                     WatermarkService watermarkService) {
         this.versionService = versionService;
+        this.watermarkService = watermarkService;
     }
 
     @GetMapping("/documents/{id}/versions")
@@ -48,10 +54,36 @@ public class DocumentVersionController {
         return versionService.get(id, versionId);
     }
 
+    /**
+     * Downloads a version. Default: a stamped PDF rendition when
+     * watermarking applies (Phase 2e plan-back F1 matrix), the original
+     * otherwise. {@code original=true} is the audited owner/admin escape
+     * hatch for the untouched file (flag F2).
+     */
     @GetMapping("/documents/{id}/versions/{versionId}/download")
-    public ResponseEntity<InputStreamResource> download(@PathVariable Integer id,
-                                                        @PathVariable Integer versionId) {
-        DownloadedFile file = versionService.openForDownload(id, versionId);
+    public ResponseEntity<Resource> download(@PathVariable Integer id,
+                                             @PathVariable Integer versionId,
+                                             @RequestParam(value = "original", required = false,
+                                                     defaultValue = "false") boolean original) {
+        DocumentVersionService.VersionDownload download =
+                versionService.openForDownload(id, versionId, original);
+        // original=true never goes near the stamping pipeline — the escape
+        // hatch must return the untouched file (plan-back flag F2)
+        WatermarkService.StampedDownload stamped = original
+                ? null
+                : watermarkService.stampForDownload(download.versionStatus(), download.file());
+        if (stamped != null) {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentDisposition(ContentDisposition.attachment()
+                    .filename(stamped.fileName(), StandardCharsets.UTF_8)
+                    .build());
+            return ResponseEntity.ok()
+                    .headers(headers)
+                    .contentLength(stamped.pdf().length)
+                    .contentType(MediaType.APPLICATION_PDF)
+                    .body(new ByteArrayResource(stamped.pdf()));
+        }
+        DownloadedFile file = download.file();
         HttpHeaders headers = new HttpHeaders();
         headers.setContentDisposition(ContentDisposition.attachment()
                 .filename(file.fileName(), StandardCharsets.UTF_8)

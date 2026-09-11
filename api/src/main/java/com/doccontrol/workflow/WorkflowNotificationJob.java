@@ -45,7 +45,12 @@ import java.util.List;
  *    is escalateAfterOverdueDays business days past due;
  * 4. acknowledgment notifications (Phase 2d): ACK_REMINDER to department
  *    members who still owe one near the window close, ACK_OVERDUE summary
- *    to owner + admins past the close — record-only, nothing is gated.
+ *    to owner + admins past the close — record-only, nothing is gated;
+ * 5. change notifications (Phase 2e): DOCUMENT_CHANGED to every active
+ *    member of the document's department for each version that became
+ *    effective today — the catch-up for the live-path send on immediate
+ *    approvals and the phase-1 flip send, deduped once per version per
+ *    recipient ever.
  *
  * Every phase is idempotent for a given business date — safe to run twice:
  * the flip and clock reset are one-way state transitions, and every
@@ -117,6 +122,7 @@ public class WorkflowNotificationJob {
         sweepApprovalTasks(today);
         sweepReviewOverdue(today);
         sweepAcknowledgments(today);
+        sweepChangeNotifications(today);
     }
 
     /**
@@ -137,6 +143,10 @@ public class WorkflowNotificationJob {
                 transactionTemplate.execute(tx -> {
                     DocumentVersion version = documentVersionRepository.findById(versionId).orElseThrow();
                     documentService.promoteVersion(version, version.getEffectiveAt(), system);
+                    // best-effort and never throws (flag F1): the flip must
+                    // commit even when mail is down; phase 5 of this same
+                    // run retries any recipient the send missed
+                    documentService.notifyDepartmentOfChange(version.getDocument(), version, today);
                     log.info("Effective-date flip applied: {} v{} effective {}",
                             version.getDocument().getDocumentNumber(),
                             version.getVersionNumber(), version.getEffectiveAt());
@@ -301,6 +311,35 @@ public class WorkflowNotificationJob {
                                 + version.getVersionNumber() + ": " + names
                                 + ". The window closed " + closesAt
                                 + ". Record-only — acknowledgment is still open.");
+            }
+        }
+    }
+
+    /**
+     * Phase 5 — change notifications (Phase 2e). For every version that
+     * became effective today (an immediate approval earlier today, or a
+     * phase-1 flip of this same run), ensure every active member of the
+     * document's department has their DOCUMENT_CHANGED notice. The
+     * per-version dedup key makes this an exact catch-up: recipients
+     * already served are skipped, failed sends are retried. A manual
+     * daily-sweep re-run for the business date covers same-day failures
+     * the scheduled sweep alone would not revisit.
+     */
+    private void sweepChangeNotifications(LocalDate today) {
+        List<Integer> versionIds = documentVersionRepository
+                .findAllByStatusAndEffectiveAtAndDocument_DeletedAtIsNull(
+                        DocumentVersionStatus.CURRENT, today)
+                .stream().map(DocumentVersion::getId).toList();
+        for (Integer versionId : versionIds) {
+            try {
+                transactionTemplate.execute(tx -> {
+                    DocumentVersion version = documentVersionRepository.findById(versionId).orElseThrow();
+                    documentService.notifyDepartmentOfChange(version.getDocument(), version, today);
+                    return null;
+                });
+            } catch (Exception e) {
+                log.warn("Change-notification sweep failed for version {}: {}",
+                        versionId, e.getMessage());
             }
         }
     }

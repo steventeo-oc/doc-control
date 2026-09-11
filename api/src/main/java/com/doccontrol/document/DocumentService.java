@@ -18,6 +18,8 @@ import com.doccontrol.lookup.DocumentType;
 import com.doccontrol.lookup.DocumentTypeRepository;
 import com.doccontrol.security.CurrentUserProvider;
 import jakarta.persistence.criteria.Predicate;
+import org.slf4j.Logger;
+import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -36,6 +38,9 @@ import java.util.Set;
 
 @Service
 public class DocumentService {
+
+    private static final Logger log = LoggerFactory.getLogger(DocumentService.class);
+
 
     /**
      * Statuses visible to every authenticated user under the provisional
@@ -459,6 +464,53 @@ public class DocumentService {
         entry.setNotificationDate(java.time.LocalDate.now());
         entry.setChannel("log");
         notificationLogRepository.save(entry);
+    }
+
+    /**
+     * Phase 2e change notification: everyone in the document's department
+     * (the same live {@code user_department} lookup the acknowledgment
+     * sweep uses — confirmed with QA, no exclusions), sent once per
+     * version per recipient ever via the dedup key. Best-effort by design
+     * (plan-back flag F1): a send failure is logged and never propagates —
+     * an approval completion or an effective-date flip must not roll back
+     * because mail was down. The daily sweep's change-notification phase
+     * (and a manual daily-sweep re-run for that business date) redelivers
+     * to whoever has no log row yet.
+     */
+    public void notifyDepartmentOfChange(Document document, DocumentVersion version,
+                                         LocalDate notificationDate) {
+        String dedupKey = "change:version=" + version.getId();
+        String subject = "Document changed: " + document.getDocumentNumber()
+                + " v" + version.getVersionNumber() + " now in effect";
+        String body = document.getDocumentNumber() + " \"" + document.getName()
+                + "\" — version " + version.getVersionNumber()
+                + " is now in effect (effective " + version.getEffectiveAt() + ")."
+                + (version.getChangeReference() == null || version.getChangeReference().isBlank()
+                        ? "" : "\nChange reference: " + version.getChangeReference());
+        for (User member : userRepository.findActiveByDepartmentId(document.getDepartment().getId())) {
+            if (notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
+                    "DOCUMENT_CHANGED", dedupKey, member.getId())) {
+                continue;
+            }
+            try {
+                notificationSender.send(member, subject, body);
+
+                NotificationLog entry = new NotificationLog();
+                entry.setKind("DOCUMENT_CHANGED");
+                entry.setDocument(document);
+                entry.setDocumentVersion(version);
+                entry.setDedupKey(dedupKey);
+                entry.setRecipient(member);
+                entry.setSubject(subject);
+                entry.setNotificationDate(notificationDate);
+                entry.setChannel(notificationSender.channel());
+                notificationLogRepository.save(entry);
+            } catch (Exception e) {
+                log.warn("Change notification failed for {} v{} to {}: {}",
+                        document.getDocumentNumber(), version.getVersionNumber(),
+                        member.getEmail(), e.getMessage());
+            }
+        }
     }
 
     private Specification<Document> notDeleted() {

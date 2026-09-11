@@ -1,6 +1,7 @@
 package com.doccontrol.document;
 
 import com.doccontrol.audit.AuditService;
+import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
 import com.doccontrol.security.CurrentUserProvider;
 import com.doccontrol.storage.FileStorageService;
@@ -104,14 +105,41 @@ public class DocumentVersionService {
     }
 
     /**
-     * Opens the stored file for streaming. The visibility check happens here
-     * (service layer); the returned stream is read by the controller outside
+     * A prepared version download: everything the controller needs,
+     * resolved inside the transaction (open-in-view is off — entities may
+     * not be touched after this returns). The stream is consumed outside
      * the transaction — object storage, not the DB.
      */
-    @Transactional(readOnly = true)
-    public FileStorageService.DownloadedFile openForDownload(Integer documentId, Integer versionId) {
+    public record VersionDownload(DocumentVersionStatus versionStatus,
+                                  FileStorageService.DownloadedFile file) {
+    }
+
+    /**
+     * Prepares a version download. The visibility check, and for original
+     * downloads the canModify gate plus the audit row, happen here in the
+     * service layer (Phase 2e plan-back flags F2/F7); stamping is
+     * WatermarkService's job. Deliberately a read-write transaction: the
+     * original-download audit row is an INSERT, and Postgres rejects
+     * inserts inside a read-only transaction.
+     */
+    @Transactional
+    public VersionDownload openForDownload(Integer documentId, Integer versionId, boolean original) {
         DocumentVersion version = findVisibleVersion(documentId, versionId);
-        return fileStorageService.open(version.getFileReference());
+        if (original) {
+            Document document = version.getDocument();
+            if (!documentService.canModify(document)) {
+                throw new ForbiddenException(
+                        "Only members of the document's department (or an admin) can download the original file.");
+            }
+            // An unstamped original leaving the system is control-relevant
+            // (plan-back flag F2); rendition downloads stay unaudited.
+            auditService.record("document_version", version.getId(), "original_downloaded",
+                    java.util.Map.of(
+                            "document_number", document.getDocumentNumber(),
+                            "version_number", version.getVersionNumber()));
+        }
+        return new VersionDownload(version.getStatus(),
+                fileStorageService.open(version.getFileReference()));
     }
 
     private DocumentVersion findVisibleVersion(Integer documentId, Integer versionId) {

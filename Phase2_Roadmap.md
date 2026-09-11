@@ -124,17 +124,29 @@ enforcement gate; nothing is blocked by a missing acknowledgment.
 
 ## Phase 2e — Distribution control
 
+**Status**: **implemented 2026-09-11** — Phase 2e is complete. Two tracks:
+(1) change notifications per the approved plan-back
+(`Phase2e_Change_Notifications_PlanBack.md`, flags F1–F4); (2)
+watermarking per the approved plan-back
+(`Phase2e_Watermarking_Design_PlanBack.md`, flags F1–F7) — PDFBox 3.x
+stamping, LibreOffice headless via the Gotenberg sidecar in compose,
+stamped-PDF downloads with an audited `original=true` escape hatch,
+fail-closed 503 on rendition failures. Fonts confirmed a non-issue
+(owner, 2026-09-11): real SOPs use standard fonts only, so nothing needs
+baking into the sidecar image.
+
 - **Watermark/stamp on export** (#15): released documents get a visible
   mark (e.g. "Uncontrolled if Printed") when exported/downloaded/printed.
   Needs a PDF-stamping approach — most straightforward if paired with a
   PDF rendition step (may need a library decision; flag for a short
   technical spike, similar in spirit to the Camunda evaluation).
 - **Change notification tracking** (#16): notify relevant people when a
-  document changes. QA's own answer was tentative ("my personal thinking
-  is the owner, previous approvers, and admin") — treat this as a
-  reasonable starting default, not a confirmed spec. Reuses 2b's
-  Microsoft 365/Graph notification infrastructure — build once, use for
-  both approval reminders and change notifications.
+  document changes. **Confirmed with QA (2026-09-11)**: the recipients
+  are everyone in the document's department — the same audience as 2d's
+  acknowledgment tracking (live `user_department` membership), not a
+  separate list. Reuses 2b's Microsoft 365/Graph notification
+  infrastructure — build once, use for both approval reminders and
+  change notifications.
 
 ## Later — real, but not blocking rollout
 
@@ -153,10 +165,12 @@ Captured so they aren't lost, not scheduled yet:
 - Stronger e-signature / re-authentication on approval (#21) — session
   login is sufficient; no regulatory driver for more requires this today.
 
-## Open items (updated 2026-09-10)
+## Open items (updated 2026-09-11)
 
 - [x] Camunda vs. Flowable spike outcome — confirmed Flowable 8.0.0
   (Phase 2b implemented).
 - [x] Who must acknowledge a document (2d) — confirmed: department-only.
-- [ ] Who receives change notifications (2e) — still tentative; 2e stays
-  not-started until the Graph sender lands AND this is answered.
+- [x] Who receives change notifications (2e) — confirmed 2026-09-11:
+  everyone in the document's department (the same audience as 2d
+  acknowledgment tracking, live `user_department` membership). With the
+  Graph sender landed in 2b, Phase 2e is unblocked.

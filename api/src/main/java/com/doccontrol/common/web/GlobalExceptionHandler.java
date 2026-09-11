@@ -30,6 +30,13 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.FORBIDDEN, ex.getMessage());
     }
 
+    @ExceptionHandler(RenditionUnavailableException.class)
+    ProblemDetail renditionUnavailable(RenditionUnavailableException ex) {
+        // Fail closed (Phase 2e plan-back flag F4): an unstamped original
+        // must never escape while the rendition pipeline is unhealthy.
+        return ProblemDetail.forStatusAndDetail(HttpStatus.SERVICE_UNAVAILABLE, ex.getMessage());
+    }
+
     @ExceptionHandler({BadCredentialsException.class, DisabledException.class})
     ProblemDetail badCredentials(Exception ex) {
         // Deliberately vague: don't reveal whether the account exists or is disabled.

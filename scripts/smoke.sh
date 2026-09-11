@@ -98,10 +98,12 @@ V2="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions" \
 V2_ID="$(field "$V2" id)"
 echo "OK — version $(field "$V2" versionNumber) uploaded (id $V2_ID)"
 
-step "6. Download version 2 and verify the bytes round-trip"
-api -b "$TMP/admin.jar" -o "$TMP/downloaded.txt" "$API/documents/$DOC_ID/versions/$V2_ID/download"
+step "6. Download version 2 via the audited original path and verify the bytes round-trip"
+# Phase 2e: the default download of a renditionable version returns a
+# stamped PDF rendition; original=true is the audited canModify escape hatch
+api -b "$TMP/admin.jar" -o "$TMP/downloaded.txt" "$API/documents/$DOC_ID/versions/$V2_ID/download?original=true"
 grep -q "Rev B" "$TMP/downloaded.txt" || fail "downloaded content does not match"
-echo "OK — downloaded file contains the Rev B content"
+echo "OK — original download contains the Rev B content"
 
 step "7. A department member can see their department's draft (Phase 2a member visibility)"
 code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$API/documents/$DOC_ID")"
@@ -199,6 +201,21 @@ ACKS="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/acknowledgments")"
 [ "$(printf '%s' "$ACKS" | python -c "import sys,json;print(len(json.load(sys.stdin)['acknowledged']))")" = "1" ] \
   || fail "acknowledged should contain exactly the one record"
 echo "OK — department member acknowledged version 3 once (idempotent); $OUT_BEFORE members outstanding before, one fewer after"
+
+step "15. Watermarking (Phase 2e): the released document downloads as a stamped PDF rendition"
+# v3 is text/plain, so the rendition goes through the Gotenberg sidecar
+# (LibreOffice headless) and comes back stamped. The first conversion may
+# include LibreOffice's lazy start — allow more than the api() timeout.
+RENDITION_TYPE="$(curl -s -m 120 -b "$TMP/admin.jar" \
+  -o "$TMP/rendition.pdf" -w '%{content_type}' \
+  "$API/documents/$DOC_ID/versions/$V3_ID/download")"
+[ "$(head -c 5 "$TMP/rendition.pdf")" = "%PDF-" ] || fail "released download is not a PDF rendition"
+case "$RENDITION_TYPE" in application/pdf*) ;; *) fail "expected an application/pdf rendition, got '$RENDITION_TYPE'";; esac
+echo "OK — v3 downloaded as a PDF rendition ($RENDITION_TYPE, $(wc -c < "$TMP/rendition.pdf") bytes, converted by the Gotenberg sidecar)"
+api -b "$TMP/admin.jar" -o "$TMP/original-v3.txt" \
+  "$API/documents/$DOC_ID/versions/$V3_ID/download?original=true"
+grep -q "Rev C" "$TMP/original-v3.txt" || fail "original download does not match"
+echo "OK — original=true still returns the untouched Rev C bytes (audited)"
 
 step "DONE — all checks passed"
 echo "Left behind: department $DEPT_CODE, document $DOC_NUMBER (released, v3 effective, acknowledged), three users."

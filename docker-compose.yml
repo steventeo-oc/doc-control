@@ -67,6 +67,14 @@ services:
       # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
       # SPRING_PROFILES_ACTIVE: prod   # startup hard-fails on default admin
       #                                # credentials under this profile
+      # Microsoft Graph mail (Phase 2b) — log-only until enabled=true with the
+      # Azure app registration values (tenant of the app registration; client
+      # id/secret of its Mail.Send app; the sending mailbox's SMTP address):
+      # DOCCONTROL_NOTIFICATION_ENABLED: "true"
+      # DOCCONTROL_NOTIFICATION_TENANT_ID: ...
+      # DOCCONTROL_NOTIFICATION_CLIENT_ID: ...
+      # DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ...
+      # DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: doccontrol@your-domain.com
     ports:
       - "8080:8080"
 

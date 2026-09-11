@@ -35,9 +35,16 @@
   visited before the cookie-path fix keep a stale Path=/api XSRF-TOKEN
   cookie that blocks login until it is cleared (session cookie — closing
   the browser clears it).
-- **In progress / next**: the **Microsoft Graph sender** for notifications —
-  waiting on the owner's Azure app registration + sender mailbox
-  (operational). Nothing else is mid-flight; Phase 2e remains off-limits.
+- **In progress / next**: nothing pending — **Phase 2b is fully complete**:
+  the Microsoft Graph sender is implemented (`GraphNotificationSender`,
+  JDK HTTP client, client-credentials against the tenant, Mail.Send from
+  the configured sender mailbox, token cached until shortly before
+  expiry) behind `doccontrol.notification.enabled` — **disabled by
+  default**, so deployments stay log-only until the real values are set
+  (`DOCCONTROL_NOTIFICATION_ENABLED/TENANT_ID/CLIENT_ID/CLIENT_SECRET/
+  SENDER_MAILBOX`, commented in docker-compose.yml). notification_log rows
+  record the transport used ('log' or 'graph'). Phase 2e remains
+  off-limits.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2 (run compose via `wsl -e bash -c "cd
   '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && sudo docker compose
@@ -254,9 +261,9 @@ unrestricted delegation, pooled role tasks, reviewer visibility) is
 implemented and tested — the status-override stopgap is retired. The
 reminder/escalation job is also implemented (daily sweep, configurable
 thresholds, pooled tasks remind current role members until claimed,
-dedup via notification_log) on the log-only NotificationSender; the
-Microsoft Graph sender is the last Phase 2b piece (pending Azure app
-registration).
+dedup via notification_log), and the Microsoft Graph sender completed
+the phase — log-only remains the default until a deployment sets the
+DOCCONTROL_NOTIFICATION_* values.
 
 ## Phase 2c/2d design note (requirements confirmed with QA, implemented 2026-09-10)
 

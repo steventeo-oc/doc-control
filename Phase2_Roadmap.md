@@ -69,10 +69,9 @@ unrestricted delegation, pooled role tasks via candidate groups, reviewer
 visibility) **and** the reminder/escalation job — daily sweep with
 configurable thresholds (3/1/2 business days), pooled tasks remind current
 role members until claimed, reminders dedup per day and escalations fire
-once per task per recipient, all recorded in `notification_log` and sent
-through the log-only `NotificationSender`. Remaining: swap the sender for
-Microsoft Graph — blocked only on the Azure app registration / sender
-mailbox (operational).
+once per task per recipient, all recorded in `notification_log`. The
+Microsoft Graph sender completed the phase (2026-09-11): log-only remains
+the default until a deployment sets `DOCCONTROL_NOTIFICATION_*`.
 
 ## Phase 2c — Document lifecycle extensions
 

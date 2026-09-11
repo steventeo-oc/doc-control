@@ -8,43 +8,46 @@
   Phase 2a (multi-department users, department-scoped create/edit).
   Phase 2b core: **Flowable 8.0.0** embedded approval flow (ad-hoc parallel
   reviewers, 100% promotion, rejection, delegation, pooled role tasks,
-  reviewer visibility) **and** the daily reminder/escalation job (log-only
-  sender). The Sprint 1 status-override stopgap is retired. Phase 2c
-  (periodic review, effective dates, optional change reference) and Phase
-  2d (read & understood acknowledgment) — implemented per the approved
-  `Phase2c_2d_Design_PlanBack.md`; the daily job now runs four ordered
-  phases (flip → approval reminders → review notices → acknowledgment
-  notices), each item in its own transaction with re-fetched entities (a
-  real cron would otherwise hit lazy-init/detached failures — caught by
-  smoke testing), and is idempotent per business date (test-proven).
-  `scripts/smoke.sh` sections 11–14 cover the lifecycle flows; an
-  admin-only `POST /admin/jobs/daily-sweep?date=…` triggers the sweep as
-  of a business date (that's how the smoke simulates the flip). The SPA
-  now has the workflow UI: My tasks page (approve/reject with an optional
-  effective-date picker, re-approval badge), send-for-approval /
-  start-re-approval actions and the acknowledgment panel with grants on
-  the document page (the retired admin status override was removed from
-  it). Reviewer assignment is available to every modifier: the
-  document-scoped `GET /documents/{id}/reviewer-candidates` picklist
-  (minimal fields, gated by the same canModify rule as starting an
-  approval) serves the by-user picker for non-admin owners — `/users`
-  itself stays admin-only. Two latent CSRF bugs were found by real-browser
-  testing and fixed: the
-  SPA login fetch bypassed the CSRF header, and the XSRF-TOKEN cookie was
-  scoped to Path=/api so the SPA's JS could never read it. Browsers that
-  visited before the cookie-path fix keep a stale Path=/api XSRF-TOKEN
-  cookie that blocks login until it is cleared (session cookie — closing
-  the browser clears it).
-- **In progress / next**: nothing pending — **Phase 2b is fully complete**:
-  the Microsoft Graph sender is implemented (`GraphNotificationSender`,
-  JDK HTTP client, client-credentials against the tenant, Mail.Send from
-  the configured sender mailbox, token cached until shortly before
-  expiry) behind `doccontrol.notification.enabled` — **disabled by
-  default**, so deployments stay log-only until the real values are set
-  (`DOCCONTROL_NOTIFICATION_ENABLED/TENANT_ID/CLIENT_ID/CLIENT_SECRET/
-  SENDER_MAILBOX`, commented in docker-compose.yml). notification_log rows
-  record the transport used ('log' or 'graph'). Phase 2e remains
-  off-limits.
+  reviewer visibility) plus the daily job — four ordered phases (flip →
+  approval reminders → review notices → acknowledgment notices), each
+  item in its own transaction with re-fetched entities (a real cron would
+  otherwise hit lazy-init/detached failures — caught by smoke testing),
+  idempotent per business date (test-proven). The Sprint 1 status-override
+  stopgap is retired. **Phase 2b is fully complete and verified
+  end-to-end (2026-09-11)**: the Microsoft Graph sender
+  (`GraphNotificationSender`, behind `doccontrol.notification.enabled` —
+  the local stack runs with the real Azure values from the gitignored
+  `.env`, which compose interpolates into the api container) sent a real
+  email that was confirmed delivered to a real inbox; the smoke-test data
+  used for that verification was reverted afterwards, and the two
+  `notification_log` rows (channel 'graph') plus the `daily_sweep` audit
+  entry remain as genuine records. Phase 2c (periodic review, effective
+  dates, optional change reference) and Phase 2d (read & understood
+  acknowledgment) are complete — backend, SPA frontend, and
+  browser-verified: the daily sweep, `scripts/smoke.sh` sections 11–14,
+  admin-only `POST /admin/jobs/daily-sweep?date=…` for date simulation,
+  the My tasks page (approve/reject with an optional effective-date
+  picker, re-approval badge), send-for-approval / start-re-approval
+  actions and the acknowledgment panel with grants on the document page,
+  the document-scoped `GET /documents/{id}/reviewer-candidates` picklist
+  for non-admin owners, and fixes for two latent CSRF bugs found by
+  real-browser testing (SPA login bypassed the CSRF header; the
+  XSRF-TOKEN cookie was scoped to Path=/api so the SPA's JS could never
+  read it — browsers that visited before that fix keep a stale cookie
+  that blocks login until cleared; closing the browser clears it).
+- **Pending (owner)**: rotate the Azure client secret (it passed through
+  chat during setup — NOT yet done). The new value goes into the
+  gitignored `.env`; after editing, the running api container needs
+  `docker compose up -d api` (no rebuild) or Graph token requests will
+  401 until then.
+- **In progress / next**: nothing mid-flight. Phase 2e (watermarking,
+  change notifications) has NOT started — blocked on one thing:
+  confirming with QA who should receive change notifications, replacing
+  their earlier tentative answer. The go-live checklist now includes the
+  Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
+  proves submission, not delivery) — it needs a decision before real
+  rollout: a routable-email audit plus who watches the sender mailbox for
+  bounces.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2 (run compose via `wsl -e bash -c "cd
   '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && sudo docker compose

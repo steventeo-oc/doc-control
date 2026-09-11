@@ -80,10 +80,11 @@
   rollout: a routable-email audit plus who watches the sender mailbox for
   bounces.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
-  Engine lives inside WSL2 (run compose via `wsl -e bash -c "cd
-  '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && sudo docker compose
-  up -d --build"`, with `POSTGRES_HOST_PORT=15432 MINIO_HOST_PORT=19000
-  MINIO_CONSOLE_HOST_PORT=19001` to avoid port collisions). Tests need a
+  Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
+  (start/stop/verify the stack, check existing data, machine-specific
+  gotchas — use `wsl -u root`, never non-interactive `sudo`, which
+  hangs) with `POSTGRES_HOST_PORT=15432 MINIO_HOST_PORT=19000
+  MINIO_CONSOLE_HOST_PORT=19001` to avoid port collisions. Tests need a
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**

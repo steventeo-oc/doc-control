@@ -139,7 +139,9 @@ class WorkflowJobIdempotencyTests {
         Integer docC = createDocumentWithFile(sessionC, dept.getId(), "Idempotency Approval Doc");
         Integer vC = firstVersionId(docC, sessionC);
         WorkflowInstanceDto instanceC = startApproval(sessionC, docC, vC, "idemownerC@doccontrol.test");
-        LocalDate day = taskDueDate(instanceC.id());
+        org.flowable.task.api.Task taskC = taskOf(instanceC.id());
+        LocalDate day = taskC.getDueDate().toInstant()
+                .atZone(java.time.ZoneId.systemDefault()).toLocalDate();
 
         // Doc A: v1 released immediately; v2 approved with effect from `day` (pending flip).
         // The flip runs first in the sweep, so doc A itself produces no review
@@ -186,9 +188,16 @@ class WorkflowJobIdempotencyTests {
                 "idemownerG@doccontrol.test");
         backdateEffectiveAt(docG, BusinessDays.addBusinessDays(day, -9));
 
+        // Count only this test's documents: the shared dev database holds
+        // released leftovers whose own acknowledgment windows drift with the
+        // real calendar and must not affect the assertions. Doc C's approval
+        // reminder is task-anchored (no document anchor) and checked by task id.
+        java.util.Set<Integer> testDocs = java.util.Set.of(docA, docB, docC, docD, docE, docF, docG);
+
         // ---- first run on `day`: every phase fires once ----
         job.run(day);
-        Map<String, Long> notificationsAfterRun1 = notificationsByKind();
+        Map<String, Long> notificationsAfterRun1 = notificationsByKindFor(testDocs);
+        long remindersForTaskCAfterRun1 = remindersForTask(taskC.getId());
         long statusChangesAfterRun1 = auditCount("document", "status_changed");
         long clockResetsAfterRun1 = auditCount("document", "review_clock_reset");
 
@@ -206,7 +215,8 @@ class WorkflowJobIdempotencyTests {
         assertThat(afterReset.getPendingReviewEffectiveAt()).isNull();
         // the day's notifications exist
         assertThat(notificationsAfterRun1).containsKeys(
-                "REMINDER", "REVIEW_DUE", "REVIEW_OVERDUE", "ACK_REMINDER", "ACK_OVERDUE");
+                "REVIEW_DUE", "REVIEW_OVERDUE", "ACK_REMINDER", "ACK_OVERDUE");
+        assertThat(remindersForTaskCAfterRun1).isEqualTo(1L);
         // one reminder per member of doc F's department who still owes one
         // (the whole department owes — including the other docs' owners)
         long docFOutstanding = acknowledgmentService
@@ -217,8 +227,10 @@ class WorkflowJobIdempotencyTests {
 
         // ---- second run, same business date: nothing may change ----
         job.run(day);
-        assertThat(notificationsByKind()).as("no duplicate notifications")
+        assertThat(notificationsByKindFor(testDocs)).as("no duplicate notifications")
                 .isEqualTo(notificationsAfterRun1);
+        assertThat(remindersForTask(taskC.getId())).as("no duplicate approval reminders")
+                .isEqualTo(remindersForTaskCAfterRun1);
         assertThat(auditCount("document", "status_changed")).as("no duplicate flips")
                 .isEqualTo(statusChangesAfterRun1);
         assertThat(auditCount("document", "review_clock_reset")).as("no duplicate clock resets")
@@ -226,16 +238,26 @@ class WorkflowJobIdempotencyTests {
 
         // ---- third run for good measure: still nothing ----
         job.run(day);
-        assertThat(notificationsByKind()).isEqualTo(notificationsAfterRun1);
+        assertThat(notificationsByKindFor(testDocs)).isEqualTo(notificationsAfterRun1);
+        assertThat(remindersForTask(taskC.getId())).isEqualTo(remindersForTaskCAfterRun1);
         assertThat(auditCount("document", "status_changed")).isEqualTo(statusChangesAfterRun1);
         assertThat(auditCount("document", "review_clock_reset")).isEqualTo(clockResetsAfterRun1);
     }
 
     // ---- helpers (mirroring the other workflow test classes) ----
 
-    private Map<String, Long> notificationsByKind() {
+    private Map<String, Long> notificationsByKindFor(java.util.Set<Integer> documentIds) {
         return notificationLogRepository.findAll().stream()
+                .filter(entry -> entry.getDocument() != null
+                        && documentIds.contains(entry.getDocument().getId()))
                 .collect(Collectors.groupingBy(NotificationLog::getKind, Collectors.counting()));
+    }
+
+    private long remindersForTask(String flowableTaskId) {
+        return notificationLogRepository.findAll().stream()
+                .filter(entry -> "REMINDER".equals(entry.getKind()))
+                .filter(entry -> flowableTaskId.equals(entry.getFlowableTaskId()))
+                .count();
     }
 
     private long auditCount(String entityType, String action) {
@@ -251,17 +273,6 @@ class WorkflowJobIdempotencyTests {
         DocumentVersion version = document.getCurrentVersion();
         version.setEffectiveAt(effectiveAt);
         documentVersionRepository.save(version);
-    }
-
-    private LocalDate taskDueDate(Integer instanceId) {
-        WorkflowInstance instance = workflowInstanceRepository.findById(instanceId).orElseThrow();
-        org.flowable.task.api.Task task = taskService.createTaskQuery()
-                .processInstanceId(instance.getProcessInstanceId())
-                .singleResult();
-        if (task == null || task.getDueDate() == null) {
-            throw new AssertionError("Expected an active task with a due date");
-        }
-        return task.getDueDate().toInstant().atZone(java.time.ZoneId.systemDefault()).toLocalDate();
     }
 
     /** Creates a document and releases version 1 through an immediate approval. */

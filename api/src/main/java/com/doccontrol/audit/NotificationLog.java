@@ -79,7 +79,7 @@ public class NotificationLog {
     @Column(name = "notification_date")
     private LocalDate notificationDate;
 
-    /** 'log' until the Microsoft Graph sender lands. */
+    /** The transport that delivered it — 'log' (default) or 'graph'. */
     @Column(nullable = false)
     private String channel;
 }

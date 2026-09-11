@@ -154,9 +154,12 @@ public class WorkflowNotificationJob {
             try {
                 transactionTemplate.execute(tx -> {
                     Document document = documentRepository.findById(documentId).orElseThrow();
-                    documentService.resetReviewClock(document, document.getPendingReviewEffectiveAt(), system);
+                    // capture before the reset consumes it — the log must show
+                    // the date the clock was anchored to, not the cleared null
+                    LocalDate effectiveOn = document.getPendingReviewEffectiveAt();
+                    documentService.resetReviewClock(document, effectiveOn, system);
                     log.info("Review clock reset applied: {} effective {}",
-                            document.getDocumentNumber(), document.getPendingReviewEffectiveAt());
+                            document.getDocumentNumber(), effectiveOn);
                     return null;
                 });
             } catch (Exception e) {
@@ -333,7 +336,7 @@ public class WorkflowNotificationJob {
         entry.setRecipient(recipient);
         entry.setSubject(subject);
         entry.setNotificationDate(notificationDate);
-        entry.setChannel("log");
+        entry.setChannel(notificationSender.channel());
         notificationLogRepository.save(entry);
     }
 
@@ -415,7 +418,7 @@ public class WorkflowNotificationJob {
         entry.setRecipient(recipient);
         entry.setSubject(subject);
         entry.setNotificationDate(notificationDate);
-        entry.setChannel("log");
+        entry.setChannel(notificationSender.channel());
         notificationLogRepository.save(entry);
     }
 

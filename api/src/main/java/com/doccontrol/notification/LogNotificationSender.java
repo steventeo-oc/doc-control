@@ -3,15 +3,12 @@ package com.doccontrol.notification;
 import com.doccontrol.identity.User;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
-import org.springframework.stereotype.Component;
 
 /**
- * Development stub: writes the notification to the application log instead
- * of sending mail. Replaced by the Microsoft Graph implementation without
- * touching any caller (see go-live checklist — M365 prerequisites are
- * handled operationally).
+ * Writes the notification to the application log instead of sending mail.
+ * The default sender; the Microsoft Graph implementation takes over when
+ * doccontrol.notification.enabled=true (see NotificationConfig).
  */
-@Component
 public class LogNotificationSender implements NotificationSender {
 
     private static final Logger log = LoggerFactory.getLogger(LogNotificationSender.class);

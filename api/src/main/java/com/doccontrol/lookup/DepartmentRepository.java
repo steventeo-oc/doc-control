@@ -10,4 +10,7 @@ public interface DepartmentRepository extends JpaRepository<Department, Integer>
     Optional<Department> findByCode(String code);
 
     List<Department> findAllByActiveTrueOrderByCodeAsc();
+
+    /** The includeInactive=true shape: every row, active or not. */
+    List<Department> findAllByOrderByCodeAsc();
 }

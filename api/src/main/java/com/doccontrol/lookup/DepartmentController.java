@@ -2,12 +2,14 @@ package com.doccontrol.lookup;
 
 import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestMapping;
+import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 
 import java.net.URI;
@@ -15,7 +17,8 @@ import java.util.List;
 
 /**
  * Reads are open to any authenticated user; writes are admin-only (enforced
- * in SecurityConfig, see the /departments/** rule).
+ * in SecurityConfig, see the /departments/** rule — usage reads too, so the
+ * deactivate/delete confirmation numbers match the write surface).
  */
 @RestController
 @RequestMapping("/departments")
@@ -29,11 +32,26 @@ public class DepartmentController {
         this.departmentService = departmentService;
     }
 
+    /**
+     * Active rows only by default; `includeInactive=true` is the admin and
+     * filter shape (plan-back F2) — deactivated departments stay visible
+     * for reactivation and for searching the documents that reference them.
+     */
     @GetMapping
-    public List<DepartmentDto> list() {
-        return departmentRepository.findAllByActiveTrueOrderByCodeAsc().stream()
+    public List<DepartmentDto> list(
+            @RequestParam(value = "includeInactive", required = false, defaultValue = "false")
+            boolean includeInactive) {
+        return (includeInactive
+                ? departmentRepository.findAllByOrderByCodeAsc()
+                : departmentRepository.findAllByActiveTrueOrderByCodeAsc())
+                .stream()
                 .map(DepartmentDto::from)
                 .toList();
+    }
+
+    @GetMapping("/{id}/usage")
+    public DepartmentUsageDto usage(@PathVariable Integer id) {
+        return departmentService.usage(id);
     }
 
     @PostMapping
@@ -48,5 +66,11 @@ public class DepartmentController {
     public DepartmentDto update(@PathVariable Integer id,
                                 @Valid @RequestBody UpdateDepartmentRequest request) {
         return departmentService.update(id, request);
+    }
+
+    @DeleteMapping("/{id}")
+    public ResponseEntity<Void> delete(@PathVariable Integer id) {
+        departmentService.delete(id);
+        return ResponseEntity.noContent().build();
     }
 }

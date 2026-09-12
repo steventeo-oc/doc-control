@@ -16,4 +16,13 @@ public interface DocumentRepository extends JpaRepository<Document, Integer>, Jp
 
     /** Released, non-trashed documents — the acknowledgment sweep's candidates. */
     List<Document> findAllByStatusAndDeletedAtIsNull(DocumentStatus status);
+
+    /**
+     * All documents referencing a lookup row, soft-deleted ones included —
+     * a lookup's FKs are as live as ever after a soft delete, so the
+     * delete-blocking count must include them (lookup plan-back D3).
+     */
+    long countByDepartmentId(Integer departmentId);
+
+    long countByDocumentTypeId(Integer documentTypeId);
 }

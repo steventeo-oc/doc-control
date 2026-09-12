@@ -8,5 +8,8 @@ public interface DocumentTypeRepository extends JpaRepository<DocumentType, Inte
 
     List<DocumentType> findAllByActiveTrueOrderByCodeAsc();
 
+    /** The includeInactive=true shape: every row, active or not. */
+    List<DocumentType> findAllByOrderByCodeAsc();
+
     boolean existsByCode(String code);
 }

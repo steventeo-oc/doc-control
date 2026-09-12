@@ -18,6 +18,7 @@ import org.springframework.security.web.authentication.AnonymousAuthenticationFi
 import org.springframework.security.web.authentication.HttpStatusEntryPoint;
 import org.springframework.security.web.authentication.logout.HttpStatusReturningLogoutSuccessHandler;
 import org.springframework.security.web.csrf.CookieCsrfTokenRepository;
+import org.springframework.security.web.csrf.CsrfFilter;
 import org.springframework.web.cors.CorsConfiguration;
 import org.springframework.web.cors.CorsConfigurationSource;
 import org.springframework.web.cors.UrlBasedCorsConfigurationSource;
@@ -44,10 +45,15 @@ public class SecurityConfig {
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokenRepository)
                 .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))
+            .addFilterBefore(new LegacyXsrfCookieExpiryFilter(), CsrfFilter.class)
             .addFilterAfter(new CsrfCookieFilter(), AnonymousAuthenticationFilter.class)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/auth/login").permitAll()
+                // lookup usage counts power the admin deactivate/delete
+                // confirmations — same surface as the writes they precede
+                .requestMatchers(org.springframework.http.HttpMethod.GET,
+                        "/departments/*/usage", "/document-types/*/usage").hasRole("ADMIN")
                 .requestMatchers(org.springframework.http.HttpMethod.GET,
                         "/document-tiers", "/document-tiers/**",
                         "/document-types", "/document-types/**",

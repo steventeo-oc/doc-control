@@ -2,7 +2,9 @@ package com.doccontrol.lookup;
 
 import com.doccontrol.audit.AuditService;
 import com.doccontrol.common.web.ConflictException;
+import com.doccontrol.common.web.DeletionBlockedException;
 import com.doccontrol.common.web.NotFoundException;
+import com.doccontrol.document.DocumentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -14,13 +16,19 @@ public class DocumentTypeService {
 
     private final DocumentTypeRepository documentTypeRepository;
     private final DocumentTierRepository documentTierRepository;
+    private final DocumentRepository documentRepository;
+    private final DocumentSequenceCounterRepository documentSequenceCounterRepository;
     private final AuditService auditService;
 
     public DocumentTypeService(DocumentTypeRepository documentTypeRepository,
                                DocumentTierRepository documentTierRepository,
+                               DocumentRepository documentRepository,
+                               DocumentSequenceCounterRepository documentSequenceCounterRepository,
                                AuditService auditService) {
         this.documentTypeRepository = documentTypeRepository;
         this.documentTierRepository = documentTierRepository;
+        this.documentRepository = documentRepository;
+        this.documentSequenceCounterRepository = documentSequenceCounterRepository;
         this.auditService = auditService;
     }
 
@@ -48,8 +56,7 @@ public class DocumentTypeService {
 
     @Transactional
     public DocumentTypeDto update(Integer id, UpdateDocumentTypeRequest request) {
-        DocumentType type = documentTypeRepository.findById(id)
-                .orElseThrow(() -> new NotFoundException("Document type " + id + " not found."));
+        DocumentType type = requireType(id);
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
@@ -77,5 +84,42 @@ public class DocumentTypeService {
         }
 
         return DocumentTypeDto.from(type);
+    }
+
+    /** Counts powering the deactivate confirmation (plan-back F1). */
+    @Transactional(readOnly = true)
+    public DocumentTypeUsageDto usage(Integer id) {
+        requireType(id);
+        return new DocumentTypeUsageDto(documentRepository.countByDocumentTypeId(id));
+    }
+
+    /**
+     * Hard delete (plan-back F4): blocked while any document — including
+     * soft-deleted ones — references the type; otherwise its
+     * sequence-counter bookkeeping rows go with it.
+     */
+    @Transactional
+    public void delete(Integer id) {
+        DocumentType type = requireType(id);
+        long documents = documentRepository.countByDocumentTypeId(id);
+        if (documents > 0) {
+            throw new DeletionBlockedException(
+                    documents + " document(s) (including soft-deleted) reference document type '"
+                            + type.getCode() + "' — deactivate it instead of deleting.",
+                    Map.of("documents", documents));
+        }
+
+        long counters = documentSequenceCounterRepository.deleteByDocumentTypeId(id);
+        documentTypeRepository.delete(type);
+
+        auditService.record("document_type", id, "deleted", Map.of(
+                "code", type.getCode(),
+                "label", type.getLabel(),
+                "removed_sequence_counters", counters));
+    }
+
+    private DocumentType requireType(Integer id) {
+        return documentTypeRepository.findById(id)
+                .orElseThrow(() -> new NotFoundException("Document type " + id + " not found."));
     }
 }

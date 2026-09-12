@@ -31,4 +31,13 @@ public interface DocumentSequenceCounterRepository extends JpaRepository<Documen
     @Modifying
     @Query(value = "UPDATE document_sequence_counter SET next_sequence_number = :next WHERE id = :id", nativeQuery = true)
     void advance(@Param("id") Integer id, @Param("next") Integer next);
+
+    /** Usage/delete bookkeeping for the lookup admin (plan-back F1/F4). */
+    long countByDepartmentId(Integer departmentId);
+
+    long countByDocumentTypeId(Integer documentTypeId);
+
+    long deleteByDepartmentId(Integer departmentId);
+
+    long deleteByDocumentTypeId(Integer documentTypeId);
 }

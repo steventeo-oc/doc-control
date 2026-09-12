@@ -58,6 +58,13 @@ public class GlobalExceptionHandler {
         return ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, "Request violates a data constraint.");
     }
 
+    @ExceptionHandler(DeletionBlockedException.class)
+    ProblemDetail deletionBlocked(DeletionBlockedException ex) {
+        ProblemDetail detail = ProblemDetail.forStatusAndDetail(HttpStatus.CONFLICT, ex.getMessage());
+        detail.setProperty("blocking", ex.getBlocking());
+        return detail;
+    }
+
     /** Bad request payloads surfaced as IllegalArgumentException (e.g. missing multipart parts). */
     @ExceptionHandler(IllegalArgumentException.class)
     ProblemDetail badRequest(IllegalArgumentException ex) {

@@ -53,7 +53,8 @@ public class SecurityConfig {
                 // lookup usage counts power the admin deactivate/delete
                 // confirmations — same surface as the writes they precede
                 .requestMatchers(org.springframework.http.HttpMethod.GET,
-                        "/departments/*/usage", "/document-types/*/usage").hasRole("ADMIN")
+                        "/departments/*/usage", "/document-types/*/usage",
+                        "/document-tiers/*/usage").hasRole("ADMIN")
                 .requestMatchers(org.springframework.http.HttpMethod.GET,
                         "/document-tiers", "/document-tiers/**",
                         "/document-types", "/document-types/**",

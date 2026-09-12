@@ -12,4 +12,7 @@ public interface DocumentTypeRepository extends JpaRepository<DocumentType, Inte
     List<DocumentType> findAllByOrderByCodeAsc();
 
     boolean existsByCode(String code);
+
+    /** Types referencing a tier — the tier delete-blocking count (F5). */
+    long countByTierId(Integer tierId);
 }

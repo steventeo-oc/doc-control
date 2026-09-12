@@ -198,6 +198,85 @@ class LookupAdminTests {
         assertThat(audited).containsExactlyInAnyOrder(userA.getId(), userB.getId());
     }
 
+    @Test
+    void tierCrudLifecycle() throws Exception {
+        int tierNumber = 9000 + (int) (System.nanoTime() % 1000);
+        MvcResult created = mockMvc.perform(post("/document-tiers")
+                        .with(csrf()).session(adminSession())
+                        .contentType("application/json")
+                        .content("{\"tierNumber\":" + tierNumber + ",\"label\":\"Tier CRUD test\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.active").value(true))
+                .andReturn();
+        Integer tierId = objectMapper.readValue(created.getResponse().getContentAsString(),
+                com.doccontrol.lookup.DocumentTierDto.class).id();
+
+        // duplicate tierNumber rejected
+        mockMvc.perform(post("/document-tiers")
+                        .with(csrf()).session(adminSession())
+                        .contentType("application/json")
+                        .content("{\"tierNumber\":" + tierNumber + ",\"label\":\"Duplicate\"}"))
+                .andExpect(status().isConflict());
+
+        // default list is active-only; the new tier is active and present
+        mockMvc.perform(get("/document-tiers").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + tierId + ")]").isNotEmpty());
+
+        // deactivate: vanishes from the default, present with includeInactive
+        mockMvc.perform(patch("/document-tiers/{id}", tierId).with(csrf()).session(adminSession())
+                        .contentType("application/json").content("{\"active\": false}"))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.active").value(false));
+        mockMvc.perform(get("/document-tiers").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + tierId + ")]").isEmpty());
+        mockMvc.perform(get("/document-tiers").param("includeInactive", "true").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + tierId + ")].active").value(false));
+
+        // usage with no types, then a clean delete
+        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentTypes").value(0));
+        mockMvc.perform(delete("/document-tiers/{id}", tierId).with(csrf()).session(adminSession()))
+                .andExpect(status().isNoContent());
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "document_tier".equals(entry.getEntityType())
+                        && tierId.equals(entry.getEntityId())
+                        && "deleted".equals(entry.getAction()));
+    }
+
+    @Test
+    void tierDeleteBlockedByReferencingTypes() throws Exception {
+        Integer tierId = documentTierRepository.findAllByOrderByTierNumberAsc().get(0).getId();
+        createType("TBK", tierId);
+
+        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.documentTypes").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+        mockMvc.perform(delete("/document-tiers/{id}", tierId).with(csrf()).session(adminSession()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("detail").value(org.hamcrest.Matchers.containsString(
+                        "reference document tier")))
+                .andExpect(jsonPath("blocking.documentTypes")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+
+        // nothing cascades: the referencing type keeps working (D5)
+        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+                .andExpect(jsonPath("$.documentTypes")
+                        .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
+    }
+
+    @Test
+    void tierWritesAreAdminOnly() throws Exception {
+        User member = createUserInDepartment(createDepartment("TWR"), "tieruser");
+        mockMvc.perform(post("/document-tiers")
+                        .with(csrf()).session(loginAs(member.getEmail(), "pw-tieruser"))
+                        .contentType("application/json")
+                        .content("{\"tierNumber\":9500,\"label\":\"Not allowed\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(get("/document-tiers").session(loginAs(member.getEmail(), "pw-tieruser")))
+                .andExpect(status().isOk());
+    }
+
     // ---- helpers ----
 
     @Autowired
@@ -228,7 +307,10 @@ class LookupAdminTests {
     }
 
     private Integer createType(String prefix) throws Exception {
-        Integer tierId = documentTierRepository.findAllByOrderByTierNumberAsc().get(0).getId();
+        return createType(prefix, documentTierRepository.findAllByOrderByTierNumberAsc().get(0).getId());
+    }
+
+    private Integer createType(String prefix, Integer tierId) throws Exception {
         MvcResult result = mockMvc.perform(post("/document-types")
                         .with(csrf()).session(adminSession())
                         .contentType("application/json")

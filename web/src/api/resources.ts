@@ -36,17 +36,33 @@ export const authApi = {
 };
 
 export const lookupApi = {
-  tiers: () => api.get<DocumentTier[]>('/document-tiers'),
-  types: () => api.get<DocumentType[]>('/document-types'),
+  // The admin/filter shape passes includeInactive so deactivated rows stay
+  // visible (reactivation + searching documents that reference them);
+  // creation dropdowns use the active-only default and/or filter locally.
+  tiers: (includeInactive = false) =>
+    api.get<DocumentTier[]>(`/document-tiers${includeInactive ? '?includeInactive=true' : ''}`),
+  types: (includeInactive = false) =>
+    api.get<DocumentType[]>(`/document-types${includeInactive ? '?includeInactive=true' : ''}`),
+  departments: (includeInactive = false) =>
+    api.get<Department[]>(`/departments${includeInactive ? '?includeInactive=true' : ''}`),
+  usageDepartment: (id: number) => api.get<{ documents: number; users: number }>(`/departments/${id}/usage`),
+  usageType: (id: number) => api.get<{ documents: number }>(`/document-types/${id}/usage`),
+  usageTier: (id: number) => api.get<{ documentTypes: number }>(`/document-tiers/${id}/usage`),
+  createTier: (tierNumber: number, label: string) =>
+    api.post<DocumentTier>('/document-tiers', { tierNumber, label }),
+  updateTier: (id: number, patch: { label?: string; active?: boolean }) =>
+    api.patch<DocumentTier>(`/document-tiers/${id}`, patch),
+  deleteTier: (id: number) => api.delete(`/document-tiers/${id}`),
   createType: (code: string, label: string, tierId: number) =>
     api.post<DocumentType>('/document-types', { code, label, tierId }),
   updateType: (id: number, patch: { label?: string; tierId?: number; active?: boolean }) =>
     api.patch<DocumentType>(`/document-types/${id}`, patch),
-  departments: () => api.get<Department[]>('/departments'),
+  deleteType: (id: number) => api.delete(`/document-types/${id}`),
   createDepartment: (code: string, label: string) =>
     api.post<Department>('/departments', { code, label }),
   updateDepartment: (id: number, patch: { label?: string; active?: boolean }) =>
     api.patch<Department>(`/departments/${id}`, patch),
+  deleteDepartment: (id: number) => api.delete(`/departments/${id}`),
 };
 
 export const documentApi = {

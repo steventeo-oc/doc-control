@@ -35,8 +35,11 @@ export default function DocumentsPage() {
 
   useEffect(load, [load]);
   useEffect(() => {
-    lookupApi.types().then(setTypes).catch(() => undefined);
-    lookupApi.departments().then(setDepartments).catch(() => undefined);
+    // includeInactive: filter dropdowns must offer deactivated types and
+    // departments so existing documents referencing them stay searchable
+    // (lookup admin plan-back F2); the creation form filters to active.
+    lookupApi.types(true).then(setTypes).catch(() => undefined);
+    lookupApi.departments(true).then(setDepartments).catch(() => undefined);
   }, []);
 
   function handleCreate(event: FormEvent<HTMLFormElement>) {
@@ -81,6 +84,7 @@ export default function DocumentsPage() {
             {types.map((t) => (
               <option key={t.id} value={t.code}>
                 {t.code}
+                {!t.active && ' (inactive)'}
               </option>
             ))}
           </select>
@@ -98,6 +102,7 @@ export default function DocumentsPage() {
             {departments.map((d) => (
               <option key={d.id} value={d.code}>
                 {d.code}
+                {!d.active && ' (inactive)'}
               </option>
             ))}
           </select>
@@ -146,11 +151,13 @@ export default function DocumentsPage() {
               <option value="" disabled>
                 Choose type…
               </option>
-              {types.map((t) => (
-                <option key={t.id} value={t.id}>
-                  {t.code} — {t.label}
-                </option>
-              ))}
+              {types
+                .filter((t) => t.active)
+                .map((t) => (
+                  <option key={t.id} value={t.id}>
+                    {t.code} — {t.label}
+                  </option>
+                ))}
             </select>
           </label>
           <label>
@@ -160,8 +167,10 @@ export default function DocumentsPage() {
                 Choose department…
               </option>
               {(isAdmin
-                ? departments
-                : departments.filter((d) => user?.departments.some((ud) => ud.id === d.id))
+                ? departments.filter((d) => d.active)
+                : departments.filter(
+                    (d) => d.active && user?.departments.some((ud) => ud.id === d.id),
+                  )
               ).map((d) => (
                 <option key={d.id} value={d.id}>
                   {d.code} — {d.label}

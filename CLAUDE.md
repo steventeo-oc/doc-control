@@ -33,8 +33,14 @@
   for non-admin owners, and fixes for two latent CSRF bugs found by
   real-browser testing (SPA login bypassed the CSRF header; the
   XSRF-TOKEN cookie was scoped to Path=/api so the SPA's JS could never
-  read it — browsers that visited before that fix keep a stale cookie
-  that blocks login until cleared; closing the browser clears it).
+  read it — browsers that visited before that fix kept a stale cookie
+  that blocked login until cleared; **fixed 2026-09-12**:
+  `LegacyXsrfCookieExpiryFilter` (registered before CsrfFilter) expires
+  the Path=/api variant whenever a request carries a duplicate
+  XSRF-TOKEN cookie, so affected browsers self-heal on their next
+  request with no manual action — verified in a real browser (stale
+  cookie injected → login 401 → rebuild → next attempt 200, cookie
+  gone).
   Phase 2e change notifications (#16) are **implemented 2026-09-11
   exactly per the approved plan-back**
   (`Phase2e_Change_Notifications_PlanBack.md`): a `DOCUMENT_CHANGED`
@@ -62,7 +68,21 @@
   use standard fonts only, so nothing needs baking into the sidecar
   image. `WatermarkServiceTests` / `WatermarkEndpointTests` /
   `WatermarkDisabledTests` plus smoke section 15 (real sidecar
-  conversion) cover it.
+  conversion) cover it. **Lookup admin (plan-back approved and
+  implemented 2026-09-12, three commits 2aabb1f / d97da47 / 879275b —
+  `Lookup_Admin_Design_PlanBack.md`)**: `includeInactive=true` list
+  shapes on all three lookups (tiers' list default flipped to
+  active-only), `GET .../{id}/usage` counts, and DELETE endpoints that
+  409 with a structured `blocking` payload while documents reference the
+  row (soft-deleted included) and otherwise hard-delete with audit,
+  cascading department memberships (the audit details list detached user
+  ids — plan-back D7; proven live when it guided restoring QA after a
+  verification delete) and sequence-counter rows. SPA: LookupsPage shows
+  inactive rows (reactivation works from the UI now), deactivations
+  confirm against usage counts, delete errors render the server's
+  sentence; DocumentsPage filters mark inactive rows "(inactive)" and
+  creation dropdowns stay active-only. `LookupAdminTests` covers the
+  backend; browser-verified end to end.
 - **Pending (owner)**: nothing operational outstanding. Standing habit
   (owner, 2026-09-11): full smoke runs go with
   `DOCCONTROL_NOTIFICATION_ENABLED=false` in `.env` so the placeholder
@@ -71,10 +91,14 @@
   the 2026-09-11 run). Secrets hygiene closed 2026-09-11: the Azure
   client secret and the WSL sudo password were both rotated (the new
   secret lives only in the gitignored `.env`).
-- **In progress / next**: nothing mid-flight — Phase 2e is complete
-  (both tracks, see Done above). Next up per the roadmap: the "Later"
-  backlog and the remaining go-live checklist decisions. The go-live
-  checklist now includes the
+- **In progress / next**: nothing mid-flight — Phase 2e and the lookup
+  admin work (see Done above) are complete. Next up per the roadmap: the
+  "Later" backlog and the remaining go-live checklist decisions. Dev-data
+  note: the owner's manual gap-testing left a few rows deactivated
+  (document types DWG and WI, departments "it" and SMK1788933740) — they
+  are one Activate click away on the Lookups page; QA was deleted and
+  restored during verification (its audit trail records the cycle). The
+  go-live checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
   proves submission, not delivery) — it needs a decision before real
   rollout: a routable-email audit plus who watches the sender mailbox for
@@ -88,7 +112,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 78 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 90 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL

@@ -1,16 +1,28 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
-import { workflowApi } from '../api/resources';
-import type { WorkflowTask } from '../api/types';
+import { Link, useSearchParams } from 'react-router-dom';
+import { acknowledgmentApi, workflowApi } from '../api/resources';
+import type { PendingAcknowledgment, WorkflowTask } from '../api/types';
 
 /**
- * The reviewer's queue (GET /my/tasks): assigned tasks plus pooled role
- * tasks. Approving opens the completion form — an optional future effective
- * date (Phase 2c: absent = immediate, exactly the pre-2c behavior) and an
- * optional comment. Re-approval tasks are visibly flagged, per the
- * confirmed requirement that reviewers must see the difference.
+ * The Tasks section (nav restructure plan-back section 1): two panes via
+ * the ?view= parameter. My Approvals is the existing reviewer queue
+ * (GET /my/tasks); Pending My Acknowledgment is the new reverse query
+ * (GET /my/acknowledgments) — record-only, acknowledging happens on the
+ * document page.
  */
 export default function TasksPage() {
+  const [searchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'acknowledgments' ? 'acknowledgments' : 'approvals';
+
+  return (
+    <>
+      <h1>Tasks</h1>
+      {view === 'approvals' ? <MyApprovals /> : <PendingMyAcknowledgment />}
+    </>
+  );
+}
+
+function MyApprovals() {
   const [tasks, setTasks] = useState<WorkflowTask[] | null>(null);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
@@ -73,7 +85,7 @@ export default function TasksPage() {
 
   return (
     <>
-      <h1>My tasks</h1>
+      <h2>My Approvals</h2>
       {error && <div className="error-banner">{error}</div>}
       {notice && <div className="success-banner">{notice}</div>}
 
@@ -169,6 +181,75 @@ export default function TasksPage() {
           </p>
         </div>
       )}
+    </>
+  );
+}
+
+function PendingMyAcknowledgment() {
+  const [pending, setPending] = useState<PendingAcknowledgment[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    acknowledgmentApi
+      .pending()
+      .then(setPending)
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
+  useEffect(load, [load]);
+
+  if (error && !pending) {
+    return <div className="error-banner">{error}</div>;
+  }
+  if (!pending) {
+    return <div className="page-loading">Loading…</div>;
+  }
+
+  return (
+    <>
+      <h2>Pending My Acknowledgment</h2>
+      {error && <div className="error-banner">{error}</div>}
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Name</th>
+            <th>Department</th>
+            <th>Version</th>
+            <th>Effective</th>
+            <th>Window closes</th>
+          </tr>
+        </thead>
+        <tbody>
+          {pending.map((entry) => (
+            <tr key={entry.documentId}>
+              <td>
+                <Link to={`/documents/${entry.documentId}`}>{entry.documentNumber}</Link>
+                {entry.overdue && <span className="badge reapproval"> overdue</span>}
+              </td>
+              <td>{entry.name}</td>
+              <td>{entry.departmentCode}</td>
+              <td>v{entry.versionNumber}</td>
+              <td className="muted">
+                {entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleDateString() : '—'}
+              </td>
+              <td className="muted">
+                {entry.windowClosesAt ? new Date(entry.windowClosesAt).toLocaleDateString() : '—'}
+              </td>
+            </tr>
+          ))}
+          {pending.length === 0 && (
+            <tr>
+              <td colSpan={6} className="muted">
+                Nothing to acknowledge — you are all caught up.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+      <p className="muted">
+        Acknowledgment is record-only: open a document to read it and acknowledge there.
+      </p>
     </>
   );
 }

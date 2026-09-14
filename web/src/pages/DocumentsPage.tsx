@@ -1,12 +1,22 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
-import { Link } from 'react-router-dom';
+import { Link, useSearchParams } from 'react-router-dom';
 import { documentApi, lookupApi } from '../api/resources';
 import type { Department, DocumentSummary, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
+/**
+ * The Documents section (nav restructure plan-back F1/F2): one page, three
+ * sidebar views via the ?view= parameter — all (default), mine (owner=me),
+ * and trash (trashed=true, rows restorable). The view keeps ?view= off the
+ * route tree so /documents/:id stays unambiguous.
+ */
 export default function DocumentsPage() {
   const { user, isAdmin } = useAuth();
+  const [searchParams] = useSearchParams();
+  const view = searchParams.get('view') === 'mine' || searchParams.get('view') === 'trash'
+    ? (searchParams.get('view') as 'mine' | 'trash')
+    : 'all';
   const [page, setPage] = useState<PageResult | null>(null);
   const [types, setTypes] = useState<DocumentType[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
@@ -27,13 +37,18 @@ export default function DocumentsPage() {
         department: filters.department || undefined,
         status: filters.status || undefined,
         q: filters.q || undefined,
+        trashed: view === 'trash' || undefined,
+        owner: view === 'mine' ? 'me' : undefined,
         page: pageNumber,
       })
       .then(setPage)
       .catch((err: Error) => setError(err.message));
-  }, [filters, pageNumber]);
+  }, [filters, pageNumber, view]);
 
   useEffect(load, [load]);
+  useEffect(() => {
+    setPageNumber(0);
+  }, [view]);
   useEffect(() => {
     // includeInactive: filter dropdowns must offer deactivated types and
     // departments so existing documents referencing them stay searchable
@@ -64,6 +79,14 @@ export default function DocumentsPage() {
       })
       .catch((err: Error) => setCreateError(err.message))
       .finally(() => setCreating(false));
+  }
+
+  function runRestore(documentId: number) {
+    setError(null);
+    documentApi
+      .restore(documentId)
+      .then(load)
+      .catch((err: Error) => setError(err.message));
   }
 
   return (
@@ -136,12 +159,14 @@ export default function DocumentsPage() {
             }}
           />
         </label>
-        <button type="button" onClick={() => setShowCreate((v) => !v)}>
-          {showCreate ? 'Cancel' : 'New document'}
-        </button>
+        {view !== 'trash' && (
+          <button type="button" onClick={() => setShowCreate((v) => !v)}>
+            {showCreate ? 'Cancel' : 'New document'}
+          </button>
+        )}
       </div>
 
-      {showCreate && (
+      {view !== 'trash' && showCreate && (
         <form className="stack card" onSubmit={handleCreate}>
           <h2>New document</h2>
           {createError && <div className="error-banner">{createError}</div>}
@@ -204,6 +229,7 @@ export default function DocumentsPage() {
             <th>Dept</th>
             <th>Owner</th>
             <th>Updated</th>
+            {view === 'trash' && <th />}
           </tr>
         </thead>
         <tbody>
@@ -220,11 +246,18 @@ export default function DocumentsPage() {
               <td>{doc.departmentCode}</td>
               <td>{doc.ownerName}</td>
               <td className="muted">{new Date(doc.updatedAt).toLocaleString()}</td>
+              {view === 'trash' && (
+                <td>
+                  <button type="button" onClick={() => runRestore(doc.id)}>
+                    Restore
+                  </button>
+                </td>
+              )}
             </tr>
           ))}
           {page && page.content.length === 0 && (
             <tr>
-              <td colSpan={7} className="muted">
+              <td colSpan={view === 'trash' ? 8 : 7} className="muted">
                 No documents match.
               </td>
             </tr>

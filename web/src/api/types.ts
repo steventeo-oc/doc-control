@@ -160,6 +160,17 @@ export interface DepartmentMembership {
   level: MembershipLevel;
 }
 
+export interface PendingAcknowledgment {
+  documentId: number;
+  documentNumber: string;
+  name: string;
+  departmentCode: string;
+  versionNumber: number;
+  effectiveAt: string | null;
+  windowClosesAt: string | null;
+  overdue: boolean;
+}
+
 export interface DepartmentMember {
   userId: number;
   name: string;

@@ -1,13 +1,72 @@
-import { NavLink, Outlet, useNavigate } from 'react-router-dom';
+import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
+import { userApi } from '../api/resources';
+
+/**
+ * The app shell (nav restructure plan-back section 1): top navigation with
+ * the section set — Documents | Tasks | Departments | Admin — plus an
+ * Account menu, and a per-section sidebar rendered from this config when
+ * the active section has entries. The Departments sidebar is built from
+ * the signed-in user's memberships; admins see every department (built on
+ * the section page in piece 3).
+ */
+type SectionItem = { label: string; to: string };
 
 export default function Layout() {
   const { user, isAdmin, logout } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+  const section = location.pathname.split('/')[1] || 'documents';
+
+  const departmentItems: SectionItem[] = (user?.departments ?? [])
+    .slice()
+    .sort((a, b) => a.code.localeCompare(b.code))
+    .map((d) => ({
+      label: d.code + (d.active ? '' : ' (inactive)'),
+      to: `/departments/${d.id}`,
+    }));
+
+  const sections: Record<string, { label: string; items: SectionItem[] }> = {
+    documents: {
+      label: 'Documents',
+      items: [
+        { label: 'All Documents', to: '/documents?view=all' },
+        { label: 'My Documents', to: '/documents?view=mine' },
+        { label: 'Trash', to: '/documents?view=trash' },
+      ],
+    },
+    tasks: {
+      label: 'Tasks',
+      items: [
+        { label: 'My Approvals', to: '/tasks?view=approvals' },
+        { label: 'Pending My Acknowledgment', to: '/tasks?view=acknowledgments' },
+      ],
+    },
+    departments: { label: 'Departments', items: departmentItems },
+  };
+
+  const activeSection = sections[section];
+  const sidebarItems =
+    section === 'departments' && isAdmin
+      ? [] // the admin's department list comes from the section page itself (piece 3)
+      : activeSection?.items ?? [];
 
   async function handleLogout() {
     await logout();
     navigate('/login');
+  }
+
+  async function handleChangePassword() {
+    const currentPassword = window.prompt('Current password:');
+    if (!currentPassword) return;
+    const newPassword = window.prompt('New password (min 8 chars):');
+    if (!newPassword || !user) return;
+    try {
+      await userApi.changePassword(user.id, { currentPassword, newPassword });
+      window.alert('Password changed.');
+    } catch (err) {
+      window.alert((err as Error).message);
+    }
   }
 
   return (
@@ -15,26 +74,49 @@ export default function Layout() {
       <header className="topbar">
         <span className="brand">Document Control</span>
         <nav>
-          <NavLink to="/" end>
-            Documents
-          </NavLink>
-          <NavLink to="/tasks">My tasks</NavLink>
-          <NavLink to="/lookups">Lookups</NavLink>
-          {isAdmin && <NavLink to="/users">Users</NavLink>}
+          <NavLink to="/documents">Documents</NavLink>
+          <NavLink to="/tasks">Tasks</NavLink>
+          {isAdmin && <NavLink to="/admin/types">Admin</NavLink>}
         </nav>
-        <div className="session">
-          <span>
-            {user?.name}{' '}
-            <small>({user?.departments.map((d) => d.code).join(', ')})</small>
-          </span>
-          <button type="button" onClick={handleLogout}>
-            Log out
-          </button>
-        </div>
+        <details className="account-menu">
+          <summary>
+            {user?.name} <small>({user?.email})</small>
+          </summary>
+          <div className="account-panel">
+            <div className="account-identity">
+              <strong>{user?.name}</strong>
+              <small>{user?.email}</small>
+              <small>{user?.departments.map((d) => `${d.code}: ${d.level}`).join(' · ')}</small>
+            </div>
+            <button type="button" onClick={handleChangePassword}>
+              Change password
+            </button>
+            <button type="button" onClick={handleLogout}>
+              Log out
+            </button>
+          </div>
+        </details>
       </header>
-      <main className="content">
-        <Outlet />
-      </main>
+      <div className="shell">
+        {sidebarItems.length > 0 && (
+          <aside className="sidebar">
+            {sidebarItems.map((item) => (
+              <NavLink
+                key={item.to}
+                to={item.to}
+                className={() =>
+                  'sidebar-link' + (location.pathname + location.search === item.to ? ' active' : '')
+                }
+              >
+                {item.label}
+              </NavLink>
+            ))}
+          </aside>
+        )}
+        <main className="content">
+          <Outlet />
+        </main>
+      </div>
     </div>
   );
 }

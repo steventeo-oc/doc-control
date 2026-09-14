@@ -303,3 +303,74 @@ button.danger {
 .meta-grid dd {
   margin: 2px 0 0;
 }
+
+/* Navigation restructure: section sidebar + Account menu (plan-back section 1) */
+.shell {
+  display: flex;
+  align-items: flex-start;
+  gap: 24px;
+}
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  min-width: 220px;
+  padding: 16px 8px;
+  border-right: 1px solid #dde5ec;
+}
+
+.sidebar-link {
+  padding: 6px 10px;
+  border-radius: 6px;
+  color: #16324f;
+  text-decoration: none;
+}
+
+.sidebar-link:hover {
+  background: #eef3f8;
+}
+
+.sidebar-link.active {
+  background: #16324f;
+  color: #fff;
+}
+
+.account-menu {
+  position: relative;
+  color: #fff;
+}
+
+.account-menu summary {
+  cursor: pointer;
+  list-style: none;
+}
+
+.account-menu summary::-webkit-details-marker {
+  display: none;
+}
+
+.account-panel {
+  position: absolute;
+  right: 0;
+  top: calc(100% + 8px);
+  z-index: 10;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+  min-width: 260px;
+  padding: 12px;
+  background: #fff;
+  color: #16324f;
+  border: 1px solid #dde5ec;
+  border-radius: 8px;
+  box-shadow: 0 8px 24px rgba(22, 50, 79, 0.18);
+}
+
+.account-identity {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+  border-bottom: 1px solid #dde5ec;
+  padding-bottom: 8px;
+}

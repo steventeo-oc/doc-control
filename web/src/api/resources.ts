@@ -1,11 +1,15 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
   department?: string;
   status?: string;
   q?: string;
+  /** Trash view (nav restructure plan-back F2): list soft-deleted documents. */
+  trashed?: boolean;
+  /** My Documents view: `owner=me` filters to the caller's own documents. */
+  owner?: string;
   page?: number;
   pageSize?: number;
 }
@@ -60,6 +64,8 @@ export const documentApi = {
     if (filters.department) params.set('department', filters.department);
     if (filters.status) params.set('status', filters.status);
     if (filters.q) params.set('q', filters.q);
+    if (filters.trashed) params.set('trashed', 'true');
+    if (filters.owner) params.set('owner', filters.owner);
     params.set('page', String(filters.page ?? 0));
     params.set('page_size', String(filters.pageSize ?? 20));
     return api.get<DocumentsPage>(`/documents?${params.toString()}`);
@@ -117,6 +123,7 @@ export const workflowApi = {
 };
 
 export const acknowledgmentApi = {
+  pending: () => api.get<PendingAcknowledgment[]>('/my/acknowledgments'),
   acknowledge: (documentId: number) =>
     api.post<AcknowledgmentRecord>(`/documents/${documentId}/acknowledge`),
   status: (documentId: number) =>

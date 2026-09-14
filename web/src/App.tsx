@@ -5,7 +5,8 @@ import LoginPage from './pages/LoginPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import TasksPage from './pages/TasksPage';
-import LookupsPage from './pages/LookupsPage';
+import AdminTypesPage from './pages/AdminTypesPage';
+import AdminTiersPage from './pages/AdminTiersPage';
 import UsersPage from './pages/UsersPage';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -31,13 +32,15 @@ export default function App() {
           </Protected>
         }
       >
-        <Route index element={<DocumentsPage />} />
+        <Route index element={<Navigate to="/documents" replace />} />
+        <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
-        <Route path="lookups" element={<LookupsPage />} />
-        <Route path="users" element={<UsersPage />} />
+        <Route path="admin/types" element={<AdminTypesPage />} />
+        <Route path="admin/tiers" element={<AdminTiersPage />} />
+        <Route path="admin/users" element={<UsersPage />} />
       </Route>
-      <Route path="*" element={<Navigate to="/" replace />} />
+      <Route path="*" element={<Navigate to="/documents" replace />} />
     </Routes>
   );
 }

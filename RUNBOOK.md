@@ -101,9 +101,11 @@ heredoc matters: passing this command as a quoted one-liner through
   only takes effect on an **empty** database — changing it later does not
   change the existing admin's password (that's `POST /users/{id}/password`
   territory).
-- If login mysteriously fails in a browser that has visited the SPA
-  before an old fix: clear cookies for localhost (a stale `XSRF-TOKEN`
-  cookie can block login; closing the browser clears it).
+- Stale-cookie login failures (browsers that used the SPA before the
+  cookie-path fix) are **self-healing**: the server expires the old
+  `Path=/api` cookie automatically once it sees a request carrying the
+  duplicate, so the next login attempt just works. No manual cookie
+  clearing is needed on any current build.
 
 ## 4. Stopping the stack
 

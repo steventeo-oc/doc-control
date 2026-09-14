@@ -206,7 +206,14 @@
   rendered screenshots directly as the visual gate). Incremental
   coexistence confirmed with the preflight-off-then-final-flip strategy
   (F1); native dialogs and selects swap to Radix equivalents with
-  behavior preserved (F2/F3, decision on selects wanted at review).
+  behavior preserved (F2/F3 — **decisions made at review: adopt shadcn
+  Select, dark mode stays out of scope**). **Phase 0 is done** (commit
+  e665860): Tailwind v4 + shadcn scaffolded with preflight off, tokens
+  defined (§3), eleven base components copied in unused (JS bundle
+  byte-identical — zero visual change, verified in the running stack),
+  and the 14-page baseline screenshot set captured pre-scaffold under
+  `screenshots/baseline/` (gitignored). **Paused for the owner's visual
+  review per §7 — Phase 1 (shell + login + dashboard) waits for it.**
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,

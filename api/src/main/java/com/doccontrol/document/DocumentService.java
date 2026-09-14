@@ -173,12 +173,36 @@ public class DocumentService {
 
     @Transactional(readOnly = true)
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
-                                 String q, Boolean reviewOverdue, int page, int pageSize) {
+                                 String q, Boolean reviewOverdue, Boolean trashed, String owner,
+                                 int page, int pageSize) {
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100),
                 Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
 
         List<Specification<Document>> parts = new ArrayList<>();
-        parts.add(notDeleted());
+        if (Boolean.TRUE.equals(trashed)) {
+            // Trash view (nav restructure plan-back F2): soft-deleted
+            // documents the caller can manage — Manager: the department's;
+            // Collaborator/Contributor: their own; admin: all. The same
+            // rule as delete/restore (canManageDocument), so every row is
+            // restorable by its caller.
+            parts.add((root, query, cb) -> root.get("deletedAt").isNotNull());
+            if (!currentUserProvider.isAdmin()) {
+                Integer me = currentUserProvider.getCurrentUserId();
+                List<Integer> managedIds = departmentAccessService.managedDepartmentIdsOfCurrentUser();
+                parts.add((root, query, cb) -> {
+                    Predicate managed = managedIds.isEmpty()
+                            ? cb.disjunction()
+                            : root.get("department").get("id").in(managedIds);
+                    return cb.or(managed, cb.equal(root.get("owner").get("id"), me));
+                });
+            }
+        } else {
+            parts.add(notDeleted());
+        }
+        if ("me".equals(owner)) {
+            parts.add((root, query, cb) ->
+                    cb.equal(root.get("owner").get("id"), currentUserProvider.getCurrentUserId()));
+        }
         if (typeCode != null && !typeCode.isBlank()) {
             parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("code"), typeCode));
         }

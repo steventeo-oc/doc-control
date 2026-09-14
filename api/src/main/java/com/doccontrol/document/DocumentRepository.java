@@ -2,8 +2,11 @@ package com.doccontrol.document;
 
 import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.JpaSpecificationExecutor;
+import org.springframework.data.jpa.repository.Query;
+import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 
 public interface DocumentRepository extends JpaRepository<Document, Integer>, JpaSpecificationExecutor<Document> {
@@ -25,4 +28,25 @@ public interface DocumentRepository extends JpaRepository<Document, Integer>, Jp
     long countByDepartmentId(Integer departmentId);
 
     long countByDocumentTypeId(Integer documentTypeId);
+
+    /**
+     * The "Pending My Acknowledgment" reverse query (nav restructure
+     * plan-back F2): released documents in the caller's departments whose
+     * current version the caller has not acknowledged — the inverse of the
+     * per-document outstandingUsers query.
+     */
+    @Query("""
+            SELECT d FROM Document d
+            WHERE d.deletedAt IS NULL
+              AND d.status = com.doccontrol.document.DocumentStatus.RELEASED
+              AND d.currentVersion IS NOT NULL
+              AND d.department.id IN :departmentIds
+              AND NOT EXISTS (
+                  SELECT a FROM com.doccontrol.acknowledgment.DocumentAcknowledgment a
+                  WHERE a.documentVersion.id = d.currentVersion.id
+                    AND a.user.id = :userId)
+            ORDER BY d.documentNumber
+            """)
+    List<Document> findPendingAcknowledgments(@Param("userId") Integer userId,
+                                              @Param("departmentIds") Collection<Integer> departmentIds);
 }

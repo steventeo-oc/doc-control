@@ -23,4 +23,9 @@ public interface UserDepartmentRepository extends JpaRepository<UserDepartment, 
 
     @Query("SELECT ud FROM UserDepartment ud WHERE ud.department.id = :departmentId")
     List<UserDepartment> findAllByDepartmentId(@Param("departmentId") Integer departmentId);
+
+    @Query("SELECT ud.department.id FROM UserDepartment ud " +
+           "WHERE ud.id.userId = :userId AND ud.level = :level")
+    List<Integer> findDepartmentIdsByUserIdAndLevel(
+            @Param("userId") Integer userId, @Param("level") MembershipLevel level);
 }

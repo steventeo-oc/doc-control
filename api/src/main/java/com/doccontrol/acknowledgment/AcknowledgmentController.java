@@ -33,6 +33,16 @@ public class AcknowledgmentController {
         return acknowledgmentService.acknowledge(id);
     }
 
+    /**
+     * The "Pending My Acknowledgment" reverse query (nav restructure
+     * plan-back F2): released documents in the caller's departments that
+     * the caller has not acknowledged yet.
+     */
+    @GetMapping("/my/acknowledgments")
+    public List<PendingAcknowledgmentDto> pendingMine() {
+        return acknowledgmentService.pendingForCurrentUser();
+    }
+
     @GetMapping("/documents/{id}/acknowledgments")
     public AcknowledgmentStatusDto status(@PathVariable Integer id) {
         return acknowledgmentService.status(id);

@@ -4,6 +4,7 @@ import com.doccontrol.security.CurrentUserProvider;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.List;
 import java.util.Optional;
 
 /**
@@ -101,5 +102,15 @@ public class DepartmentAccessService {
             return true;
         }
         return levelOfCurrentUser(departmentId).orElse(null) == MembershipLevel.MANAGER;
+    }
+
+    /**
+     * Departments where the caller holds MANAGER — the trash view's
+     * "managed" set (nav restructure plan-back F2).
+     */
+    @Transactional(readOnly = true)
+    public List<Integer> managedDepartmentIdsOfCurrentUser() {
+        return userDepartmentRepository.findDepartmentIdsByUserIdAndLevel(
+                currentUserProvider.getCurrentUserId(), MembershipLevel.MANAGER);
     }
 }

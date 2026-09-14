@@ -34,9 +34,12 @@ public class DocumentController {
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Boolean review_overdue,
+            @RequestParam(required = false) Boolean trashed,
+            @RequestParam(required = false) String owner,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
-        return documentService.list(type, department, status, q, review_overdue, page, pageSize);
+        return documentService.list(type, department, status, q, review_overdue, trashed, owner,
+                page, pageSize);
     }
 
     /**

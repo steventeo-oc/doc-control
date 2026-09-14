@@ -10,6 +10,7 @@ import com.doccontrol.acknowledgment.dto.AcknowledgmentStatusDto;
 import com.doccontrol.acknowledgment.dto.AcknowledgmentUserDto;
 import com.doccontrol.config.AcknowledgmentProperties;
 import com.doccontrol.document.Document;
+import com.doccontrol.document.DocumentRepository;
 import com.doccontrol.document.DocumentService;
 import com.doccontrol.document.DocumentStatus;
 import com.doccontrol.document.DocumentVersion;
@@ -38,6 +39,7 @@ public class AcknowledgmentService {
     private final DocumentAcknowledgmentRepository acknowledgmentRepository;
     private final DocumentAcknowledgmentAccessRepository accessRepository;
     private final DocumentService documentService;
+    private final DocumentRepository documentRepository;
     private final UserRepository userRepository;
     private final UserDepartmentRepository userDepartmentRepository;
     private final AcknowledgmentProperties properties;
@@ -47,6 +49,7 @@ public class AcknowledgmentService {
     public AcknowledgmentService(DocumentAcknowledgmentRepository acknowledgmentRepository,
                                  DocumentAcknowledgmentAccessRepository accessRepository,
                                  DocumentService documentService,
+                                 DocumentRepository documentRepository,
                                  UserRepository userRepository,
                                  UserDepartmentRepository userDepartmentRepository,
                                  AcknowledgmentProperties properties,
@@ -55,6 +58,7 @@ public class AcknowledgmentService {
         this.acknowledgmentRepository = acknowledgmentRepository;
         this.accessRepository = accessRepository;
         this.documentService = documentService;
+        this.documentRepository = documentRepository;
         this.userRepository = userRepository;
         this.userDepartmentRepository = userDepartmentRepository;
         this.properties = properties;
@@ -170,6 +174,39 @@ public class AcknowledgmentService {
             return null;
         }
         return BusinessDays.addBusinessDays(version.getEffectiveAt(), properties.windowBusinessDays());
+    }
+
+    /**
+     * The "Pending My Acknowledgment" reverse query (nav restructure
+     * plan-back F2): released documents in the caller's departments whose
+     * current version the caller has not acknowledged — the inverse of the
+     * per-document outstandingUsers query. Level-blind: every membership
+     * level owes acknowledgment. Record-only, so the list never gates
+     * anything; acknowledging happens on the document page as today.
+     */
+    @Transactional(readOnly = true)
+    public List<PendingAcknowledgmentDto> pendingForCurrentUser() {
+        Integer userId = currentUserProvider.getCurrentUserId();
+        var departmentIds = currentUserProvider.getCurrentUserDepartmentIds();
+        if (departmentIds.isEmpty()) {
+            return List.of();
+        }
+        return documentRepository.findPendingAcknowledgments(userId, departmentIds).stream()
+                .map(document -> {
+                    DocumentVersion version = document.getCurrentVersion();
+                    LocalDate closesAt = windowClosesAt(document);
+                    boolean overdue = closesAt != null && LocalDate.now().isAfter(closesAt);
+                    return new PendingAcknowledgmentDto(
+                            document.getId(),
+                            document.getDocumentNumber(),
+                            document.getName(),
+                            document.getDepartment().getCode(),
+                            version.getVersionNumber(),
+                            version.getEffectiveAt(),
+                            closesAt,
+                            overdue);
+                })
+                .toList();
     }
 
     // ---- status-visibility grants (owner/admin by default) ----

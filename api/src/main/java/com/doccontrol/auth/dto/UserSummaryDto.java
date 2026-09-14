@@ -1,17 +1,18 @@
 package com.doccontrol.auth.dto;
 
+import com.doccontrol.identity.DepartmentMembershipDto;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
-import com.doccontrol.lookup.DepartmentDto;
 
+import java.util.Comparator;
 import java.util.List;
 
-/** Current user's profile, departments and roles — the /auth/me response. */
+/** Current user's profile, departments (with membership levels) and roles — the /auth/me response. */
 public record UserSummaryDto(
         Integer id,
         String name,
         String email,
-        List<DepartmentDto> departments,
+        List<DepartmentMembershipDto> departments,
         List<String> roles,
         boolean active) {
 
@@ -20,10 +21,9 @@ public record UserSummaryDto(
                 .map(userRole -> userRole.getRole().getName())
                 .sorted()
                 .toList();
-        List<DepartmentDto> departments = user.getDepartments().stream()
-                .map(UserDepartment::getDepartment)
-                .sorted(java.util.Comparator.comparing(com.doccontrol.lookup.Department::getCode))
-                .map(DepartmentDto::from)
+        List<DepartmentMembershipDto> departments = user.getDepartments().stream()
+                .sorted(Comparator.comparing(membership -> membership.getDepartment().getCode()))
+                .map(DepartmentMembershipDto::from)
                 .toList();
         return new UserSummaryDto(
                 user.getId(),

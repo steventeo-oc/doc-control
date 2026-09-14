@@ -150,11 +150,29 @@ export interface AcknowledgmentAccess {
   grantedAt: string;
 }
 
+export type MembershipLevel = 'MANAGER' | 'COLLABORATOR' | 'CONTRIBUTOR' | 'CONSUMER';
+
+export interface DepartmentMembership {
+  id: number;
+  code: string;
+  label: string;
+  active: boolean;
+  level: MembershipLevel;
+}
+
+export interface DepartmentMember {
+  userId: number;
+  name: string;
+  email: string;
+  userActive: boolean;
+  level: MembershipLevel;
+}
+
 export interface UserSummary {
   id: number;
   name: string;
   email: string;
-  departments: Department[];
+  departments: DepartmentMembership[];
   roles: string[];
   active: boolean;
 }
@@ -163,7 +181,7 @@ export interface UserRow {
   id: number;
   name: string;
   email: string;
-  departments: Department[];
+  departments: DepartmentMembership[];
   adUsername: string | null;
   active: boolean;
   roles: string[];

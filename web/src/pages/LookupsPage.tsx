@@ -1,6 +1,6 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { Fragment, FormEvent, useCallback, useEffect, useState } from 'react';
 import { lookupApi } from '../api/resources';
-import type { Department, DocumentTier, DocumentType } from '../api/types';
+import type { Department, DepartmentMember, DocumentTier, DocumentType } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 
 /**
@@ -8,15 +8,48 @@ import { useAuth } from '../auth/AuthContext';
  * rows stay visible and reactivatable (the pre-plan-back page could never
  * show them again). Deactivating confirms against the server's usage
  * counts first; deleting is blocked server-side with a sentence this page
- * renders in the error banner (lookup admin plan-back F1–F5).
+ * renders in the error banner (lookup admin plan-back F1–F5). The
+ * department members panel is the Manager self-service surface (department
+ * levels plan-back F5): Managers of a department (and admins) see and
+ * change its members' levels; adding/removing members stays admin-only on
+ * the Users page.
  */
 export default function LookupsPage() {
-  const { isAdmin } = useAuth();
+  const { isAdmin, user: me } = useAuth();
   const [tiers, setTiers] = useState<DocumentTier[]>([]);
   const [types, setTypes] = useState<DocumentType[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+  const [openMembers, setOpenMembers] = useState<Record<number, boolean>>({});
+  const [members, setMembers] = useState<Record<number, DepartmentMember[]>>({});
+
+  function canManageMembers(departmentId: number): boolean {
+    return isAdmin || !!me?.departments.some((d) => d.id === departmentId && d.level === 'MANAGER');
+  }
+
+  function toggleMembers(departmentId: number) {
+    setOpenMembers((prev) => ({ ...prev, [departmentId]: !prev[departmentId] }));
+    if (!members[departmentId]) {
+      lookupApi.departmentMembers(departmentId).then((list) => {
+        setMembers((prev) => ({ ...prev, [departmentId]: list }));
+      }).catch((err: Error) => setError(err.message));
+    }
+  }
+
+  function changeMemberLevel(departmentId: number, userId: number, level: DepartmentMember['level']) {
+    setError(null);
+    lookupApi
+      .updateDepartmentMember(departmentId, userId, level)
+      .then((updated) => {
+        setMembers((prev) => ({
+          ...prev,
+          [departmentId]: (prev[departmentId] ?? []).map((m) => (m.userId === userId ? updated : m)),
+        }));
+        setNotice('Member level updated.');
+      })
+      .catch((err: Error) => setError(err.message));
+  }
 
   const load = useCallback(() => {
     lookupApi.tiers(true).then(setTiers).catch((err: Error) => setError(err.message));
@@ -259,29 +292,88 @@ export default function LookupsPage() {
               <th>Code</th>
               <th>Label</th>
               <th>Active</th>
-              {isAdmin && <th />}
+              {(isAdmin || departments.some((d) => canManageMembers(d.id))) && <th />}
             </tr>
           </thead>
           <tbody>
             {departments.map((department) => (
-              <tr key={department.id}>
-                <td>{department.code}</td>
-                <td>{department.label}</td>
-                <td>{department.active ? 'yes' : 'no'}</td>
-                {isAdmin && (
-                  <td>
-                    <button type="button" onClick={() => toggleDepartment(department)}>
-                      {department.active ? 'Deactivate' : 'Activate'}
-                    </button>{' '}
-                    <button
-                      type="button"
-                      onClick={() => run(() => lookupApi.deleteDepartment(department.id), 'Department deleted.')}
-                    >
-                      Delete
-                    </button>
-                  </td>
+              <Fragment key={department.id}>
+                <tr>
+                  <td>{department.code}</td>
+                  <td>{department.label}</td>
+                  <td>{department.active ? 'yes' : 'no'}</td>
+                  {(isAdmin || canManageMembers(department.id)) && (
+                    <td>
+                      {canManageMembers(department.id) && (
+                        <button type="button" onClick={() => toggleMembers(department.id)}>
+                          Members
+                        </button>
+                      )}{' '}
+                      {isAdmin && (
+                        <>
+                          <button type="button" onClick={() => toggleDepartment(department)}>
+                            {department.active ? 'Deactivate' : 'Activate'}
+                          </button>{' '}
+                          <button
+                            type="button"
+                            onClick={() => run(() => lookupApi.deleteDepartment(department.id), 'Department deleted.')}
+                          >
+                            Delete
+                          </button>
+                        </>
+                      )}
+                    </td>
+                  )}
+                </tr>
+                {openMembers[department.id] && (
+                  <tr>
+                    <td colSpan={isAdmin ? 4 : 3}>
+                      {members[department.id] ? (
+                        <table className="data">
+                          <thead>
+                            <tr>
+                              <th>Name</th>
+                              <th>Email</th>
+                              <th>Active</th>
+                              <th>Level</th>
+                            </tr>
+                          </thead>
+                          <tbody>
+                            {members[department.id].map((member) => (
+                              <tr key={member.userId}>
+                                <td>{member.name}</td>
+                                <td>{member.email}</td>
+                                <td>{member.userActive ? 'yes' : 'no'}</td>
+                                <td>
+                                  <select
+                                    aria-label={`Level for ${member.email}`}
+                                    value={member.level}
+                                    onChange={(e) =>
+                                      changeMemberLevel(
+                                        department.id,
+                                        member.userId,
+                                        e.target.value as DepartmentMember['level'],
+                                      )
+                                    }
+                                  >
+                                    {(['MANAGER', 'COLLABORATOR', 'CONTRIBUTOR', 'CONSUMER'] as const).map((l) => (
+                                      <option key={l} value={l}>
+                                        {l}
+                                      </option>
+                                    ))}
+                                  </select>
+                                </td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      ) : (
+                        <span className="muted">Loading members…</span>
+                      )}
+                    </td>
+                  </tr>
                 )}
-              </tr>
+              </Fragment>
             ))}
           </tbody>
         </table>

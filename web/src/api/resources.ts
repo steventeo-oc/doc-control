@@ -1,21 +1,5 @@
 import { api } from './client';
-import type {
-  AcknowledgmentAccess,
-  AcknowledgmentRecord,
-  AcknowledgmentStatus,
-  Department,
-  DocumentDetail,
-  DocumentTier,
-  DocumentType,
-  DocumentsPage,
-  DocumentVersion,
-  ReviewerCandidate,
-  RoleRow,
-  UserRow,
-  UserSummary,
-  WorkflowInstance,
-  WorkflowTask,
-} from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
@@ -63,6 +47,10 @@ export const lookupApi = {
   updateDepartment: (id: number, patch: { label?: string; active?: boolean }) =>
     api.patch<Department>(`/departments/${id}`, patch),
   deleteDepartment: (id: number) => api.delete(`/departments/${id}`),
+  departmentMembers: (id: number) =>
+    api.get<DepartmentMember[]>(`/departments/${id}/members`),
+  updateDepartmentMember: (id: number, userId: number, level: MembershipLevel) =>
+    api.patch<DepartmentMember>(`/departments/${id}/members/${userId}`, { level }),
 };
 
 export const documentApi = {
@@ -146,7 +134,7 @@ export const userApi = {
   create: (body: {
     name: string;
     email: string;
-    departmentIds: number[];
+    departments: { departmentId: number; level: MembershipLevel }[];
     password: string;
     roles?: string[];
   }) => api.post<UserRow>('/users', body),
@@ -154,7 +142,7 @@ export const userApi = {
     id: number,
     patch: {
       name?: string;
-      departmentIds?: number[];
+      departments?: { departmentId: number; level: MembershipLevel }[];
       adUsername?: string;
       active?: boolean;
       roles?: string[];

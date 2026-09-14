@@ -43,6 +43,9 @@ export default function App() {
         <Route path="admin/types" element={<AdminTypesPage />} />
         <Route path="admin/tiers" element={<AdminTiersPage />} />
         <Route path="admin/users" element={<UsersPage />} />
+        {/* redirects for the pre-restructure paths (plan-back section 1) */}
+        <Route path="lookups" element={<Navigate to="/admin/types" replace />} />
+        <Route path="users" element={<Navigate to="/admin/users" replace />} />
       </Route>
       <Route path="*" element={<Navigate to="/documents" replace />} />
     </Routes>

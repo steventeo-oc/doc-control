@@ -10,6 +10,8 @@ import com.doccontrol.document.DocumentStatus;
 import com.doccontrol.document.DocumentVersion;
 import com.doccontrol.document.DocumentVersionRepository;
 import com.doccontrol.document.DocumentVersionStatus;
+import com.doccontrol.identity.DepartmentAccessService;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
@@ -49,13 +51,15 @@ public class WorkflowService {
     private final DocumentService documentService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+    private final DepartmentAccessService departmentAccessService;
 
     public WorkflowService(RuntimeService runtimeService, TaskService taskService,
                            WorkflowInstanceRepository instanceRepository,
                            DocumentVersionRepository documentVersionRepository,
                            UserRepository userRepository, RoleRepository roleRepository,
                            DocumentService documentService, AuditService auditService,
-                           CurrentUserProvider currentUserProvider) {
+                           CurrentUserProvider currentUserProvider,
+                           DepartmentAccessService departmentAccessService) {
         this.runtimeService = runtimeService;
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
@@ -65,6 +69,7 @@ public class WorkflowService {
         this.documentService = documentService;
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
+        this.departmentAccessService = departmentAccessService;
     }
 
     @Transactional
@@ -82,7 +87,7 @@ public class WorkflowService {
         }
         requireNoApprovalInFlight(document);
 
-        AssigneeSlots slots = resolveSlots(request);
+        AssigneeSlots slots = resolveSlots(document, request);
 
         WorkflowInstance instance = new WorkflowInstance();
         instance.setDocumentVersion(version);
@@ -127,7 +132,7 @@ public class WorkflowService {
         }
         requireNoApprovalInFlight(document);
 
-        AssigneeSlots slots = resolveSlots(request);
+        AssigneeSlots slots = resolveSlots(document, request);
 
         WorkflowInstance instance = new WorkflowInstance();
         instance.setDocumentVersion(version);
@@ -178,7 +183,14 @@ public class WorkflowService {
                 .toList();
     }
 
-    private AssigneeSlots resolveSlots(StartApprovalRequest request) {
+    /**
+     * Validates and expands the assignee inputs. Named assignees whose
+     * membership level in the document's department is CONSUMER are
+     * rejected — a Consumer holds no approval rights, so being assigned to
+     * approve would contradict the level (plan-back F3b). Non-members and
+     * ROLE slots are outside the level system and stay assignable.
+     */
+    private AssigneeSlots resolveSlots(Document document, StartApprovalRequest request) {
         List<String> names = new ArrayList<>();
         List<String> descriptions = new ArrayList<>();
         for (StartApprovalRequest.AssigneeInput assignee : request.assignees()) {
@@ -188,6 +200,15 @@ public class WorkflowService {
                             .filter(User::isActive)
                             .orElseThrow(() -> new NotFoundException(
                                     "Reviewer user " + assignee.userId() + " not found."));
+                    MembershipLevel assigneeLevel = departmentAccessService
+                            .levelOf(user.getId(), document.getDepartment().getId())
+                            .orElse(MembershipLevel.MANAGER); // non-members: outside the level system
+                    if (assigneeLevel == MembershipLevel.CONSUMER) {
+                        throw new ConflictException("User '" + user.getEmail()
+                                + "' is a Consumer in department '"
+                                + document.getDepartment().getCode()
+                                + "' and cannot be assigned as a reviewer.");
+                    }
                     names.add(SlotAssignmentListener.USER_PREFIX + user.getId());
                     descriptions.add(user.getEmail());
                 }

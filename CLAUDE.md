@@ -125,7 +125,10 @@
   object (pending merged, not duplicated) and documentApi already had
   restore/softDelete. DocumentListFilterTests + MyAcknowledgmentsTests
   cover the backend; 105 tests green; browser-verified (nav, sidebars,
-  trash, acknowledgment pane, Departments per level, redirects).
+  trash, acknowledgment pane, Departments per level, redirects). **With
+  the navigation restructure, the original QA gap-analysis roadmap
+  (Phases 2a–2e) is complete (2026-09-14)** — what remains is the
+  "Later" backlog, the go-live checklist, and hosting decisions.
 - **Pending (owner)**: nothing operational outstanding. Standing habit
   (owner, 2026-09-11): full smoke runs go with
   `DOCCONTROL_NOTIFICATION_ENABLED=false` in `.env` so the placeholder
@@ -136,15 +139,18 @@
   secret lives only in the gitignored `.env`).
 - **In progress / next**: nothing mid-flight — the navigation
   restructure is complete (see Done above); the compose stack runs the
-  current build (V8 applied, memberships at COLLABORATOR). Next up per
-  the roadmap: the "Later" backlog (now including the Dashboard, whose
-  nav slot exists) and the remaining go-live checklist decisions.
-  Dev-data note: the owner's manual gap-testing left a few rows
-  deactivated (document types DWG and WI, departments "it" and
-  SMK1788933740) — they are one Activate click away on Admin > Tiers /
-  the Departments section; QA was deleted and restored during
-  verification (its audit trail records the cycle). The go-live
-  checklist now includes the
+  current build (V8 applied, memberships at COLLABORATOR). Remaining
+  work, none scheduled: the "Later" backlog; the go-live checklist;
+  hosting decisions; and a new candidate — a **Dashboard landing page**
+  (the nav slot exists) with exactly three dashlets: My Approvals, My
+  Acknowledgments, My Documents (via `?owner=me`). An "activities feed"
+  dashlet is explicitly EXCLUDED — it needs an audit-log read API that
+  doesn't exist yet (Sprint 4 scope). Dev-data note: the owner's manual
+  gap-testing left a few rows deactivated (document types DWG and WI,
+  departments "it" and SMK1788933740) — they are one Activate click
+  away on Admin > Tiers / the Departments section; QA was deleted and
+  restored during verification (its audit trail records the cycle).
+  The go-live checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
   proves submission, not delivery) — it needs a decision before real
   rollout: a routable-email audit plus who watches the sender mailbox for

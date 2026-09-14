@@ -155,7 +155,10 @@ Captured so they aren't lost, not scheduled yet:
 - Document-to-document relationships/references (#14)
 - Retention schedules and disposition (#17)
 - Legal hold (#18)
-- Dashboard of pending approvals / overdue reviews (#19)
+- Dashboard landing page (#19) — candidate refined 2026-09-14: exactly
+  three dashlets (My Approvals, My Acknowledgments, My Documents via
+  `?owner=me`); an "activities feed" dashlet is excluded — it needs an
+  audit-log read API that doesn't exist yet (Sprint 4 scope)
 - Approval cycle time / KPI reporting (#20)
 
 ## Explicitly not needed (confirmed No)

@@ -1,6 +1,7 @@
 package com.doccontrol.workflow;
 
 import com.doccontrol.acknowledgment.AcknowledgmentService;
+import com.doccontrol.audit.AuditService;
 import com.doccontrol.audit.NotificationLog;
 import com.doccontrol.audit.NotificationLogRepository;
 import com.doccontrol.audit.SystemActor;
@@ -31,6 +32,7 @@ import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
 import java.util.List;
+import java.util.Map;
 
 /**
  * The daily sweep (Phase 2b reminders/escalations + Phase 2c lifecycle
@@ -81,6 +83,7 @@ public class WorkflowNotificationJob {
     private final SystemActor systemActor;
     private final AcknowledgmentService acknowledgmentService;
     private final TransactionTemplate transactionTemplate;
+    private final AuditService auditService;
 
     public WorkflowNotificationJob(TaskService taskService,
                                    WorkflowInstanceRepository instanceRepository,
@@ -95,7 +98,8 @@ public class WorkflowNotificationJob {
                                    DocumentVersionRepository documentVersionRepository,
                                    SystemActor systemActor,
                                    AcknowledgmentService acknowledgmentService,
-                                   TransactionTemplate transactionTemplate) {
+                                   TransactionTemplate transactionTemplate,
+                                   AuditService auditService) {
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
         this.userRepository = userRepository;
@@ -110,11 +114,23 @@ public class WorkflowNotificationJob {
         this.systemActor = systemActor;
         this.acknowledgmentService = acknowledgmentService;
         this.transactionTemplate = transactionTemplate;
+        this.auditService = auditService;
     }
 
     @Scheduled(cron = "${doccontrol.workflow.reminder-cron:0 0 7 * * *}")
     public void runScheduled() {
-        run(LocalDate.now());
+        LocalDate today = LocalDate.now();
+        run(today);
+        // Owner decision (2026-09-14): a scheduled firing gets the same
+        // trigger-level audit row as a manual one, so every sweep is visible
+        // in audit_log (ISO 9001 evidence). Own transaction — the sweep's
+        // per-item transactions have already committed — and the System user
+        // as actor, since no security context exists here.
+        transactionTemplate.execute(tx -> {
+            auditService.recordAs(systemActor.get(), "daily_sweep", 0, "triggered",
+                    Map.of("date", today.toString(), "triggered_by", "scheduled"));
+            return null;
+        });
     }
 
     void run(LocalDate today) {

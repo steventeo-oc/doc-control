@@ -1,8 +1,11 @@
 package com.doccontrol.workflow;
 
 import com.doccontrol.CsrfTestSupport;
+import com.doccontrol.audit.AuditLog;
+import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.audit.NotificationLog;
 import com.doccontrol.audit.NotificationLogRepository;
+import com.doccontrol.audit.SystemActor;
 import com.doccontrol.auth.dto.LoginRequest;
 import com.doccontrol.document.DocumentDto;
 import com.doccontrol.document.DocumentVersionDto;
@@ -93,6 +96,9 @@ class WorkflowNotificationJobTests {
 
     @Autowired
     NotificationLogRepository notificationLogRepository;
+
+    @Autowired
+    AuditLogRepository auditLogRepository;
 
     @Autowired
     WorkflowInstanceRepository workflowInstanceRepository;
@@ -191,6 +197,24 @@ class WorkflowNotificationJobTests {
                         .param("date", LocalDate.now().minusDays(5).toString())
                         .with(csrf()).session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD)))
                 .andExpect(status().isOk());
+    }
+
+    @Test
+    void scheduledRunWritesTriggerAuditRow() {
+        job.runScheduled();
+
+        // the scheduled firing is audited exactly like a manual one (owner
+        // decision, 2026-09-14): same daily_sweep/triggered shape, the
+        // System user as actor, the swept date and trigger source in details
+        List<AuditLog> rows = auditLogRepository.findAll().stream()
+                .filter(entry -> "daily_sweep".equals(entry.getEntityType()))
+                .filter(entry -> "triggered".equals(entry.getAction()))
+                .toList();
+        assertThat(rows).hasSize(1);
+        assertThat(rows.get(0).getPerformedBy().getEmail()).isEqualTo(SystemActor.EMAIL);
+        assertThat(rows.get(0).getDetails())
+                .containsEntry("triggered_by", "scheduled")
+                .containsEntry("date", LocalDate.now().toString());
     }
 
     private List<NotificationLog> remindersFor(Integer recipientId, String taskId) {

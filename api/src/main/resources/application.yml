@@ -22,17 +22,14 @@ spring:
 
   servlet:
     multipart:
-      # PROPOSAL for production (pending confirmation — go-live checklist):
-      #   * 25MB is ample for office documents (SOPs, forms, work instructions)
-      #   * drawings/CAD (DWG) can exceed that; if large artifacts are in
-      #     scope, 100MB max-file-size / 110MB max-request-size is the
-      #     recommended ceiling
-      #   * confirm by measuring the largest real artifact in the old
-      #     Alfresco archive (kept read-only) before deciding
-      # Memory is not the constraint — Spring spools uploads to temp files
-      # and the MinIO SDK streams them — so the limit is abuse/disk hygiene.
-      max-file-size: 50MB
-      max-request-size: 55MB
+      # DECIDED (owner, 2026-09-14): large CAD/DWG drawings are in scope, so
+      # the ceiling is 100MB max-file-size / 110MB max-request-size — the
+      # go-live checklist item is resolved without measuring the old
+      # Alfresco archive. Memory is not the constraint — Spring spools
+      # uploads to temp files and the MinIO SDK streams them — so the limit
+      # is abuse/disk hygiene.
+      max-file-size: 100MB
+      max-request-size: 110MB
 
 doccontrol:
   workflow:

@@ -139,19 +139,25 @@
   secret lives only in the gitignored `.env`).
 - **In progress / next**: nothing mid-flight. 2026-09-14 session (after
   the nav restructure): two go-live checklist items resolved — the
-  upload limit was decided by the owner at **100MB/110MB** (large
-  CAD/DWG in scope) and `application.yml` now reflects it (the 50MB dev
-  default is gone), and **scheduled sweep runs now write the same
-  trigger-level `daily_sweep` audit row as manual runs** (owner-approved
-  quick fix in `WorkflowNotificationJob.runScheduled`; test added; 106
-  tests green). The **Dashboard plan-back is drafted**
-  (`Dashboard_Design_PlanBack.md`, 2026-09-14): exactly three dashlets —
-  My Approvals, My Acknowledgments, My Documents (via `?owner=me`) —
-  zero backend changes, activities feed explicitly excluded (needs a
-  Sprint 4 audit-log read API); **awaiting owner approval before any
-  build**. The compose stack still runs the pre-2026-09-14 build — a
-  rebuild (`docker compose up -d --build`) picks up today's two changes;
-  not yet done. Remaining work, none scheduled: the "Later" backlog;
+  upload limit decided by the owner at **100MB/110MB** now in
+  `application.yml`, and **scheduled sweep runs write the same
+  trigger-level `daily_sweep` audit row as manual runs** (System user,
+  `triggered_by: scheduled`; 106 tests green). The **Dashboard landing
+  page is implemented (commit f42abf8) and browser-verified** per the
+  approved plan-back (`Dashboard_Design_PlanBack.md`): exactly three
+  dashlets — My Approvals, My Acknowledgments, My Documents (via
+  `?owner=me`) — explicit `/dashboard` route with index + catch-all
+  redirecting there, Dashboard first in the nav, zero backend changes;
+  the activities feed stays excluded (Sprint 4 audit-log read API).
+  The compose stack was rebuilt from main the same day and the **full
+  smoke (sections 0–15) passes against it** — which required fixing the
+  smoke script's user creation (commit aa91c1c), stale since the levels
+  work: the old `departmentIds` shape 400s against
+  `departments:[{departmentId, level}]`, and the viewer now arrives as
+  COLLABORATOR (a Consumer would also trip the F3b reviewer rejection at
+  the approval-start step). The notification flag was flipped back to
+  `true` + `up -d api` after the run (standing habit honored).
+  Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,
   Graph bounce monitoring); hosting decisions. Dev-data note: the owner's manual
@@ -183,9 +189,9 @@
   stack (a background `wsl -e bash -c "sleep N"` works).
 - **Deployment target**: `docker compose up -d --build` serves the SPA at
   localhost:3000 with the API under the `/api` mount; stack rebuilt from
-  main on 2026-09-11 with Phase 2e (change notifications, watermarking,
-  the gotenberg sidecar) and the full smoke (sections 1–15) passing
-  against it.
+  main on 2026-09-14 (Phase 2e, the levels/nav work, the 100MB upload
+  limit, the scheduled-sweep audit row, and the Dashboard landing page)
+  with the full smoke (sections 0–15) passing against it.
 - **Verification habit**: `scripts/smoke.sh` walks the full flow (including
   the workflow release) end-to-end; run it after any stack rebuild.
 

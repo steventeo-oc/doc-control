@@ -6,12 +6,14 @@ import type { Department } from '../api/types';
 
 /**
  * The app shell (nav restructure plan-back section 1; Dashboard added per
- * the dashboard plan-back): top navigation with the section set —
- * Dashboard | Documents | Tasks | Departments | Admin — plus an Account
- * menu, and a per-section sidebar rendered from this config when the
- * active section has entries (the dashboard has none and renders
- * full-width). The Departments sidebar is built from the signed-in user's
- * memberships; admins see every department.
+ * the dashboard plan-back, Activity per the activity plan-back): top
+ * navigation with the section set — Dashboard | Documents | Tasks |
+ * Departments | Activity | Admin — plus an Account menu, and a
+ * per-section sidebar rendered from this config when the active section
+ * has entries (the dashboard has none and renders full-width). The
+ * Departments sidebar is built from the signed-in user's memberships;
+ * admins see every department. Activity's sidebar is its scope filter
+ * (Mine / My Departments, plus Company-wide for admins).
  */
 type SectionItem = { label: string; to: string };
 
@@ -58,6 +60,16 @@ export default function Layout() {
       ],
     },
     departments: { label: 'Departments', items: departmentItems },
+    // Activity's scope filter wears the section sidebar (activity plan-back
+    // F4): Mine / My Departments for everyone, Company for admins.
+    activity: {
+      label: 'Activity',
+      items: [
+        { label: 'My activity', to: '/activity?scope=mine' },
+        { label: 'My departments', to: '/activity?scope=departments' },
+        ...(isAdmin ? [{ label: 'Company-wide', to: '/activity?scope=company' }] : []),
+      ],
+    },
   };
 
   const activeSection = sections[section];
@@ -90,6 +102,7 @@ export default function Layout() {
           <NavLink to="/documents">Documents</NavLink>
           <NavLink to="/tasks">Tasks</NavLink>
           <NavLink to="/departments">Departments</NavLink>
+          <NavLink to="/activity">Activity</NavLink>
           {isAdmin && <NavLink to="/admin/types">Admin</NavLink>}
         </nav>
         <details className="account-menu">

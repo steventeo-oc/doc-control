@@ -173,6 +173,30 @@ export interface PendingAcknowledgment {
   overdue: boolean;
 }
 
+/** One activity row (activity plan-back F6) — details carry the free-form
+ * context (document_number, version_number, …) each action wrote. */
+export interface AuditLogEntry {
+  id: number;
+  performedAt: string;
+  actorName: string;
+  actorEmail: string;
+  entityType: string;
+  action: string;
+  entityId: number;
+  departmentCode: string | null;
+  details: Record<string, unknown> | null;
+}
+
+export type ActivityScope = 'mine' | 'departments' | 'company';
+
+export interface AuditLogPage {
+  content: AuditLogEntry[];
+  page: number;
+  pageSize: number;
+  totalElements: number;
+  totalPages: number;
+}
+
 export interface DepartmentMember {
   userId: number;
   name: string;

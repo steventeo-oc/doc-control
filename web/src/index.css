@@ -500,14 +500,3 @@ button.danger {
   background: #eef3f8;
   color: #16324f;
 }
-
-/* The Activity placeholder must read as "not built yet" — muted card,
-   dashed border, no icon, no footer link, no data fetching. */
-.dashlet.dash-placeholder {
-  background: #f7f9fb;
-  border-style: dashed;
-}
-
-.dashlet.dash-placeholder h2 {
-  color: #55677a;
-}

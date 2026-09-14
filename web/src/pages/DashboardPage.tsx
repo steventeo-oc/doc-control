@@ -1,7 +1,8 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { acknowledgmentApi, documentApi, lookupApi, workflowApi } from '../api/resources';
+import { acknowledgmentApi, auditApi, documentApi, lookupApi, workflowApi } from '../api/resources';
 import type {
+  AuditLogPage,
   Department,
   DocumentSummary,
   DocumentsPage as PageResult,
@@ -9,16 +10,26 @@ import type {
   WorkflowTask,
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import ActivitySentence from '../components/ActivitySentence';
+
+/** Local-date ISO string n days back (0 = today) — the activity presets. */
+function isoDaysAgo(days: number): string {
+  const date = new Date(Date.now() - days * 86400000);
+  const month = String(date.getMonth() + 1).padStart(2, '0');
+  const day = String(date.getDate()).padStart(2, '0');
+  return `${date.getFullYear()}-${month}-${day}`;
+}
 
 /**
  * The Dashboard landing page (Dashboard_Design_PlanBack.md, approved
- * 2026-09-14; round-three structure per owner review): a 2×2 grid — the
- * merged Tasks card, My Documents, the Departments card (own memberships,
- * all departments for admins, mirroring the Layout sidebar's sources) and
- * the Activity placeholder, which is deliberately a muted "not built yet"
- * card with no data fetching and no empty-state icon. Rows are compact
- * (code + title on one line, small inline badges) and link to their
- * section pages; lists scroll internally under a max height.
+ * 2026-09-14; round-three structure per owner review; Activity made real
+ * per the approved activity plan-back): a 2×2 grid — the merged Tasks
+ * card, My Documents, the Departments card (own memberships, all
+ * departments for admins, mirroring the Layout sidebar's sources) and the
+ * Activity card (my activity, last 7 days, top 5, deep-linking into the
+ * full /activity view). Rows are compact (code + title on one line, small
+ * inline badges) and link to their section pages; lists scroll internally
+ * under a max height.
  */
 
 export default function DashboardPage() {
@@ -29,7 +40,7 @@ export default function DashboardPage() {
         <TasksDashlet />
         <DocumentsDashlet />
         <DepartmentsDashlet />
-        <ActivityPlaceholder />
+        <ActivityDashlet />
       </div>
     </>
   );
@@ -274,17 +285,58 @@ function DepartmentsDashlet() {
 }
 
 /**
- * Explicit placeholder (round three): muted and dashed so it reads as
- * "not built yet" rather than "built but empty" — no icon, no data
- * fetching, no footer link. The real feed needs the Sprint 4 audit-log
- * read API.
+ * The real Activity card (activity plan-back, approved 2026-09-14): my
+ * activity over the last 7 days, top 5, deep-linking into the full
+ * /activity view. Read-only over the immutable audit trail.
  */
-function ActivityPlaceholder() {
+function ActivityDashlet() {
+  const [page, setPage] = useState<AuditLogPage | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    auditApi
+      .list({
+        scope: 'mine',
+        from: isoDaysAgo(6),
+        to: isoDaysAgo(0),
+        pageSize: 5,
+      })
+      .then(setPage)
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
   return (
-    <section className="dashlet dash-placeholder">
-      <h2>Activity</h2>
-      <p className="muted">Activity feed — coming in a future update.</p>
-    </section>
+    <Dashlet
+      title="Activity"
+      count={page?.totalElements ?? null}
+      moreTo="/activity?scope=mine"
+      moreLabel="All my activity"
+      error={error}
+      loaded={page !== null}
+      empty={
+        <>
+          <InboxIcon />
+          <span>No activity in the last 7 days.</span>
+        </>
+      }
+    >
+      <ul className="dash-list">
+        {(page?.content ?? []).map((entry) => (
+          <li key={entry.id}>
+            <ActivitySentence entry={entry} />
+            <div className="muted">
+              {new Date(entry.performedAt).toLocaleString()}
+              {entry.departmentCode && (
+                <>
+                  {' '}
+                  <span className="badge dept">{entry.departmentCode}</span>
+                </>
+              )}
+            </div>
+          </li>
+        ))}
+      </ul>
+    </Dashlet>
   );
 }
 

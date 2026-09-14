@@ -3,6 +3,7 @@ import { useAuth } from './auth/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
 import DashboardPage from './pages/DashboardPage';
+import ActivityPage from './pages/ActivityPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import TasksPage from './pages/TasksPage';
@@ -43,6 +44,7 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="activity" element={<ActivityPage />} />
         <Route path="departments" element={<DepartmentsPage />} />
         <Route path="departments/:id" element={<DepartmentDetailPage />} />
         <Route path="admin/types" element={<AdminTypesPage />} />

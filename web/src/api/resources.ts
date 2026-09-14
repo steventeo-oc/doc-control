@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
@@ -134,6 +134,39 @@ export const acknowledgmentApi = {
     api.post<AcknowledgmentAccess>(`/documents/${documentId}/acknowledgments/access`, { userId }),
   revoke: (documentId: number, userId: number) =>
     api.delete(`/documents/${documentId}/acknowledgments/access/${userId}`),
+};
+
+export interface ActivityFilters {
+  scope: ActivityScope;
+  category?: string;
+  /** Inclusive ISO dates (the UI's Today/7/14/28 presets compute these). */
+  from?: string;
+  to?: string;
+  page?: number;
+  pageSize?: number;
+}
+
+export const auditApi = {
+  list: (filters: ActivityFilters) => {
+    const params = new URLSearchParams();
+    params.set('scope', filters.scope);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    params.set('page', String(filters.page ?? 0));
+    params.set('page_size', String(filters.pageSize ?? 20));
+    return api.get<AuditLogPage>(`/audit-log?${params.toString()}`);
+  },
+  /** Admin-only CSV export — a plain GET link (session cookie authenticates,
+   * no CSRF needed); the backend sets the download filename. */
+  exportUrl: (filters: ActivityFilters) => {
+    const params = new URLSearchParams();
+    params.set('scope', filters.scope);
+    if (filters.category) params.set('category', filters.category);
+    if (filters.from) params.set('from', filters.from);
+    if (filters.to) params.set('to', filters.to);
+    return `/api/audit-log/export?${params.toString()}`;
+  },
 };
 
 export const userApi = {

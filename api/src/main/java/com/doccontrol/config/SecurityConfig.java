@@ -75,6 +75,12 @@ public class SecurityConfig {
                 // the admin-only /users/** surface
                 .requestMatchers(org.springframework.http.HttpMethod.POST, "/users/*/password")
                     .authenticated()
+                // the audit-log CSV export is the admin evidence surface
+                // (activity plan-back); the query itself is open to all
+                // authenticated users with server-side scoping, and the
+                // service re-checks export admin rights anyway
+                .requestMatchers(org.springframework.http.HttpMethod.GET, "/audit-log/export")
+                    .hasRole("ADMIN")
                 .requestMatchers("/users/**", "/roles", "/admin/**").hasRole("ADMIN")
                 .anyRequest().authenticated())
             .exceptionHandling(handling -> handling

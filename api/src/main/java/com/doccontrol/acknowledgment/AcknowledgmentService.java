@@ -103,7 +103,7 @@ public class AcknowledgmentService {
         auditService.record("document_acknowledgment", acknowledgment.getId(), "created", java.util.Map.of(
                 "document_number", document.getDocumentNumber(),
                 "version_number", version.getVersionNumber(),
-                "user_id", me.getId()));
+                "user_id", me.getId()), document.getDepartment());
         return AcknowledgmentDto.from(acknowledgment);
     }
 
@@ -245,7 +245,7 @@ public class AcknowledgmentService {
         auditService.record("document_acknowledgment_access", access.getId(), "granted", java.util.Map.of(
                 "document_number", document.getDocumentNumber(),
                 "granted_to", target.getId(),
-                "granted_by", currentUserProvider.getCurrentUserId()));
+                "granted_by", currentUserProvider.getCurrentUserId()), document.getDepartment());
         return AcknowledgmentAccessDto.from(access);
     }
 
@@ -263,7 +263,7 @@ public class AcknowledgmentService {
         auditService.record("document_acknowledgment_access", access.getId(), "revoked", java.util.Map.of(
                 "document_number", document.getDocumentNumber(),
                 "revoked_from", userId,
-                "revoked_by", currentUserProvider.getCurrentUserId()));
+                "revoked_by", currentUserProvider.getCurrentUserId()), document.getDepartment());
     }
 
     private void requireStatusViewer(Document document) {

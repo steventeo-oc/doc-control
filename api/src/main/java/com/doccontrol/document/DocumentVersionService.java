@@ -72,7 +72,7 @@ public class DocumentVersionService {
                 "document_number", document.getDocumentNumber(),
                 "version_number", versionNumber,
                 "file_name", fileReference.substring(fileReference.lastIndexOf('/') + 1),
-                "size", size));
+                "size", size), document.getDepartment());
 
         return DocumentVersionDto.from(version);
     }
@@ -136,7 +136,7 @@ public class DocumentVersionService {
             auditService.record("document_version", version.getId(), "original_downloaded",
                     java.util.Map.of(
                             "document_number", document.getDocumentNumber(),
-                            "version_number", version.getVersionNumber()));
+                            "version_number", version.getVersionNumber()), document.getDepartment());
         }
         return new VersionDownload(version.getStatus(),
                 fileStorageService.open(version.getFileReference()));

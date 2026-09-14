@@ -125,7 +125,7 @@ public class DocumentService {
                 "document_number", document.getDocumentNumber(),
                 "name", document.getName(),
                 "type", type.getCode(),
-                "department", department.getCode()));
+                "department", department.getCode()), document.getDepartment());
 
         return DocumentDto.from(document);
     }
@@ -291,7 +291,8 @@ public class DocumentService {
         }
 
         if (!after.isEmpty()) {
-            auditService.record("document", id, "updated", Map.of("before", before, "after", after));
+            auditService.record("document", id, "updated", Map.of("before", before, "after", after),
+                    document.getDepartment());
         }
 
         return DocumentDto.from(document);
@@ -305,7 +306,8 @@ public class DocumentService {
 
         if (document.getDeletedAt() == null) {
             document.setDeletedAt(LocalDateTime.now());
-            auditService.record("document", id, "deleted", Map.of("soft_delete", true));
+            auditService.record("document", id, "deleted", Map.of("soft_delete", true),
+                    document.getDepartment());
         }
     }
 
@@ -316,7 +318,7 @@ public class DocumentService {
 
         if (document.getDeletedAt() != null) {
             document.setDeletedAt(null);
-            auditService.record("document", id, "restored", Map.of());
+            auditService.record("document", id, "restored", Map.of(), document.getDepartment());
         }
         return DocumentDto.from(document);
     }
@@ -398,11 +400,11 @@ public class DocumentService {
             after.put("current_version_id", version.getId());
             after.put("effective_at", effectiveDate.toString());
             auditService.recordAs(actor, "document", document.getId(), "status_changed",
-                    Map.of("before", before, "after", after));
+                    Map.of("before", before, "after", after), document.getDepartment());
         } else if (!pointerBefore.equals(version.getId())) {
             auditService.recordAs(actor, "document", document.getId(), "updated", Map.of(
                     "before", Map.of("current_version_id", pointerBefore),
-                    "after", Map.of("current_version_id", version.getId())));
+                    "after", Map.of("current_version_id", version.getId())), document.getDepartment());
         }
         resetReviewClock(document, effectiveDate, actor);
     }
@@ -427,7 +429,8 @@ public class DocumentService {
                         "superseded_before_effective", Map.of(
                                 "document_number", document.getDocumentNumber(),
                                 "version_number", stale.getVersionNumber(),
-                                "effective_at", String.valueOf(stale.getEffectiveAt())));
+                                "effective_at", String.valueOf(stale.getEffectiveAt())),
+                        document.getDepartment());
                 notifyOwnerOfSupersededPending(document, stale);
             }
         }
@@ -447,7 +450,7 @@ public class DocumentService {
         after.put("status", DocumentStatus.APPROVED.getValue());
         after.put("pending_effective_at", effectiveDate.toString());
         auditService.recordAs(actor, "document", document.getId(), "status_changed",
-                Map.of("before", before, "after", after));
+                Map.of("before", before, "after", after), document.getDepartment());
     }
 
     /**
@@ -466,7 +469,7 @@ public class DocumentService {
         auditService.recordAs(actor, "document", document.getId(), "review_clock_reset", Map.of(
                 "last_reviewed_at", certifiedOn.toString(),
                 "next_review_due", document.getNextReviewDue() == null
-                        ? "none" : document.getNextReviewDue().toString()));
+                        ? "none" : document.getNextReviewDue().toString()), document.getDepartment());
     }
 
     /**
@@ -478,7 +481,7 @@ public class DocumentService {
     public void schedulePendingReviewReset(Document document, LocalDate effectiveDate, User actor) {
         document.setPendingReviewEffectiveAt(effectiveDate);
         auditService.recordAs(actor, "document", document.getId(), "review_reset_scheduled", Map.of(
-                "effective_at", effectiveDate.toString()));
+                "effective_at", effectiveDate.toString()), document.getDepartment());
     }
 
     private void notifyOwnerOfSupersededPending(Document document, DocumentVersion retired) {

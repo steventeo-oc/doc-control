@@ -63,7 +63,7 @@ public class DepartmentService {
         departmentRepository.save(department);
 
         auditService.record("department", department.getId(), "created",
-                Map.of("code", department.getCode(), "label", department.getLabel()));
+                Map.of("code", department.getCode(), "label", department.getLabel()), department);
 
         return DepartmentDto.from(department);
     }
@@ -87,7 +87,8 @@ public class DepartmentService {
         }
 
         if (!after.isEmpty()) {
-            auditService.record("department", id, "updated", Map.of("before", before, "after", after));
+            auditService.record("department", id, "updated", Map.of("before", before, "after", after),
+                    department);
         }
 
         return DepartmentDto.from(department);
@@ -142,7 +143,7 @@ public class DepartmentService {
                 "user_id", userId,
                 "user_email", membership.getUser().getEmail(),
                 "before", before.toString(),
-                "after", request.level().toString()));
+                "after", request.level().toString()), department);
         return DepartmentMemberDto.from(membership);
     }
 

@@ -105,7 +105,7 @@ public class WorkflowService {
         auditService.record("workflow_instance", instance.getId(), "created", Map.of(
                 "document_number", document.getDocumentNumber(),
                 "version_number", version.getVersionNumber(),
-                "assignees", slots.descriptions()));
+                "assignees", slots.descriptions()), document.getDepartment());
 
         return toDto(instance);
     }
@@ -152,7 +152,7 @@ public class WorkflowService {
                 "document_number", document.getDocumentNumber(),
                 "version_number", version.getVersionNumber(),
                 "kind", WorkflowInstanceKind.REAPPROVAL.getValue(),
-                "assignees", slots.descriptions()));
+                "assignees", slots.descriptions()), document.getDepartment());
 
         return toDto(instance);
     }
@@ -293,11 +293,11 @@ public class WorkflowService {
                         "kind", instance.getKind().getValue(),
                         "effective_at", deferred
                                 ? requestedEffectiveDate.toString()
-                                : today.toString()));
+                                : today.toString()), document.getDepartment());
             } else {
                 auditService.record("workflow_instance", instance.getId(), "task_approved", Map.of(
                         "task_id", taskId,
-                        "document_number", document.getDocumentNumber()));
+                        "document_number", document.getDocumentNumber()), document.getDepartment());
             }
         } else {
             // 100% required: a single rejection rejects the whole approval.
@@ -312,7 +312,7 @@ public class WorkflowService {
                     "document_number", document.getDocumentNumber(),
                     "version_number", instance.getDocumentVersion().getVersionNumber(),
                     "rejected_by", currentUserProvider.getCurrentUserId(),
-                    "kind", instance.getKind().getValue()));
+                    "kind", instance.getKind().getValue()), document.getDepartment());
         }
         return toDto(instance);
     }
@@ -334,7 +334,7 @@ public class WorkflowService {
         auditService.record("workflow_instance", instance.getId(), "task_delegated", Map.of(
                 "task_id", taskId,
                 "from", previousAssignee == null ? "unclaimed" : previousAssignee,
-                "to", target.getId()));
+                "to", target.getId()), document.getDepartment());
         return toDto(instance);
     }
 

@@ -51,6 +51,19 @@ public class AuditLog {
     @JoinColumn(name = "performed_by", nullable = false)
     private User performedBy;
 
+    /**
+     * The department the row belongs to (activity plan-back F1) — populated
+     * at write time where a single department is unambiguous. A plain FK
+     * integer, deliberately NOT a @ManyToOne: the audit insert must never
+     * hold an entity association that breaks a flush when the referenced
+     * department is deleted in the same transaction, and departments are
+     * hard-deleted (the DB's ON DELETE SET NULL turns their rows into
+     * NULL-department rows). NULL is legitimate (lookup config, user rows,
+     * sweep triggers): such rows are never visible in department scope.
+     */
+    @Column(name = "department_id")
+    private Integer departmentId;
+
     @CreationTimestamp
     @Column(name = "performed_at", nullable = false, updatable = false)
     private LocalDateTime performedAt;

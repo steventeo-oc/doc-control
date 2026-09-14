@@ -399,11 +399,19 @@ button.danger {
 
 .dash-grid {
   display: grid;
-  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  /* fixed 2×2 (round three): Tasks + My Documents, then Departments +
+     Activity; collapses to one column on narrow screens */
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 16px;
   /* independent card heights: an empty card stays short; a long queue is
      capped by the list's max-height + internal scroll instead of stretching */
   align-items: start;
+}
+
+@media (max-width: 860px) {
+  .dash-grid {
+    grid-template-columns: 1fr;
+  }
 }
 
 .dashlet {
@@ -491,4 +499,15 @@ button.danger {
 .badge.dept {
   background: #eef3f8;
   color: #16324f;
+}
+
+/* The Activity placeholder must read as "not built yet" — muted card,
+   dashed border, no icon, no footer link, no data fetching. */
+.dashlet.dash-placeholder {
+  background: #f7f9fb;
+  border-style: dashed;
+}
+
+.dashlet.dash-placeholder h2 {
+  color: #55677a;
 }

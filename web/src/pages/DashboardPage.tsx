@@ -1,23 +1,24 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
-import { acknowledgmentApi, documentApi, workflowApi } from '../api/resources';
+import { acknowledgmentApi, documentApi, lookupApi, workflowApi } from '../api/resources';
 import type {
+  Department,
   DocumentSummary,
   DocumentsPage as PageResult,
   PendingAcknowledgment,
   WorkflowTask,
 } from '../api/types';
+import { useAuth } from '../auth/AuthContext';
 
 /**
  * The Dashboard landing page (Dashboard_Design_PlanBack.md, approved
- * 2026-09-14; round-two structure per owner review): TWO dashlets — a
- * merged Tasks card (approvals + acknowledgments, mirroring the Tasks nav
- * section) and My Documents — over endpoints that already exist. Rows are
- * compact (code + title on one line, small inline badges) and link to the
- * document page; full detail and actions stay in their section pages.
- * Lists scroll internally under a max height, so an empty card stays
- * short and a long queue cannot grow the page. The activities feed is
- * deliberately excluded — it needs the Sprint 4 audit-log read API.
+ * 2026-09-14; round-three structure per owner review): a 2×2 grid — the
+ * merged Tasks card, My Documents, the Departments card (own memberships,
+ * all departments for admins, mirroring the Layout sidebar's sources) and
+ * the Activity placeholder, which is deliberately a muted "not built yet"
+ * card with no data fetching and no empty-state icon. Rows are compact
+ * (code + title on one line, small inline badges) and link to their
+ * section pages; lists scroll internally under a max height.
  */
 
 export default function DashboardPage() {
@@ -27,6 +28,8 @@ export default function DashboardPage() {
       <div className="dash-grid">
         <TasksDashlet />
         <DocumentsDashlet />
+        <DepartmentsDashlet />
+        <ActivityPlaceholder />
       </div>
     </>
   );
@@ -176,7 +179,10 @@ function TasksDashlet() {
                 {row.task.documentNumber} — {row.task.name}
               </Link>
               <div className="muted">
-                <span className="badge">v{row.task.versionNumber}</span>
+                {row.task.departmentCode && (
+                  <span className="badge dept">{row.task.departmentCode}</span>
+                )}
+                <span className="badge"> v{row.task.versionNumber}</span>
                 {row.task.reapproval && <span className="badge reapproval"> re-approval</span>}
                 {row.task.dueDate && new Date(row.task.dueDate) < startOfToday && (
                   <span className="badge overdue"> overdue</span>
@@ -210,6 +216,75 @@ function TasksDashlet() {
         )}
       </ul>
     </Dashlet>
+  );
+}
+
+/**
+ * The Departments card: the signed-in user's own memberships, or every
+ * department for admins — the same sources and inactive marking as the
+ * Layout's Departments sidebar (memberships from /auth/me, the
+ * includeInactive list for admins). Rows link to each department's
+ * detail page.
+ */
+function DepartmentsDashlet() {
+  const { user, isAdmin } = useAuth();
+  const [adminDepartments, setAdminDepartments] = useState<Department[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  useEffect(() => {
+    if (isAdmin) {
+      lookupApi
+        .departments(true)
+        .then(setAdminDepartments)
+        .catch((err: Error) => setError(err.message));
+    }
+  }, [isAdmin]);
+
+  const departments: Department[] | null = isAdmin ? adminDepartments : (user?.departments ?? null);
+  const count = departments?.length ?? null;
+
+  return (
+    <Dashlet
+      title="Departments"
+      count={count}
+      moreTo="/departments"
+      moreLabel="All departments"
+      error={error}
+      loaded={departments !== null}
+      empty={
+        <>
+          <FolderIcon />
+          <span>You belong to no departments.</span>
+        </>
+      }
+    >
+      <ul className="dash-list">
+        {(departments ?? [])
+          .slice()
+          .sort((a, b) => a.code.localeCompare(b.code))
+          .map((d) => (
+            <li key={d.id}>
+              <Link to={`/departments/${d.id}`}>{d.code}</Link> — {d.label}
+              {!d.active && <span className="muted"> (inactive)</span>}
+            </li>
+          ))}
+      </ul>
+    </Dashlet>
+  );
+}
+
+/**
+ * Explicit placeholder (round three): muted and dashed so it reads as
+ * "not built yet" rather than "built but empty" — no icon, no data
+ * fetching, no footer link. The real feed needs the Sprint 4 audit-log
+ * read API.
+ */
+function ActivityPlaceholder() {
+  return (
+    <section className="dashlet dash-placeholder">
+      <h2>Activity</h2>
+      <p className="muted">Activity feed — coming in a future update.</p>
+    </section>
   );
 }
 

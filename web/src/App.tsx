@@ -5,6 +5,8 @@ import LoginPage from './pages/LoginPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import TasksPage from './pages/TasksPage';
+import DepartmentsPage from './pages/DepartmentsPage';
+import DepartmentDetailPage from './pages/DepartmentDetailPage';
 import AdminTypesPage from './pages/AdminTypesPage';
 import AdminTiersPage from './pages/AdminTiersPage';
 import UsersPage from './pages/UsersPage';
@@ -36,6 +38,8 @@ export default function App() {
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
+        <Route path="departments" element={<DepartmentsPage />} />
+        <Route path="departments/:id" element={<DepartmentDetailPage />} />
         <Route path="admin/types" element={<AdminTypesPage />} />
         <Route path="admin/tiers" element={<AdminTiersPage />} />
         <Route path="admin/users" element={<UsersPage />} />

@@ -1,6 +1,8 @@
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
+import { useEffect, useState } from 'react';
 import { useAuth } from '../auth/AuthContext';
-import { userApi } from '../api/resources';
+import { lookupApi, userApi } from '../api/resources';
+import type { Department } from '../api/types';
 
 /**
  * The app shell (nav restructure plan-back section 1): top navigation with
@@ -18,7 +20,19 @@ export default function Layout() {
   const location = useLocation();
   const section = location.pathname.split('/')[1] || 'documents';
 
-  const departmentItems: SectionItem[] = (user?.departments ?? [])
+  // The Departments sidebar: the user's own memberships, or every
+  // department for admins (fetched with includeInactive, inactive marked).
+  const [adminDepartments, setAdminDepartments] = useState<Department[]>([]);
+  useEffect(() => {
+    if (isAdmin) {
+      lookupApi.departments(true).then(setAdminDepartments).catch(() => undefined);
+    }
+  }, [isAdmin]);
+
+  const departmentItems: SectionItem[] = (isAdmin
+    ? adminDepartments
+    : user?.departments ?? []
+  )
     .slice()
     .sort((a, b) => a.code.localeCompare(b.code))
     .map((d) => ({
@@ -46,10 +60,7 @@ export default function Layout() {
   };
 
   const activeSection = sections[section];
-  const sidebarItems =
-    section === 'departments' && isAdmin
-      ? [] // the admin's department list comes from the section page itself (piece 3)
-      : activeSection?.items ?? [];
+  const sidebarItems = activeSection?.items ?? [];
 
   async function handleLogout() {
     await logout();
@@ -76,6 +87,7 @@ export default function Layout() {
         <nav>
           <NavLink to="/documents">Documents</NavLink>
           <NavLink to="/tasks">Tasks</NavLink>
+          <NavLink to="/departments">Departments</NavLink>
           {isAdmin && <NavLink to="/admin/types">Admin</NavLink>}
         </nav>
         <details className="account-menu">

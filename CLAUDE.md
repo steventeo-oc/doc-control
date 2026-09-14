@@ -154,10 +154,10 @@
   Approval/Acknowledgment kind badges), **My Documents** (`owner=me`),
   **Departments** (own memberships, all departments for admins — the
   same sources and inactive marking as the Layout sidebar; rows link to
-  the department detail pages), and the **Activity placeholder** (muted,
-  dashed, no icon, no data fetching, no footer link — deliberately reads
-  as "not built yet"; the real feed needs the Sprint 4 audit-log read
-  API). Compact one-line rows with small inline badges; lists capped at
+  the department detail pages), and the **Activity** card (real since the
+  activity plan-back landed: my activity, last 7 days, top 5, deep link
+  into the /activity section). Compact one-line rows with small inline
+  badges; lists capped at
   384px with internal scroll (no stretch-to-tallest); empty states with
   small icons; '+ New document' CTA on the empty documents card only
   (`/documents?create=1` opens the creation form there); live counts in
@@ -166,23 +166,38 @@
   department gap: **`/my/tasks` now carries `departmentCode`**
   (WorkflowTaskDto + toTaskDto + the SPA type, 106 tests green), so
   approval rows show the same department badge as acknowledgment rows.
-  The next candidate is drafted and **awaiting owner approval**:
-  `Activity_Feed_Design_PlanBack.md` (2026-09-14) — a
-  permission-scoped audit-log query (Mine / My Departments for all,
-  Company for admins), the Sprint 4 `GET /audit-log` + `/audit-log/export`
-  endpoints that close the go-live checklist item, a real dashboard
-  Activity card (my activity, 7 days, top 5) replacing the placeholder,
-  and a top-level `/activity` section (the plan-back's recommendation,
-  F4) — with migration V9 adding the `audit_log.department_id` column
-  the department scoping needs. **No code until the owner approves.**
-  The compose stack was rebuilt from main the same day and the **full
-  smoke (sections 0–15) passes against it** — which required fixing the
-  smoke script's user creation (commit aa91c1c), stale since the levels
-  work: the old `departmentIds` shape 400s against
-  `departments:[{departmentId, level}]`, and the viewer now arrives as
-  COLLABORATOR (a Consumer would also trip the F3b reviewer rejection at
-  the approval-start step). The notification flag was flipped back to
-  `true` + `up -d api` after the run (standing habit honored).
+  The **Activity feed is implemented and browser-verified** (plan-back
+  `Activity_Feed_Design_PlanBack.md`, approved in full 2026-09-14, built
+  the same day with a mid-build checkpoint per the owner): migration V9
+  adds `audit_log.department_id` (plain FK integer with ON DELETE SET
+  NULL — deliberately NOT a @ManyToOne, so audit inserts can never tangle
+  with a department delete in one flush; backfilled where directly
+  resolvable), every write site with a single unambiguous department
+  populates it (user rows, lookup config and sweep triggers stay NULL per
+  F3), and `GET /audit-log` serves the permission-scoped query — scope
+  mine/departments for everyone, **company admin-only with a real 403**,
+  the F3 category filters, spec-compatible from/to, documents-style
+  pagination. `GET /audit-log/export` streams the filtered set as CSV
+  (admin-only at the route and in the service) — the ISO 9001 evidence
+  surface the go-live checklist pointed at. The SPA has a top-level
+  **Activity** nav section (F4): scope as the sidebar (Mine / My
+  Departments / Company-wide for admins), category + Today/7/14/28
+  presets, linked sentence rows, and the export button for admins; the
+  dashboard's Activity placeholder became the real card (my activity, 7
+  days, top 5). Checkpoint: **113 tests green** including seven new
+  scoping tests. The checkpoint also exposed and fixed a **latent
+  go-live blocker**: the bootstrap admin was only created when the user
+  table was entirely empty, but migration V6 always inserts the inactive
+  System user first — every fresh database (new compose volume!) would
+  have shipped with no way to log in; the guard now checks for any
+  ACTIVE user (commit 9200c4d). The compose stack was rebuilt and the
+  **full smoke (sections 0–15) passes** with the notification flag
+  flipped down and back (standing habit honored). Earlier the same day
+  the rebuild also required fixing the smoke script's user creation
+  (commit aa91c1c), stale since the levels work: the old `departmentIds`
+  shape 400s against `departments:[{departmentId, level}]`, and the
+  viewer now arrives as COLLABORATOR (a Consumer would also trip the F3b
+  reviewer rejection at the approval-start step).
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,
@@ -517,7 +532,10 @@ deployment, even if they don't block Sprint 1 development itself:
   `WorkflowNotificationJobTests.scheduledRunWritesTriggerAuditRow` covers
   it (106 tests green). Item-level effects remain audited as before; the
   `/audit-log`+`/audit-log/export` endpoints (Sprint 4) are the intended
-  way to produce this evidence.
+  way to produce this evidence — *(implemented 2026-09-14 per the
+  activity plan-back: browse with scope/category/time filters for all
+  users, CSV export for admins, so an auditor gets the scheduled-sweep
+  `triggered` rows out of the same query.)*
 - [ ] **Graph accepts unroutable recipients at submission — delivery
   failures bounce asynchronously to the sender mailbox.** A
   `notification_log` row with channel `'graph'` proves Graph accepted the

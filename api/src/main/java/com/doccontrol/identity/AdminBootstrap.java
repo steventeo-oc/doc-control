@@ -75,7 +75,11 @@ public class AdminBootstrap implements ApplicationRunner {
                     DEV_DEFAULT_EMAIL, DEV_DEFAULT_PASSWORD);
         }
 
-        if (userRepository.count() > 0) {
+        // Guard on ACTIVE users, not table emptiness: migration V6 always
+        // inserts the inactive System user, so an "empty table" check would
+        // skip the bootstrap on every fresh database and ship it with no
+        // way to log in (found by resetting the test database, 2026-09-14).
+        if (userRepository.existsByActiveTrue()) {
             return;
         }
 

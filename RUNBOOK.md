@@ -100,7 +100,8 @@ heredoc matters: passing this command as a quoted one-liner through
   otherwise from the dev default in
   `api/src/main/resources/application.yml` (`doccontrol.bootstrap
   .admin-password`). Ask the person who set the machine up. The value
-  only takes effect on an **empty** database — changing it later does not
+  only takes effect while the database has **no active user yet** (the
+  inactive System user doesn't count) — changing it later does not
   change the existing admin's password (that's `POST /users/{id}/password`
   territory).
 - Stale-cookie login failures (browsers that used the SPA before the

@@ -13,6 +13,9 @@ public interface UserRepository extends JpaRepository<User, Integer> {
 
     boolean existsByEmailIgnoreCase(String email);
 
+    /** Whether any active (real, loggable-in) user exists — the bootstrap guard. */
+    boolean existsByActiveTrue();
+
     /** Active users holding any of the given roles (e.g. pooled-task reviewers, Admins). */
     @Query("SELECT DISTINCT u FROM User u JOIN u.roles ur JOIN ur.role r " +
             "WHERE r.name IN :roleNames AND u.active = true")

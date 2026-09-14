@@ -94,9 +94,11 @@ doccontrol:
     bucket: doccontrol
 
   bootstrap:
-    # Initial admin account, created on first startup ONLY if the user table
-    # is empty. Override the password via DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD
-    # in any real deployment — the checked-in default is for local dev only.
+    # Initial admin account, created on first startup while no ACTIVE user
+    # exists (migration V6's inactive System user doesn't count — a fresh
+    # database must always get a way to log in). Override the password via
+    # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD in any real deployment — the
+    # checked-in default is for local dev only.
     admin-email: admin@doccontrol.local
     admin-password: changeme_admin
     admin-department: QA

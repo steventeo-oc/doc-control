@@ -455,6 +455,7 @@ public class WorkflowService {
                     .orElse(null);
         }
         WorkflowInstance instance = workflowInstanceFor(task);
+        Document document = instance == null ? null : instance.getDocumentVersion().getDocument();
         return new WorkflowTaskDto(
                 task.getId(),
                 task.getName(),
@@ -465,9 +466,10 @@ public class WorkflowService {
                 instance != null && instance.getKind() == WorkflowInstanceKind.REAPPROVAL,
                 task.getDueDate() == null ? null : LocalDateTime.ofInstant(task.getDueDate().toInstant(),
                         java.time.ZoneId.systemDefault()),
-                instance == null ? null : instance.getDocumentVersion().getDocument().getDocumentNumber(),
-                instance == null ? null : instance.getDocumentVersion().getDocument().getId(),
-                instance == null ? null : instance.getDocumentVersion().getVersionNumber());
+                document == null ? null : document.getDocumentNumber(),
+                document == null ? null : document.getId(),
+                instance == null ? null : instance.getDocumentVersion().getVersionNumber(),
+                document == null ? null : document.getDepartment().getCode());
     }
 
     private WorkflowInstance workflowInstanceFor(Task task) {

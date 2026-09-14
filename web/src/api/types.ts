@@ -99,6 +99,8 @@ export interface WorkflowTask {
   documentNumber: string;
   documentId: number;
   versionNumber: number;
+  /** Code of the document's department (null only for orphaned tasks). */
+  departmentCode: string | null;
 }
 
 export interface WorkflowInstance {

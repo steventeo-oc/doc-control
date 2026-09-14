@@ -15,5 +15,6 @@ public record WorkflowTaskDto(
         LocalDateTime dueDate,
         String documentNumber,
         Integer documentId,
-        Integer versionNumber) {
+        Integer versionNumber,
+        String departmentCode) {
 }

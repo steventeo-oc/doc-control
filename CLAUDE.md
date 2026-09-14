@@ -137,15 +137,24 @@
   the 2026-09-11 run). Secrets hygiene closed 2026-09-11: the Azure
   client secret and the WSL sudo password were both rotated (the new
   secret lives only in the gitignored `.env`).
-- **In progress / next**: nothing mid-flight — the navigation
-  restructure is complete (see Done above); the compose stack runs the
-  current build (V8 applied, memberships at COLLABORATOR). Remaining
-  work, none scheduled: the "Later" backlog; the go-live checklist;
-  hosting decisions; and a new candidate — a **Dashboard landing page**
-  (the nav slot exists) with exactly three dashlets: My Approvals, My
-  Acknowledgments, My Documents (via `?owner=me`). An "activities feed"
-  dashlet is explicitly EXCLUDED — it needs an audit-log read API that
-  doesn't exist yet (Sprint 4 scope). Dev-data note: the owner's manual
+- **In progress / next**: nothing mid-flight. 2026-09-14 session (after
+  the nav restructure): two go-live checklist items resolved — the
+  upload limit was decided by the owner at **100MB/110MB** (large
+  CAD/DWG in scope) and `application.yml` now reflects it (the 50MB dev
+  default is gone), and **scheduled sweep runs now write the same
+  trigger-level `daily_sweep` audit row as manual runs** (owner-approved
+  quick fix in `WorkflowNotificationJob.runScheduled`; test added; 106
+  tests green). The **Dashboard plan-back is drafted**
+  (`Dashboard_Design_PlanBack.md`, 2026-09-14): exactly three dashlets —
+  My Approvals, My Acknowledgments, My Documents (via `?owner=me`) —
+  zero backend changes, activities feed explicitly excluded (needs a
+  Sprint 4 audit-log read API); **awaiting owner approval before any
+  build**. The compose stack still runs the pre-2026-09-14 build — a
+  rebuild (`docker compose up -d --build`) picks up today's two changes;
+  not yet done. Remaining work, none scheduled: the "Later" backlog;
+  the remaining go-live checklist items (break-glass admin, MinIO
+  dedicated user + TLS, bootstrap-credential override at deployment,
+  Graph bounce monitoring); hosting decisions. Dev-data note: the owner's manual
   gap-testing left a few rows deactivated (document types DWG and WI,
   departments "it" and SMK1788933740) — they are one Activate click
   away on Admin > Tiers / the Departments section; QA was deleted and
@@ -164,7 +173,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 105 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 106 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL
@@ -458,28 +467,25 @@ deployment, even if they don't block Sprint 1 development itself:
   admin's password is lost" — an operational step, not a code fix. Also
   note: an admin cannot change their own roles, so the second admin is the
   only way back if the primary account is ever locked out.
-- [ ] **File upload limits & storage config are dev defaults** —
-  `spring.servlet.multipart.*` currently allows 50MB. Proposal in
-  `application.yml`: 25MB if only office documents are in scope, **100MB
-  (110MB request) if large CAD/DWG drawings are** — confirm by measuring the
-  largest real artifact in the old read-only Alfresco archive before
-  deciding. Storage: override MinIO credentials at deployment
-  (`MINIO_ROOT_*` for the container, `DOCCONTROL_STORAGE_ACCESS_KEY/SECRET_KEY`
-  for the api) and **create a dedicated MinIO user** for the api with
-  read/write on the `doccontrol` bucket only — the api should never use the
-  root account. Serve MinIO behind TLS; switch the api's storage endpoint to
-  https accordingly.
-- [ ] **Confirm the daily-sweep audit story satisfies the auditor** — the
-  manual trigger (`POST /admin/jobs/daily-sweep`) writes a `daily_sweep`
-  audit row (who, when, which business date), and its item-level effects
-  are audited (flips/clock resets as the System user) plus every send in
-  `notification_log`. Scheduled (cron) runs have NO trigger-level audit row
-  — they are visible only through those item-level effects. Decide before
-  go-live whether that satisfies ISO 9001 evidence needs or whether
-  scheduled runs should also write trigger rows (a one-line change in
-  `WorkflowNotificationJob.runScheduled`); note the
-  `/audit-log`+`/audit-log/export` endpoints are Sprint 4 and are the
-  intended way to produce this evidence.
+- [ ] **Storage config is a deployment-time step** — *(upload limit
+  RESOLVED 2026-09-14: the owner decided large CAD/DWG drawings are in
+  scope without measuring the old archive; `application.yml` now sets
+  100MB max-file-size / 110MB max-request-size.)* Remaining: override
+  MinIO credentials at deployment (`MINIO_ROOT_*` for the container,
+  `DOCCONTROL_STORAGE_ACCESS_KEY/SECRET_KEY` for the api) and **create a
+  dedicated MinIO user** for the api with read/write on the `doccontrol`
+  bucket only — the api should never use the root account. Serve MinIO
+  behind TLS; switch the api's storage endpoint to https accordingly.
+- [x] **Daily-sweep audit story (resolved 2026-09-14)**: the owner approved
+  writing a trigger-level audit row for scheduled (not just manual) runs —
+  implemented same day in `WorkflowNotificationJob.runScheduled`: the same
+  `daily_sweep`/`triggered` shape as the manual endpoint's row, in its own
+  transaction after the sweep, as the System user, with
+  `triggered_by: scheduled` (vs the manual row's `admin`);
+  `WorkflowNotificationJobTests.scheduledRunWritesTriggerAuditRow` covers
+  it (106 tests green). Item-level effects remain audited as before; the
+  `/audit-log`+`/audit-log/export` endpoints (Sprint 4) are the intended
+  way to produce this evidence.
 - [ ] **Graph accepts unroutable recipients at submission — delivery
   failures bounce asynchronously to the sender mailbox.** A
   `notification_log` row with channel `'graph'` proves Graph accepted the

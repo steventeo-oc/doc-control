@@ -50,6 +50,13 @@ export default function DocumentsPage() {
     setPageNumber(0);
   }, [view]);
   useEffect(() => {
+    // '+ New document' deep link from the dashboard's empty My Documents
+    // card (?create=1) — creation itself stays on this page
+    if (searchParams.get('create') === '1' && view !== 'trash') {
+      setShowCreate(true);
+    }
+  }, [searchParams, view]);
+  useEffect(() => {
     // includeInactive: filter dropdowns must offer deactivated types and
     // departments so existing documents referencing them stay searchable
     // (lookup admin plan-back F2); the creation form filters to active.

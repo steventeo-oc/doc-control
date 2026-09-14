@@ -127,7 +127,9 @@ export default function Layout() {
             ))}
           </aside>
         )}
-        <main className="content">
+        {/* The dashboard uses the full viewport width (round-two polish);
+            the section pages keep the centered 1100px reading width. */}
+        <main className={'content' + (section === 'dashboard' ? ' content-wide' : '')}>
           <Outlet />
         </main>
       </div>

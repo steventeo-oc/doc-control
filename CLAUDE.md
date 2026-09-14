@@ -151,13 +151,24 @@
   `?owner=me`) — explicit `/dashboard` route with index + catch-all
   redirecting there, Dashboard first in the nav, zero backend changes;
   the activities feed stays excluded (Sprint 4 audit-log read API). A
-  hands-on polish round (owner feedback, same day): equal card heights
-  with the footer deep links on one shared bottom edge, darker `.muted`
-  secondary text (`#55677a`), the account-menu identity no longer
-  clipped in the topbar corner (nowrap + flex-shrink: 0), and live
-  counts in the footer links ("All my documents (17) →"); the space
-  below the cards is deliberate placeholder for the deferred
-  activities-feed dashlet — no filler content.
+  hands-on polish round (owner feedback, same day) was superseded the
+  same day by a round-two restructure, also from owner review: the
+  dashboard is now TWO cards — a merged **Tasks** card (approvals +
+  acknowledgments in one deadline-sorted queue with Approval/
+  Acknowledgment kind badges, mirroring the Tasks section) and **My
+  Documents** — with lists capped at 384px scrolling internally (no
+  stretch-to-tallest), the 1100px content cap lifted on the dashboard
+  only (`content-wide`), compact one-line rows with small inline badges,
+  the department as a clear badge on acknowledgment rows (approval rows
+  carry it inside the document number — `/my/tasks` has no department
+  field; a one-field DTO addition would change that), empty states with
+  small icons, and a '+ New document' CTA on the empty My Documents card
+  only (`/documents?create=1` opens the creation form there). Carried
+  over from the polish round: darker `.muted` text (`#55677a`), the
+  unclipped account-menu identity (nowrap + flex-shrink: 0), and live
+  counts in the footer links ("All my tasks (1) →"). The space below the
+  cards is deliberate placeholder for the deferred activities-feed
+  dashlet — no filler content.
   The compose stack was rebuilt from main the same day and the **full
   smoke (sections 0–15) passes against it** — which required fixing the
   smoke script's user creation (commit aa91c1c), stale since the levels

@@ -389,14 +389,21 @@ button.danger {
   padding-bottom: 8px;
 }
 
-/* Dashboard (Dashboard plan-back): three read-only dashlets on the landing
-   page. 'dashboard' has no sections entry, so the page renders full-width. */
+/* Dashboard (Dashboard plan-back; round-two structure per owner review):
+   two dashlets on the landing page. 'dashboard' has no sections entry, so
+   the page renders full-width, and .content-wide lifts the page's 1100px
+   cap there (Layout adds the class for the dashboard section only). */
+.content-wide {
+  max-width: none;
+}
+
 .dash-grid {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
-  /* cards stretch to the tallest in the row (default) so the footer
-     deep links share one bottom edge regardless of content above */
+  /* independent card heights: an empty card stays short; a long queue is
+     capped by the list's max-height + internal scroll instead of stretching */
+  align-items: start;
 }
 
 .dashlet {
@@ -416,11 +423,16 @@ button.danger {
   list-style: none;
   margin: 0;
   padding: 0;
+  /* fixed ceiling: the card never grows past ~8 compact rows; more rows
+     scroll inside the card, keeping the footer and the page stable */
+  max-height: 384px;
+  overflow-y: auto;
 }
 
 .dashlet .dash-list li {
-  padding: 8px 0;
+  padding: 6px 0;
   border-bottom: 1px solid #edf1f4;
+  line-height: 1.5;
 }
 
 .dashlet .dash-list li:last-child {
@@ -428,9 +440,55 @@ button.danger {
 }
 
 .dashlet .dash-more {
-  /* anchored to the card's bottom edge: auto margin absorbs the leftover
-     height; padding keeps the 12px gap even on the tallest card */
+  /* follows the (capped) content; the gap holds on short and tall cards */
   margin: 0;
   margin-top: auto;
   padding-top: 12px;
+}
+
+.dash-empty {
+  display: flex;
+  align-items: flex-start;
+  gap: 10px;
+  color: #55677a;
+  font-size: 13px;
+  margin: 8px 0 4px;
+}
+
+.dash-empty-icon {
+  flex-shrink: 0;
+  opacity: 0.75;
+  margin-top: 1px;
+}
+
+.dash-cta {
+  display: inline-block;
+  margin-top: 4px;
+  padding: 6px 14px;
+  border: 1px solid #1a6fb5;
+  border-radius: 4px;
+  background: #1a6fb5;
+  color: #fff;
+  text-decoration: none;
+}
+
+.dash-cta:hover {
+  background: #155a94;
+}
+
+/* dashboard row badges: the row's kind (approval vs acknowledgment), the
+   department as a clear label, and the version as a small inline chip */
+.badge.kind-approval {
+  background: #e3edfb;
+  color: #1d4f8f;
+}
+
+.badge.kind-acknowledgment {
+  background: #e2f2e5;
+  color: #1d5c26;
+}
+
+.badge.dept {
+  background: #eef3f8;
+  color: #16324f;
 }

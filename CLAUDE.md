@@ -105,6 +105,27 @@
   LookupsPage members panel; /auth/me carries levels.
   DepartmentLevelMatrixTests / ApprovalGateLevelTests /
   DepartmentMemberTests cover it; 102 tests green; browser-verified.
+  **Navigation restructure (plan-back approved in full 2026-09-14,
+  implemented same day in four commits 151ae64 / 91274eb / 814c943 /
+  448eb53 — `Nav_Restructure_Design_PlanBack.md`)**: top nav Documents |
+  Tasks | Departments | Admin + Account menu (identity with levels,
+  Change password via the self-service endpoint, Log out); per-section
+  sidebars via `?view=` parameters (F1 — avoids the `/documents/:id`
+  collision); Documents views All/Mine (`owner=me`)/Trash
+  (`trashed=true`, rows restorable); Tasks panes My Approvals / Pending
+  My Acknowledgment (`GET /my/acknowledgments` reverse query); the new
+  Departments section (own departments in the sidebar, admins see all;
+  detail page = info + documents + the extracted Members panel for
+  Manager/Admin, read-only otherwise — department info resolves from
+  /auth/me and the includeInactive list, deliberately no
+  GET /departments/{id}); Admin split into Types/Tiers/Users
+  (LookupsPage deleted); redirects `/lookups` → `/admin/types` and
+  `/users` → `/admin/users`. Backend additions were three (F2), all
+  additive. Mid-build finds: the client already had an acknowledgmentApi
+  object (pending merged, not duplicated) and documentApi already had
+  restore/softDelete. DocumentListFilterTests + MyAcknowledgmentsTests
+  cover the backend; 105 tests green; browser-verified (nav, sidebars,
+  trash, acknowledgment pane, Departments per level, redirects).
 - **Pending (owner)**: nothing operational outstanding. Standing habit
   (owner, 2026-09-11): full smoke runs go with
   `DOCCONTROL_NOTIFICATION_ENABLED=false` in `.env` so the placeholder
@@ -113,14 +134,15 @@
   the 2026-09-11 run). Secrets hygiene closed 2026-09-11: the Azure
   client secret and the WSL sudo password were both rotated (the new
   secret lives only in the gitignored `.env`).
-- **In progress / next**: nothing mid-flight — department membership
-  levels are complete (see Done above); the compose stack runs the
-  current build with V8 applied (all existing memberships retrofitted
-  to COLLABORATOR). Next up per the roadmap: the "Later" backlog and the
-  remaining go-live checklist decisions. Dev-data note: the owner's
-  manual gap-testing left a few rows deactivated (document types DWG and
-  WI, departments "it" and SMK1788933740) — they are one Activate click
-  away on the Lookups page; QA was deleted and restored during
+- **In progress / next**: nothing mid-flight — the navigation
+  restructure is complete (see Done above); the compose stack runs the
+  current build (V8 applied, memberships at COLLABORATOR). Next up per
+  the roadmap: the "Later" backlog (now including the Dashboard, whose
+  nav slot exists) and the remaining go-live checklist decisions.
+  Dev-data note: the owner's manual gap-testing left a few rows
+  deactivated (document types DWG and WI, departments "it" and
+  SMK1788933740) — they are one Activate click away on Admin > Tiers /
+  the Departments section; QA was deleted and restored during
   verification (its audit trail records the cycle). The go-live
   checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
@@ -136,7 +158,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 102 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 105 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL

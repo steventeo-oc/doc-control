@@ -3,5 +3,14 @@
   "references": [
     { "path": "./tsconfig.app.json" },
     { "path": "./tsconfig.node.json" }
-  ]
+  ],
+  // The shadcn CLI reads this file (not tsconfig.app.json) to resolve the
+  // aliases it writes files against — without paths here it created a
+  // literal "@/" directory (found in Phase 0).
+  "compilerOptions": {
+    "baseUrl": ".",
+    "paths": {
+      "@/*": ["./src/*"]
+    }
+  }
 }

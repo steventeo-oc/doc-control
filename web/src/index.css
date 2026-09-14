@@ -1,3 +1,65 @@
+/* Design-system scaffold (design plan-back, Phase 0): Tailwind v4 with
+   preflight deliberately OMITTED (F1) — theme + utilities only, so the
+   hand-rolled rules below keep rendering everything exactly as before
+   until each page migrates. The token set is defined here but unused
+   until then; the final phase flips preflight on and deletes the dead
+   rules in one commit. */
+@layer theme, base, components, utilities;
+@import "tailwindcss/theme.css" layer(theme);
+@import "tailwindcss/utilities.css" layer(utilities);
+@import "@fontsource-variable/inter";
+
+/* shadcn/ui semantic tokens (plan-back §3): one light theme, meaning-
+   carrying accents (success/warning/info/destructive as first-class
+   tokens alongside shadcn's defaults). Color→meaning mappings from the
+   old CSS are preserved verbatim when pages migrate. */
+@theme inline {
+  --color-background: var(--background);
+  --color-foreground: var(--foreground);
+  --color-card: var(--card);
+  --color-card-foreground: var(--card-foreground);
+  --color-primary: var(--primary);
+  --color-primary-foreground: var(--primary-foreground);
+  --color-secondary: var(--secondary);
+  --color-secondary-foreground: var(--secondary-foreground);
+  --color-muted: var(--muted);
+  --color-muted-foreground: var(--muted-foreground);
+  --color-accent: var(--accent);
+  --color-accent-foreground: var(--accent-foreground);
+  --color-destructive: var(--destructive);
+  --color-success: var(--success);
+  --color-warning: var(--warning);
+  --color-info: var(--info);
+  --color-border: var(--border);
+  --color-input: var(--input);
+  --color-ring: var(--ring);
+  --radius-lg: var(--radius);
+  --font-sans: "Inter Variable", system-ui, -apple-system, "Segoe UI", Roboto, sans-serif;
+}
+
+:root {
+  --background: #f8fafc;       /* slate-50 */
+  --foreground: #0f172a;       /* slate-900 */
+  --card: #ffffff;
+  --card-foreground: #0f172a;
+  --primary: #1d4ed8;          /* blue-700 family — heir of #1a6fb5 */
+  --primary-foreground: #eff6ff;
+  --secondary: #f1f5f9;        /* slate-100 */
+  --secondary-foreground: #0f172a;
+  --muted: #f1f5f9;
+  --muted-foreground: #64748b; /* slate-500 */
+  --accent: #e2e8f0;           /* slate-200 */
+  --accent-foreground: #0f172a;
+  --destructive: #dc2626;      /* red-600 */
+  --success: #16a34a;          /* green-600 */
+  --warning: #d97706;          /* amber-600 */
+  --info: #2563eb;             /* blue-600 */
+  --border: #e2e8f0;           /* slate-200 */
+  --input: #e2e8f0;
+  --ring: rgba(29, 78, 216, 0.4);
+  --radius: 0.5rem;
+}
+
 * {
   box-sizing: border-box;
 }

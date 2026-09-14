@@ -166,6 +166,15 @@
   department gap: **`/my/tasks` now carries `departmentCode`**
   (WorkflowTaskDto + toTaskDto + the SPA type, 106 tests green), so
   approval rows show the same department badge as acknowledgment rows.
+  The next candidate is drafted and **awaiting owner approval**:
+  `Activity_Feed_Design_PlanBack.md` (2026-09-14) — a
+  permission-scoped audit-log query (Mine / My Departments for all,
+  Company for admins), the Sprint 4 `GET /audit-log` + `/audit-log/export`
+  endpoints that close the go-live checklist item, a real dashboard
+  Activity card (my activity, 7 days, top 5) replacing the placeholder,
+  and a top-level `/activity` section (the plan-back's recommendation,
+  F4) — with migration V9 adding the `audit_log.department_id` column
+  the department scoping needs. **No code until the owner approves.**
   The compose stack was rebuilt from main the same day and the **full
   smoke (sections 0–15) passes against it** — which required fixing the
   smoke script's user creation (commit aa91c1c), stale since the levels

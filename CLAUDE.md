@@ -145,30 +145,27 @@
   `application.yml`, and **scheduled sweep runs write the same
   trigger-level `daily_sweep` audit row as manual runs** (System user,
   `triggered_by: scheduled`; 106 tests green). The **Dashboard landing
-  page is implemented (commit f42abf8) and browser-verified** per the
-  approved plan-back (`Dashboard_Design_PlanBack.md`): exactly three
-  dashlets — My Approvals, My Acknowledgments, My Documents (via
-  `?owner=me`) — explicit `/dashboard` route with index + catch-all
-  redirecting there, Dashboard first in the nav, zero backend changes;
-  the activities feed stays excluded (Sprint 4 audit-log read API). A
-  hands-on polish round (owner feedback, same day) was superseded the
-  same day by a round-two restructure, also from owner review: the
-  dashboard is now TWO cards — a merged **Tasks** card (approvals +
-  acknowledgments in one deadline-sorted queue with Approval/
-  Acknowledgment kind badges, mirroring the Tasks section) and **My
-  Documents** — with lists capped at 384px scrolling internally (no
-  stretch-to-tallest), the 1100px content cap lifted on the dashboard
-  only (`content-wide`), compact one-line rows with small inline badges,
-  the department as a clear badge on acknowledgment rows (approval rows
-  carry it inside the document number — `/my/tasks` has no department
-  field; a one-field DTO addition would change that), empty states with
-  small icons, and a '+ New document' CTA on the empty My Documents card
-  only (`/documents?create=1` opens the creation form there). Carried
-  over from the polish round: darker `.muted` text (`#55677a`), the
-  unclipped account-menu identity (nowrap + flex-shrink: 0), and live
-  counts in the footer links ("All my tasks (1) →"). The space below the
-  cards is deliberate placeholder for the deferred activities-feed
-  dashlet — no filler content.
+  page** is implemented and browser-verified (plan-back
+  `Dashboard_Design_PlanBack.md`, approved 2026-09-14, plus two
+  owner-review rounds the same day): explicit `/dashboard` route (index
+  + catch-all redirect there, Dashboard first in the nav, `content-wide`
+  lifts the 1100px cap on this page only), a **fixed 2×2 grid** — merged
+  **Tasks** card (approvals + acknowledgments, one deadline-sorted queue,
+  Approval/Acknowledgment kind badges), **My Documents** (`owner=me`),
+  **Departments** (own memberships, all departments for admins — the
+  same sources and inactive marking as the Layout sidebar; rows link to
+  the department detail pages), and the **Activity placeholder** (muted,
+  dashed, no icon, no data fetching, no footer link — deliberately reads
+  as "not built yet"; the real feed needs the Sprint 4 audit-log read
+  API). Compact one-line rows with small inline badges; lists capped at
+  384px with internal scroll (no stretch-to-tallest); empty states with
+  small icons; '+ New document' CTA on the empty documents card only
+  (`/documents?create=1` opens the creation form there); live counts in
+  the footer links; darker `.muted` text (`#55677a`); unclipped
+  account-menu identity. Round three also resolved the flagged
+  department gap: **`/my/tasks` now carries `departmentCode`**
+  (WorkflowTaskDto + toTaskDto + the SPA type, 106 tests green), so
+  approval rows show the same department badge as acknowledgment rows.
   The compose stack was rebuilt from main the same day and the **full
   smoke (sections 0–15) passes against it** — which required fixing the
   smoke script's user creation (commit aa91c1c), stale since the levels

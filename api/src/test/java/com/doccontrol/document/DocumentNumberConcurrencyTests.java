@@ -1,5 +1,6 @@
 package com.doccontrol.document;
 
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
 import com.doccontrol.identity.UserDepartmentId;
@@ -84,14 +85,14 @@ class DocumentNumberConcurrencyTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(creatorId, qa.getId()));
         departmentMembership.setUser(creator);
-        departmentMembership.setDepartment(qa);
+        departmentMembership.setDepartment(qa);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
 
         // the creator must be a member of the temp department it creates in
         UserDepartment creatorDeptMembership = new UserDepartment();
         creatorDeptMembership.setId(new UserDepartmentId(creatorId, deptId));
         creatorDeptMembership.setUser(creator);
-        creatorDeptMembership.setDepartment(departmentRepository.findById(deptId).orElseThrow());
+        creatorDeptMembership.setDepartment(departmentRepository.findById(deptId).orElseThrow());        creatorDeptMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(creatorDeptMembership);
 
         Authentication creatorAuth = new UsernamePasswordAuthenticationToken(

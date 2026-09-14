@@ -57,7 +57,7 @@ public class DocumentService {
     private final DocumentTypeRepository documentTypeRepository;
     private final DepartmentRepository departmentRepository;
     private final UserRepository userRepository;
-    private final com.doccontrol.identity.UserDepartmentRepository userDepartmentRepository;
+    private final com.doccontrol.identity.DepartmentAccessService departmentAccessService;
     private final DocumentSequenceService documentSequenceService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
@@ -71,7 +71,7 @@ public class DocumentService {
                            DocumentTypeRepository documentTypeRepository,
                            DepartmentRepository departmentRepository,
                            UserRepository userRepository,
-                           com.doccontrol.identity.UserDepartmentRepository userDepartmentRepository,
+                           com.doccontrol.identity.DepartmentAccessService departmentAccessService,
                            DocumentSequenceService documentSequenceService,
                            AuditService auditService,
                            CurrentUserProvider currentUserProvider,
@@ -84,7 +84,7 @@ public class DocumentService {
         this.documentTypeRepository = documentTypeRepository;
         this.departmentRepository = departmentRepository;
         this.userRepository = userRepository;
-        this.userDepartmentRepository = userDepartmentRepository;
+        this.departmentAccessService = departmentAccessService;
         this.documentSequenceService = documentSequenceService;
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
@@ -102,8 +102,8 @@ public class DocumentService {
     public DocumentDto create(Integer documentTypeId, Integer departmentId, String name) {
         DocumentType type = requireActiveType(documentTypeId);
         Department department = requireActiveDepartment(departmentId);
-        // Phase 2a: only members of a department (or admins) create in it
-        requireDepartmentMember(department);
+        // Plan-back section 1: every level except CONSUMER may create here
+        requireCanCreateIn(department);
 
         // The number allocation and the document insert share one transaction:
         // the counter row lock guarantees distinct numbers under concurrency,
@@ -135,29 +135,34 @@ public class DocumentService {
         return findVisible(id);
     }
 
-    /** Owner-or-admin gate shared with the version endpoints. */
-    public void requireCanModify(Document document) {
-        if (!canModify(document)) {
-            throw new ForbiddenException("Only the document owner or an admin can modify this document.");
+    /** Edit gate (metadata, versions, approval starts) — plan-back section 1. */
+    public void requireCanEdit(Document document) {
+        if (!canEdit(document)) {
+            throw new ForbiddenException(
+                    "Only a Manager or Collaborator of department '"
+                            + document.getDepartment().getCode()
+                            + "' (or the document's owner at Contributor level) can modify this document.");
         }
     }
 
-    /**
-     * Phase 2a permission rule: admins are unrestricted; otherwise only
-     * members of the document's department may modify it (create/edit/upload/
-     * trash). Ownership no longer grants edit rights by itself — ownership
-     * transfers are restricted to department members, so owners remain
-     * members.
-     *
-     * Extension seam: named-user overrides (roadmap #3, "Later") plug in here
-     * as an additional clause backed by an override table alongside this
-     * department rule — not a replacement of it.
-     */
-    public boolean canModify(Document document) {
-        if (currentUserProvider.isAdmin()) {
-            return true;
+    public boolean canEdit(Document document) {
+        return departmentAccessService.canEdit(
+                document.getOwner().getId(), document.getDepartment().getId());
+    }
+
+    /** Manage gate (soft-delete/restore) — Collaborators and Contributors on their own documents only. */
+    public void requireCanManageDocument(Document document) {
+        if (!canManageDocument(document)) {
+            throw new ForbiddenException(
+                    "Only a Manager of department '"
+                            + document.getDepartment().getCode()
+                            + "' (or the document's owner) can delete or restore this document.");
         }
-        return isDepartmentMember(document.getDepartment().getId());
+    }
+
+    public boolean canManageDocument(Document document) {
+        return departmentAccessService.canManageDocument(
+                document.getOwner().getId(), document.getDepartment().getId());
     }
 
     @Transactional(readOnly = true)
@@ -229,7 +234,7 @@ public class DocumentService {
     @Transactional
     public DocumentDto update(Integer id, UpdateDocumentRequest request) {
         Document document = findVisible(id);
-        requireCanModify(document);
+        requireCanEdit(document);
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
@@ -243,11 +248,18 @@ public class DocumentService {
             User newOwner = userRepository.findById(request.ownerUserId())
                     .filter(User::isActive)
                     .orElseThrow(() -> new NotFoundException("User " + request.ownerUserId() + " not found."));
-            // keep the invariant that the owner can edit the document: the new
-            // owner must belong to the document's department
-            if (!isDepartmentMember(newOwner.getId(), document.getDepartment().getId())) {
+            // keep the invariant that the owner can work with the document:
+            // the new owner must hold at least CONTRIBUTOR in the department
+            // — a Consumer owning a document could never edit it (plan-back F6)
+            com.doccontrol.identity.MembershipLevel newOwnerLevel = departmentAccessService
+                    .levelOf(newOwner.getId(), document.getDepartment().getId())
+                    .orElseThrow(() -> new ForbiddenException(
+                            "The new owner must be a member of department '"
+                                    + document.getDepartment().getCode() + "'."));
+            if (newOwnerLevel == com.doccontrol.identity.MembershipLevel.CONSUMER) {
                 throw new ForbiddenException(
-                        "The new owner must be a member of department '" + document.getDepartment().getCode() + "'.");
+                        "The new owner must hold at least Contributor level in department '"
+                                + document.getDepartment().getCode() + "'.");
             }
             before.put("owner_user_id", document.getOwner().getId());
             after.put("owner_user_id", newOwner.getId());
@@ -265,7 +277,7 @@ public class DocumentService {
     @Transactional
     public void delete(Integer id) {
         Document document = findVisible(id);
-        requireCanModify(document);
+        requireCanManageDocument(document);
 
         if (document.getDeletedAt() == null) {
             document.setDeletedAt(LocalDateTime.now());
@@ -276,7 +288,7 @@ public class DocumentService {
     @Transactional
     public DocumentDto restore(Integer id) {
         Document document = findVisible(id);
-        requireCanModify(document);
+        requireCanManageDocument(document);
 
         if (document.getDeletedAt() != null) {
             document.setDeletedAt(null);
@@ -521,19 +533,10 @@ public class DocumentService {
         return currentUserProvider.getCurrentUserDepartmentIds();
     }
 
-    private void requireDepartmentMember(Department department) {
-        if (!currentUserProvider.isAdmin() && !isDepartmentMember(department.getId())) {
+    private void requireCanCreateIn(Department department) {
+        if (!departmentAccessService.canCreate(department.getId())) {
             throw new ForbiddenException("Only members of department '" + department.getCode()
-                    + "' can create documents in it.");
+                    + "' at Contributor level or above can create documents in it.");
         }
-    }
-
-    private boolean isDepartmentMember(Integer departmentId) {
-        return isDepartmentMember(currentUserProvider.getCurrentUserId(), departmentId);
-    }
-
-    private boolean isDepartmentMember(Integer userId, Integer departmentId) {
-        return userDepartmentRepository.existsById(
-                new com.doccontrol.identity.UserDepartmentId(userId, departmentId));
     }
 }

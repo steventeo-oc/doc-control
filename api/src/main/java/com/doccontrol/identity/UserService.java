@@ -81,7 +81,7 @@ public class UserService {
         user.setActive(true);
         userRepository.save(user);
 
-        replaceDepartments(user, request.departmentIds());
+        replaceDepartments(user, request.departments());
         for (Role role : roles) {
             UserRole membership = new UserRole();
             membership.setId(new UserRoleId(user.getId(), role.getId()));
@@ -93,7 +93,7 @@ public class UserService {
 
         auditService.record("user", user.getId(), "created", Map.of(
                 "email", user.getEmail(),
-                "departments", departmentCodes(user),
+                "departments", departmentSummaries(user),
                 "roles", roleNames));
 
         return UserDto.from(user);
@@ -116,13 +116,13 @@ public class UserService {
             after.put("name", request.name());
             user.setName(request.name());
         }
-        if (request.departmentIds() != null) {
-            List<String> beforeCodes = departmentCodes(user);
-            replaceDepartments(user, request.departmentIds());
-            List<String> afterCodes = departmentCodes(user);
-            if (!beforeCodes.equals(afterCodes)) {
-                before.put("departments", beforeCodes);
-                after.put("departments", afterCodes);
+        if (request.departments() != null) {
+            List<String> beforeSummaries = departmentSummaries(user);
+            replaceDepartments(user, request.departments());
+            List<String> afterSummaries = departmentSummaries(user);
+            if (!beforeSummaries.equals(afterSummaries)) {
+                before.put("departments", beforeSummaries);
+                after.put("departments", afterSummaries);
             }
         }
         if (request.adUsername() != null && !request.adUsername().equals(user.getAdUsername())) {
@@ -202,27 +202,33 @@ public class UserService {
                 "self_service", selfService));
     }
 
-    /** Full replacement of the user's department memberships (Phase 2a). */
-    private void replaceDepartments(User user, List<Integer> departmentIds) {
+    /**
+     * Full replacement of the user's department memberships (Phase 2a),
+     * now carrying each membership's explicit level (plan-back F1) — the
+     * level comes from the request and is never defaulted.
+     */
+    private void replaceDepartments(User user, List<MembershipInput> departments) {
         for (UserDepartment membership : new ArrayList<>(user.getDepartments())) {
             userDepartmentRepository.delete(membership);
         }
         user.getDepartments().clear();
-        for (Integer departmentId : departmentIds.stream().distinct().toList()) {
-            Department department = departmentRepository.findById(departmentId)
-                    .orElseThrow(() -> new NotFoundException("Department " + departmentId + " not found."));
+        for (MembershipInput input : departments.stream().distinct().toList()) {
+            Department department = departmentRepository.findById(input.departmentId())
+                    .orElseThrow(() -> new NotFoundException("Department " + input.departmentId() + " not found."));
             UserDepartment membership = new UserDepartment();
             membership.setId(new UserDepartmentId(user.getId(), department.getId()));
             membership.setUser(user);
             membership.setDepartment(department);
+            membership.setLevel(input.level());
             userDepartmentRepository.save(membership);
             user.getDepartments().add(membership);
         }
     }
 
-    private List<String> departmentCodes(User user) {
+    private List<String> departmentSummaries(User user) {
         return user.getDepartments().stream()
-                .map(membership -> membership.getDepartment().getCode())
+                .map(membership -> membership.getDepartment().getCode()
+                        + ":" + membership.getLevel())
                 .sorted(Comparator.comparing(String::toString))
                 .toList();
     }

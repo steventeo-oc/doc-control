@@ -1,5 +1,7 @@
 package com.doccontrol.identity;
 
+import jakarta.validation.Valid;
+
 import java.util.List;
 
 /**
@@ -7,10 +9,11 @@ import java.util.List;
  * deliberately absent: it is the login identifier and must not drift.
  *
  * `roles` and `departments` use full-replacement semantics (the request
- * lists exactly what the account should hold). An admin cannot change their
- * own roles — same guard as self-deactivation, so a moment of carelessness
- * can't lock out the only account that can fix it.
+ * lists exactly what the account should hold); each department membership
+ * carries its level explicitly (plan-back F1). An admin cannot change
+ * their own roles — same guard as self-deactivation, so a moment of
+ * carelessness can't lock out the only account that can fix it.
  */
-public record UpdateUserRequest(String name, List<Integer> departmentIds, String adUsername,
+public record UpdateUserRequest(String name, List<@Valid MembershipInput> departments, String adUsername,
                                 Boolean active, List<String> roles) {
 }

@@ -3,6 +3,7 @@ package com.doccontrol.lookup;
 import com.doccontrol.audit.AuditLog;
 import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.auth.dto.LoginRequest;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
@@ -182,7 +183,7 @@ class LookupEndpointTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(user.getId(), qa.getId()));
         departmentMembership.setUser(user);
-        departmentMembership.setDepartment(qa);
+        departmentMembership.setDepartment(qa);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
         user.getDepartments().add(departmentMembership);
 

@@ -14,6 +14,7 @@ import com.doccontrol.document.DocumentVersion;
 import com.doccontrol.document.DocumentVersionDto;
 import com.doccontrol.document.DocumentVersionRepository;
 import com.doccontrol.document.DocumentVersionStatus;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
@@ -408,7 +409,7 @@ class WorkflowJobIdempotencyTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(user.getId(), department.getId()));
         departmentMembership.setUser(user);
-        departmentMembership.setDepartment(department);
+        departmentMembership.setDepartment(department);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
         user.getDepartments().add(departmentMembership);
 

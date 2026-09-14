@@ -96,6 +96,11 @@ public class AdminBootstrap implements ApplicationRunner {
         departmentMembership.setId(new UserDepartmentId(admin.getId(), department.getId()));
         departmentMembership.setUser(admin);
         departmentMembership.setDepartment(department);
+        // The admin's rights never derive from membership (isAdmin
+        // short-circuits everywhere); COLLABORATOR is the documented
+        // one-time retrofit level, applied explicitly since there is no
+        // default (plan-back F2).
+        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.save(departmentMembership);
 
         UserRole membership = new UserRole();

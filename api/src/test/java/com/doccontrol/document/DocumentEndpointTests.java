@@ -2,6 +2,7 @@ package com.doccontrol.document;
 
 import com.doccontrol.auth.dto.LoginRequest;
 import com.doccontrol.audit.AuditLogRepository;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
@@ -342,7 +343,7 @@ class DocumentEndpointTests {
         UserDepartment membership = new UserDepartment();
         membership.setId(new UserDepartmentId(user.getId(), department.getId()));
         membership.setUser(user);
-        membership.setDepartment(department);
+        membership.setDepartment(department);        membership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(membership);
     }
 
@@ -383,7 +384,7 @@ class DocumentEndpointTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(user.getId(), qa.getId()));
         departmentMembership.setUser(user);
-        departmentMembership.setDepartment(qa);
+        departmentMembership.setDepartment(qa);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
         user.getDepartments().add(departmentMembership);
 

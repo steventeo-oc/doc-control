@@ -7,6 +7,7 @@ import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.document.DocumentDto;
 import com.doccontrol.document.DocumentStatus;
 import com.doccontrol.document.DocumentVersionDto;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
@@ -407,7 +408,7 @@ class WorkflowEndpointTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(user.getId(), department.getId()));
         departmentMembership.setUser(user);
-        departmentMembership.setDepartment(department);
+        departmentMembership.setDepartment(department);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
 
         for (String roleName : roleNames) {

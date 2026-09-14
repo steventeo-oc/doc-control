@@ -43,7 +43,7 @@ public class DocumentVersionService {
                                      long size, InputStream content, String changeNotes,
                                      String changeReference) {
         Document document = documentService.requireVisible(documentId);
-        documentService.requireCanModify(document);
+        documentService.requireCanEdit(document);
 
         int versionNumber = versionRepository.findMaxVersionNumber(documentId) + 1;
 
@@ -85,7 +85,7 @@ public class DocumentVersionService {
     @Transactional(readOnly = true)
     public List<DocumentVersionDto> list(Integer documentId) {
         Document document = documentService.requireVisible(documentId);
-        if (documentService.canModify(document)) {
+        if (documentService.canEdit(document)) {
             return versionRepository.findAllByDocumentIdOrderByVersionNumberAsc(document.getId()).stream()
                     .map(DocumentVersionDto::from)
                     .toList();
@@ -116,7 +116,7 @@ public class DocumentVersionService {
 
     /**
      * Prepares a version download. The visibility check, and for original
-     * downloads the canModify gate plus the audit row, happen here in the
+     * downloads the canEdit gate plus the audit row, happen here in the
      * service layer (Phase 2e plan-back flags F2/F7); stamping is
      * WatermarkService's job. Deliberately a read-write transaction: the
      * original-download audit row is an INSERT, and Postgres rejects
@@ -127,7 +127,7 @@ public class DocumentVersionService {
         DocumentVersion version = findVisibleVersion(documentId, versionId);
         if (original) {
             Document document = version.getDocument();
-            if (!documentService.canModify(document)) {
+            if (!documentService.canEdit(document)) {
                 throw new ForbiddenException(
                         "Only members of the document's department (or an admin) can download the original file.");
             }
@@ -152,7 +152,7 @@ public class DocumentVersionService {
         // Non-owner/non-admin viewers only know about the version the public
         // sees — anything else 404s (existence not leaked), matching the
         // document-level visibility pattern.
-        if (!documentService.canModify(document)
+        if (!documentService.canEdit(document)
                 && document.getCurrentVersion() != null
                 && !versionId.equals(document.getCurrentVersion().getId())) {
             throw new NotFoundException("Version " + versionId + " not found.");

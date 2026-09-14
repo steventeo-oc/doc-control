@@ -4,6 +4,7 @@ import com.doccontrol.CsrfTestSupport;
 import com.doccontrol.auth.dto.LoginRequest;
 import com.doccontrol.document.DocumentDto;
 import com.doccontrol.document.DocumentVersionDto;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
@@ -145,7 +146,7 @@ class WatermarkDisabledTests {
         UserDepartment membership = new UserDepartment();
         membership.setId(new UserDepartmentId(user.getId(), department.getId()));
         membership.setUser(user);
-        membership.setDepartment(department);
+        membership.setDepartment(department);        membership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(membership);
         user.getDepartments().add(membership);
 

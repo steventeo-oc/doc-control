@@ -5,6 +5,7 @@ import com.doccontrol.audit.AuditLog;
 import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.auth.dto.LoginRequest;
 import com.doccontrol.document.DocumentRepository;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
 import com.doccontrol.identity.UserDepartmentId;
@@ -359,7 +360,7 @@ class LookupAdminTests {
         UserDepartment membership = new UserDepartment();
         membership.setId(new UserDepartmentId(user.getId(), departmentId));
         membership.setUser(user);
-        membership.setDepartment(departmentRepositoryById(departmentId));
+        membership.setDepartment(departmentRepositoryById(departmentId));        membership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(membership);
         return user;
     }

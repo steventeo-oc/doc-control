@@ -1,7 +1,5 @@
 package com.doccontrol.identity;
 
-import com.doccontrol.lookup.DepartmentDto;
-
 import java.util.Comparator;
 import java.util.List;
 
@@ -10,7 +8,7 @@ public record UserDto(
         Integer id,
         String name,
         String email,
-        List<DepartmentDto> departments,
+        List<DepartmentMembershipDto> departments,
         String adUsername,
         boolean active,
         List<String> roles) {
@@ -20,10 +18,9 @@ public record UserDto(
                 .map(userRole -> userRole.getRole().getName())
                 .sorted()
                 .toList();
-        List<DepartmentDto> departments = user.getDepartments().stream()
-                .map(UserDepartment::getDepartment)
-                .sorted(Comparator.comparing(com.doccontrol.lookup.Department::getCode))
-                .map(DepartmentDto::from)
+        List<DepartmentMembershipDto> departments = user.getDepartments().stream()
+                .sorted(Comparator.comparing(membership -> membership.getDepartment().getCode()))
+                .map(DepartmentMembershipDto::from)
                 .toList();
         return new UserDto(
                 user.getId(),

@@ -7,6 +7,7 @@ import com.doccontrol.document.Document;
 import com.doccontrol.document.DocumentDto;
 import com.doccontrol.document.DocumentRepository;
 import com.doccontrol.document.DocumentVersionDto;
+import com.doccontrol.identity.MembershipLevel;
 import com.doccontrol.identity.Role;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartment;
@@ -340,7 +341,7 @@ class AcknowledgmentTests {
         UserDepartment departmentMembership = new UserDepartment();
         departmentMembership.setId(new UserDepartmentId(user.getId(), department.getId()));
         departmentMembership.setUser(user);
-        departmentMembership.setDepartment(department);
+        departmentMembership.setDepartment(department);        departmentMembership.setLevel(MembershipLevel.COLLABORATOR);
         userDepartmentRepository.saveAndFlush(departmentMembership);
         user.getDepartments().add(departmentMembership);
 

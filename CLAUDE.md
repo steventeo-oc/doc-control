@@ -197,7 +197,16 @@
   (commit aa91c1c), stale since the levels work: the old `departmentIds`
   shape 400s against `departments:[{departmentId, level}]`, and the
   viewer now arrives as COLLABORATOR (a Consumer would also trip the F3b
-  reviewer rejection at the approval-start step).
+  reviewer rejection at the approval-start step). The next effort is
+  drafted and **awaiting owner approval — no code until reviewed**:
+  `Design_System_Redesign_PlanBack.md` (2026-09-14) — a purely
+  visual/structural redesign adopting Tailwind CSS v4 + shadcn/ui
+  (tokens in §3, component set in §4, page-by-page phases in §8 with a
+  **screenshot-review pause after each phase** — the owner reviews
+  rendered screenshots directly as the visual gate). Incremental
+  coexistence confirmed with the preflight-off-then-final-flip strategy
+  (F1); native dialogs and selects swap to Radix equivalents with
+  behavior preserved (F2/F3, decision on selects wanted at review).
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,

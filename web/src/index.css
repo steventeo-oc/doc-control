@@ -374,3 +374,42 @@ button.danger {
   border-bottom: 1px solid #dde5ec;
   padding-bottom: 8px;
 }
+
+/* Dashboard (Dashboard plan-back): three read-only dashlets on the landing
+   page. 'dashboard' has no sections entry, so the page renders full-width. */
+.dash-grid {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+  gap: 16px;
+  align-items: start;
+}
+
+.dashlet {
+  background: #fff;
+  border: 1px solid #dde4ea;
+  border-radius: 6px;
+  padding: 16px;
+}
+
+.dashlet h2 {
+  margin: 0 0 8px;
+}
+
+.dashlet .dash-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.dashlet .dash-list li {
+  padding: 8px 0;
+  border-bottom: 1px solid #edf1f4;
+}
+
+.dashlet .dash-list li:last-child {
+  border-bottom: none;
+}
+
+.dashlet .dash-more {
+  margin: 12px 0 0;
+}

@@ -2,6 +2,7 @@ import { Navigate, Route, Routes } from 'react-router-dom';
 import { useAuth } from './auth/AuthContext';
 import Layout from './components/Layout';
 import LoginPage from './pages/LoginPage';
+import DashboardPage from './pages/DashboardPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import TasksPage from './pages/TasksPage';
@@ -34,7 +35,11 @@ export default function App() {
           </Protected>
         }
       >
-        <Route index element={<Navigate to="/documents" replace />} />
+        {/* Dashboard landing page (plan-back F1/F4): an explicit /dashboard
+            path — overloading / would trip the Layout's || 'documents'
+            section fallback — with the index and catch-all pointing at it. */}
+        <Route index element={<Navigate to="/dashboard" replace />} />
+        <Route path="dashboard" element={<DashboardPage />} />
         <Route path="documents" element={<DocumentsPage />} />
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
@@ -47,7 +52,7 @@ export default function App() {
         <Route path="lookups" element={<Navigate to="/admin/types" replace />} />
         <Route path="users" element={<Navigate to="/admin/users" replace />} />
       </Route>
-      <Route path="*" element={<Navigate to="/documents" replace />} />
+      <Route path="*" element={<Navigate to="/dashboard" replace />} />
     </Routes>
   );
 }

@@ -5,12 +5,13 @@ import { lookupApi, userApi } from '../api/resources';
 import type { Department } from '../api/types';
 
 /**
- * The app shell (nav restructure plan-back section 1): top navigation with
- * the section set — Documents | Tasks | Departments | Admin — plus an
- * Account menu, and a per-section sidebar rendered from this config when
- * the active section has entries. The Departments sidebar is built from
- * the signed-in user's memberships; admins see every department (built on
- * the section page in piece 3).
+ * The app shell (nav restructure plan-back section 1; Dashboard added per
+ * the dashboard plan-back): top navigation with the section set —
+ * Dashboard | Documents | Tasks | Departments | Admin — plus an Account
+ * menu, and a per-section sidebar rendered from this config when the
+ * active section has entries (the dashboard has none and renders
+ * full-width). The Departments sidebar is built from the signed-in user's
+ * memberships; admins see every department.
  */
 type SectionItem = { label: string; to: string };
 
@@ -85,6 +86,7 @@ export default function Layout() {
       <header className="topbar">
         <span className="brand">Document Control</span>
         <nav>
+          <NavLink to="/dashboard">Dashboard</NavLink>
           <NavLink to="/documents">Documents</NavLink>
           <NavLink to="/tasks">Tasks</NavLink>
           <NavLink to="/departments">Departments</NavLink>

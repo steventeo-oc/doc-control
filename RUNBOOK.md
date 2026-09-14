@@ -27,7 +27,9 @@ wsl -u root bash -c "cd '/mnt/c/Users/Exp Local XYZ/Downloads/doc-control' && PO
 - **Why `-u root`:** passwordless `sudo` is not configured inside WSL — a
   `sudo docker ...` one-liner hangs forever waiting for a password.
   `wsl -u root` runs the same thing as root with no prompt. Don't pipe a
-  password; you never need to.
+  password; you never need to. (If interactive `sudo` is ever required,
+  the password is recorded in the gitignored `.env` — keep it out of
+  tracked files.)
 
 ### Keeping the stack alive (WSL idle shutdown)
 

@@ -136,7 +136,9 @@
   `true` and `docker compose up -d api` afterwards (done this way for
   the 2026-09-11 run). Secrets hygiene closed 2026-09-11: the Azure
   client secret and the WSL sudo password were both rotated (the new
-  secret lives only in the gitignored `.env`).
+  secret lives only in the gitignored `.env`). The WSL sudo password was
+  re-shared in chat on 2026-09-14 and is recorded in the gitignored
+  `.env` (never in tracked files; `wsl -u root` still avoids needing it).
 - **In progress / next**: nothing mid-flight. 2026-09-14 session (after
   the nav restructure): two go-live checklist items resolved — the
   upload limit decided by the owner at **100MB/110MB** now in
@@ -148,7 +150,14 @@
   dashlets — My Approvals, My Acknowledgments, My Documents (via
   `?owner=me`) — explicit `/dashboard` route with index + catch-all
   redirecting there, Dashboard first in the nav, zero backend changes;
-  the activities feed stays excluded (Sprint 4 audit-log read API).
+  the activities feed stays excluded (Sprint 4 audit-log read API). A
+  hands-on polish round (owner feedback, same day): equal card heights
+  with the footer deep links on one shared bottom edge, darker `.muted`
+  secondary text (`#55677a`), the account-menu identity no longer
+  clipped in the topbar corner (nowrap + flex-shrink: 0), and live
+  counts in the footer links ("All my documents (17) →"); the space
+  below the cards is deliberate placeholder for the deferred
+  activities-feed dashlet — no filler content.
   The compose stack was rebuilt from main the same day and the **full
   smoke (sections 0–15) passes against it** — which required fixing the
   smoke script's user creation (commit aa91c1c), stale since the levels

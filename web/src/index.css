@@ -279,7 +279,9 @@ button.danger {
 }
 
 .muted {
-  color: #7b8a99;
+  /* #55677a matches the app's secondary text elsewhere (~5:1 on white);
+     the earlier #7b8a99 sat near 3:1 — too faint for dashlet metadata */
+  color: #55677a;
   font-size: 12px;
 }
 
@@ -339,11 +341,23 @@ button.danger {
 .account-menu {
   position: relative;
   color: #fff;
+  /* the identity (name + email) must never be squeezed or clipped by the
+     fixed-height topbar flex row — the nav (flex: 1) absorbs the squeeze */
+  flex-shrink: 0;
+  white-space: nowrap;
 }
 
 .account-menu summary {
   cursor: pointer;
   list-style: none;
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 6px 0 6px 12px;
+}
+
+.account-menu summary small {
+  opacity: 0.75;
 }
 
 .account-menu summary::-webkit-details-marker {
@@ -381,7 +395,8 @@ button.danger {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
   gap: 16px;
-  align-items: start;
+  /* cards stretch to the tallest in the row (default) so the footer
+     deep links share one bottom edge regardless of content above */
 }
 
 .dashlet {
@@ -389,6 +404,8 @@ button.danger {
   border: 1px solid #dde4ea;
   border-radius: 6px;
   padding: 16px;
+  display: flex;
+  flex-direction: column;
 }
 
 .dashlet h2 {
@@ -411,5 +428,9 @@ button.danger {
 }
 
 .dashlet .dash-more {
-  margin: 12px 0 0;
+  /* anchored to the card's bottom edge: auto margin absorbs the leftover
+     height; padding keeps the 12px gap even on the tallest card */
+  margin: 0;
+  margin-top: auto;
+  padding-top: 12px;
 }

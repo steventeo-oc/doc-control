@@ -53,7 +53,10 @@ function Dashlet(props: {
       {props.loaded && props.count === 0 && <p className="muted">{props.empty}</p>}
       {props.loaded && props.count !== null && props.count > 0 && props.children}
       <p className="dash-more">
-        <Link to={props.moreTo}>{props.moreLabel} →</Link>
+        <Link to={props.moreTo}>
+          {props.moreLabel}
+          {props.count !== null && ` (${props.count})`} →
+        </Link>
       </p>
     </section>
   );

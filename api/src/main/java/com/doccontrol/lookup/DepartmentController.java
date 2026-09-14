@@ -4,6 +4,7 @@ import jakarta.validation.Valid;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PatchMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
@@ -52,6 +53,19 @@ public class DepartmentController {
     @GetMapping("/{id}/usage")
     public DepartmentUsageDto usage(@PathVariable Integer id) {
         return departmentService.usage(id);
+    }
+
+    /** Manager self-service (department levels plan-back F5): members + levels. */
+    @GetMapping("/{id}/members")
+    public List<DepartmentMemberDto> members(@PathVariable Integer id) {
+        return departmentService.members(id);
+    }
+
+    @PatchMapping("/{id}/members/{userId}")
+    public DepartmentMemberDto updateMemberLevel(@PathVariable Integer id,
+                                                 @PathVariable Integer userId,
+                                                 @Valid @RequestBody UpdateMemberLevelRequest request) {
+        return departmentService.updateMemberLevel(id, userId, request);
     }
 
     @PostMapping

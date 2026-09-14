@@ -59,6 +59,14 @@ public class SecurityConfig {
                         "/document-tiers", "/document-tiers/**",
                         "/document-types", "/document-types/**",
                         "/departments", "/departments/**").authenticated()
+                // department member management (levels plan-back F5): the
+                // Manager-of-this-department check is data-dependent, so the
+                // route admits any authenticated user and the service
+                // enforces canManageMembers
+                .requestMatchers(org.springframework.http.HttpMethod.GET,
+                        "/departments/*/members").authenticated()
+                .requestMatchers(org.springframework.http.HttpMethod.PATCH,
+                        "/departments/*/members/*").authenticated()
                 // remaining writes on lookup resources are admin-only
                 .requestMatchers("/document-tiers/**", "/document-types/**", "/departments/**")
                     .hasRole("ADMIN")

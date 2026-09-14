@@ -3,13 +3,17 @@ package com.doccontrol.lookup;
 import com.doccontrol.audit.AuditService;
 import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.DeletionBlockedException;
+import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
 import com.doccontrol.document.DocumentRepository;
+import com.doccontrol.identity.DepartmentAccessService;
 import com.doccontrol.identity.UserDepartment;
+import com.doccontrol.identity.UserDepartmentId;
 import com.doccontrol.identity.UserDepartmentRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
+import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
@@ -19,7 +23,8 @@ import java.util.Map;
  * a data change, and this service is exactly that — no code changes anywhere
  * else when a new department appears. Deactivation is the lifecycle for
  * anything referenced; hard delete is only for rows nothing points at
- * (lookup admin plan-back F1–F4).
+ * (lookup admin plan-back F1–F4). Member level management is the Manager
+ * self-service surface (department levels plan-back F5).
  */
 @Service
 public class DepartmentService {
@@ -28,17 +33,20 @@ public class DepartmentService {
     private final DocumentRepository documentRepository;
     private final UserDepartmentRepository userDepartmentRepository;
     private final DocumentSequenceCounterRepository documentSequenceCounterRepository;
+    private final DepartmentAccessService departmentAccessService;
     private final AuditService auditService;
 
     public DepartmentService(DepartmentRepository departmentRepository,
                              DocumentRepository documentRepository,
                              UserDepartmentRepository userDepartmentRepository,
                              DocumentSequenceCounterRepository documentSequenceCounterRepository,
+                             DepartmentAccessService departmentAccessService,
                              AuditService auditService) {
         this.departmentRepository = departmentRepository;
         this.documentRepository = documentRepository;
         this.userDepartmentRepository = userDepartmentRepository;
         this.documentSequenceCounterRepository = documentSequenceCounterRepository;
+        this.departmentAccessService = departmentAccessService;
         this.auditService = auditService;
     }
 
@@ -92,6 +100,58 @@ public class DepartmentService {
         return new DepartmentUsageDto(
                 documentRepository.countByDepartmentId(id),
                 userDepartmentRepository.countActiveUsersByDepartmentId(id));
+    }
+
+    /**
+     * The department's members with their levels — the Manager self-service
+     * surface (department levels plan-back F5). Only a Manager of the
+     * department (or an admin) may see and manage them; adding and removing
+     * members stays admin-only on the Users page.
+     */
+    @Transactional(readOnly = true)
+    public List<DepartmentMemberDto> members(Integer id) {
+        requireDepartment(id);
+        requireMemberManager(id);
+        return userDepartmentRepository.findAllByDepartmentId(id).stream()
+                .map(DepartmentMemberDto::from)
+                .sorted(Comparator.comparing(DepartmentMemberDto::name))
+                .toList();
+    }
+
+    /**
+     * Changes one member's level (plan-back F5): Manager of the department
+     * or admin; self-changes included (D2) — a Manager demoting themselves
+     * simply leaves level management to the admins if they were the last
+     * one. The audit row lands under the department with the user, the old
+     * level and the new level.
+     */
+    @Transactional
+    public DepartmentMemberDto updateMemberLevel(Integer id, Integer userId,
+                                                 UpdateMemberLevelRequest request) {
+        Department department = requireDepartment(id);
+        requireMemberManager(id);
+
+        UserDepartment membership = userDepartmentRepository
+                .findById(new UserDepartmentId(userId, id))
+                .orElseThrow(() -> new NotFoundException("User " + userId
+                        + " is not a member of department '" + department.getCode() + "'."));
+
+        com.doccontrol.identity.MembershipLevel before = membership.getLevel();
+        membership.setLevel(request.level());
+        auditService.record("department", id, "member_level_changed", Map.of(
+                "user_id", userId,
+                "user_email", membership.getUser().getEmail(),
+                "before", before.toString(),
+                "after", request.level().toString()));
+        return DepartmentMemberDto.from(membership);
+    }
+
+    private void requireMemberManager(Integer departmentId) {
+        if (!departmentAccessService.canManageMembers(departmentId)) {
+            throw new ForbiddenException("Only a Manager of department '"
+                    + requireDepartment(departmentId).getCode()
+                    + "' (or an admin) can view or manage its members.");
+        }
     }
 
     /**

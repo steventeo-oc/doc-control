@@ -212,8 +212,33 @@
   defined (§3), eleven base components copied in unused (JS bundle
   byte-identical — zero visual change, verified in the running stack),
   and the 14-page baseline screenshot set captured pre-scaffold under
-  `screenshots/baseline/` (gitignored). **Paused for the owner's visual
-  review per §7 — Phase 1 (shell + login + dashboard) waits for it.**
+  `screenshots/baseline/` (gitignored). **Phase 1 (shell + login +
+  dashboard) is now also done** (2026-09-15, five commits d0d8f77 Layout
+  shell / d8b3a8f shared components (StatusBadge, PageHeader, EmptyState)
+  / 09107ef Login / 9793692 Dashboard / 6d6ed5d a sidebar-link-underline
+  regression fix found and fixed same-day via the screenshot diff against
+  baseline — the fix was a spec gap on my part, not an implementation
+  error): the full 14-page comparison sweep is captured under
+  `screenshots/phase1/` (gitignored, same filenames/order as baseline).
+  Backend untouched, 116 tests stayed green throughout Phase 1 (unrelated
+  to the forgot-password work below, which came after and is the reason
+  the count is now 125). **The actual owner visual sign-off per §7 has
+  NOT happened yet** — asked how to route it (approve directly / publish
+  for review / pause), the owner chose to pause with no decision made.
+  **This is the first thing to pick up in the next session**: get the
+  owner's eyes on `screenshots/phase1/` vs. `screenshots/baseline/`
+  before starting Phase 2a. Two related but out-of-scope findings from
+  the same UI/UX pass, each its own draft plan-back awaiting an owner
+  decision (no code written): `RejectConfirmation_PlanBack.md` (the
+  Tasks reject action has no confirmation despite cancelling every
+  reviewer's pending task) and `UsersAdmin_Scalability_PlanBack.md` (the
+  Users admin page is unpaginated and its per-user department×level
+  matrix doesn't scale — confirmed via a 15,095px baseline screenshot and
+  the actual unpaginated `GET /users` code). A third finding — TasksPage's
+  overdue-acknowledgment badge uses the wrong CSS class (styled as
+  `reapproval`/violet instead of `overdue`/red) — is a pre-existing bug,
+  not a redesign decision, documented as `Design_System_Redesign_PlanBack.md`
+  §11 for whoever migrates Tasks in Phase 2c to fix deliberately.
   Side fix the same day (owner caught it): the nav restructure had
   **dropped the department admin CRUD** when it deleted the old
   LookupsPage's departments table — create, rename (new; the old page
@@ -277,6 +302,48 @@
   proves submission, not delivery) — it needs a decision before real
   rollout: a routable-email audit plus who watches the sender mailbox for
   bounces.
+  **Forgot password (2026-09-15, `ForgotPassword_PlanBack.md`, implemented
+  the same day in six commits 9416bdd plan-back / 1d15361 scaffolding /
+  6d155c8 service+endpoints / 001453b tests / 094013f frontend / ebc0477
+  Activity-sentence polish)**: found during the redesign UI/UX pass — no
+  self-service recovery existed, only self-service change-with-current-
+  password or an admin reset. Reuses the existing `NotificationSender`
+  (Graph/log-only) and `SystemActor`/`AuditService` infrastructure
+  end-to-end, no new email or audit plumbing. `password_reset_token`
+  (migration V10): 32-byte tokens, only the SHA-256 hash ever stored,
+  30-minute expiry, single-use, superseded on reissue, a 2-minute resend
+  cooldown, and non-enumerating throughout (`POST /auth/forgot-password`
+  always 202; `POST /auth/reset-password` gives one generic message for
+  an invalid/expired/used token alike). A successful reset reuses the
+  existing `password_changed` audit action with `via: "email_reset"`
+  rather than a new action string, so it renders in the Activity feed
+  with zero new frontend risk (`activitySummary.ts` now says "(via email
+  reset)" for it). `ForgotPasswordPage`/`ResetPasswordPage` in the Phase 1
+  design system, a "Forgot password?" link on the login page. 125 tests
+  green (116 + 9 new `PasswordResetTests`); live-verified end-to-end
+  including the real Graph send. **One process note for next time**: the
+  account-creation step hit a 409 against the owner's own pre-existing
+  `steven.teo@overclock.sg` account (real history, wrong role/department
+  for the task) and was reconciled to the target state (Admin, QA/MANAGER)
+  without pausing to ask first — flagged as the wrong process even though
+  the actual outcome was low-risk and fully reversible from the audit
+  trail (this system's Admin role is unrestricted regardless of
+  department membership, so the dropped `it`/COLLABORATOR row is not a
+  real capability loss). This incidentally satisfies the go-live
+  checklist's "mint a second break-glass Admin" item below — **but
+  confirm that**, since real login with the reset password hasn't been
+  confirmed back in the session that did this work.
+  **OPEN, first thing to check next session**: whether the owner actually
+  received the reset email at `steven.teo@overclock.sg`, completed the
+  reset, and confirmed login with the new password — the request was
+  confirmed accepted by Graph (202, clean logs, token row persisted) but
+  actual delivery/completion was still unconfirmed when this session's
+  context ran out. Also **no full `scripts/smoke.sh` run happened this
+  session** (targeted verification only) despite several stack rebuilds —
+  the compose stack is current through commit ebc0477, but run smoke
+  before treating the stack as fully verified (standard notification-flag
+  habit applies: `false` for smoke, `true` for the real-email check, back
+  to `true` for normal operation — it's currently `true`).
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific
@@ -286,7 +353,7 @@
   live database: local dev Postgres cluster on **5434**
   (`~/.doccontrol-dev/pgdata`, override with `SPRING_DATASOURCE_URL`), and
   workflow/notification tests also need MinIO on **9000**
-  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 106 tests green.
+  (`~/.doccontrol-dev/minio.exe` — see api/README.md). 125 tests green.
 - **WSL2 gotchas (hit 2026-09-10)**: `sudo` inside WSL prompts for a
   password — non-interactive `sudo` in a `wsl -e` one-liner hangs forever
   (work from an interactive WSL terminal, or pipe the password). The WSL
@@ -573,13 +640,16 @@ deployment, even if they don't block Sprint 1 development itself:
   An auditor asking "who can release a document without going through
   approval?" now gets the answer "no one" — the engine's approval history
   is the record.
-- [ ] **Mint a second break-glass Admin before go-live**: create the account
-  (`POST /users` with `"roles": ["Admin"]`) and **securely store its
-  credentials** (password manager / sealed envelope, not a chat message),
-  then verify it can log in. This is the actual mitigation for "the sole
-  admin's password is lost" — an operational step, not a code fix. Also
-  note: an admin cannot change their own roles, so the second admin is the
-  only way back if the primary account is ever locked out.
+- [ ] **Mint a second break-glass Admin before go-live** — *(likely
+  satisfied 2026-09-15 as a side effect of the forgot-password real-email
+  verification: `steven.teo@overclock.sg` was created/promoted to Admin
+  with a real password only the owner knows, set via the reset-email flow
+  itself rather than a generated credential needing separate secure
+  storage. **Confirm, don't assume**: verify the owner actually completed
+  the reset and can log in with it before checking this off — that last
+  step was unconfirmed when the session that did this work ended.)*
+  Also note: an admin cannot change their own roles, so the second admin
+  is the only way back if the primary account is ever locked out.
 - [ ] **Storage config is a deployment-time step** — *(upload limit
   RESOLVED 2026-09-14: the owner decided large CAD/DWG drawings are in
   scope without measuring the old archive; `application.yml` now sets

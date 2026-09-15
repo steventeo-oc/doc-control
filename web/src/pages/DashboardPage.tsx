@@ -1,5 +1,6 @@
 import { useEffect, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Folder, Inbox, type LucideIcon } from 'lucide-react';
 import { acknowledgmentApi, auditApi, documentApi, lookupApi, workflowApi } from '../api/resources';
 import type {
   AuditLogPage,
@@ -11,6 +12,11 @@ import type {
 } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import ActivitySentence from '../components/ActivitySentence';
+import { EmptyState } from '../components/EmptyState';
+import { PageHeader } from '../components/PageHeader';
+import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
+import { Button } from '../components/ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
 
 /** Local-date ISO string n days back (0 = today) — the activity presets. */
 function isoDaysAgo(days: number): string {
@@ -23,20 +29,19 @@ function isoDaysAgo(days: number): string {
 /**
  * The Dashboard landing page (Dashboard_Design_PlanBack.md, approved
  * 2026-09-14; round-three structure per owner review; Activity made real
- * per the approved activity plan-back): a 2×2 grid — the merged Tasks
- * card, My Documents, the Departments card (own memberships, all
- * departments for admins, mirroring the Layout sidebar's sources) and the
- * Activity card (my activity, last 7 days, top 5, deep-linking into the
- * full /activity view). Rows are compact (code + title on one line, small
- * inline badges) and link to their section pages; lists scroll internally
- * under a max height.
+ * per the approved activity plan-back). Design-redesign Phase 1: reskinned
+ * onto Card/StatusBadge/EmptyState/PageHeader — the 2×2 grid, the 384px
+ * scrolling list cap, the empty-state CTA, and every data source/href are
+ * unchanged from the pre-redesign version (F7 in the plan-back). The grid
+ * keeps the original 860px collapse breakpoint exactly (an arbitrary-value
+ * variant, not Tailwind's default 768px `md:`).
  */
 
 export default function DashboardPage() {
   return (
     <>
-      <h1>Dashboard</h1>
-      <div className="dash-grid">
+      <PageHeader title="Dashboard" />
+      <div className="grid grid-cols-2 items-start gap-4 max-[860px]:grid-cols-1">
         <TasksDashlet />
         <DocumentsDashlet />
         <DepartmentsDashlet />
@@ -51,74 +56,44 @@ function Dashlet(props: {
   count: number | null;
   moreTo: string;
   moreLabel: string;
-  empty: React.ReactNode;
+  emptyIcon: LucideIcon;
+  emptyMessage: React.ReactNode;
   cta?: React.ReactNode;
   error: string | null;
   loaded: boolean;
   children: React.ReactNode;
 }) {
   return (
-    <section className="dashlet">
-      <h2>
-        {props.title} {props.count !== null && <span className="muted">({props.count})</span>}
-      </h2>
-      {props.error && <div className="error-banner">{props.error}</div>}
-      {!props.error && !props.loaded && <div className="page-loading">Loading…</div>}
-      {props.loaded && props.count === 0 && (
-        <div className="dash-empty">
-          {props.empty}
-          {props.cta}
-        </div>
-      )}
-      {props.loaded && props.count !== null && props.count > 0 && props.children}
-      <p className="dash-more">
-        <Link to={props.moreTo}>
-          {props.moreLabel}
-          {props.count !== null && ` (${props.count})`} →
-        </Link>
-      </p>
-    </section>
-  );
-}
-
-/* Small inline SVGs for the empty states — calm, muted, no icon library. */
-
-function InboxIcon() {
-  return (
-    <svg
-      className="dash-empty-icon"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M22 12h-6l-2 3h-4l-2-3H2" />
-      <path d="M5.45 5.11 2 12v6a2 2 0 0 0 2 2h16a2 2 0 0 0 2-2v-6l-3.45-6.89A2 2 0 0 0 16.76 4H7.24a2 2 0 0 0-1.79 1.11z" />
-    </svg>
-  );
-}
-
-function FolderIcon() {
-  return (
-    <svg
-      className="dash-empty-icon"
-      width="20"
-      height="20"
-      viewBox="0 0 24 24"
-      fill="none"
-      stroke="currentColor"
-      strokeWidth="1.6"
-      strokeLinecap="round"
-      strokeLinejoin="round"
-      aria-hidden="true"
-    >
-      <path d="M4 20h16a2 2 0 0 0 2-2V8a2 2 0 0 0-2-2h-7.9a2 2 0 0 1-1.69-.9L9.6 3.9A2 2 0 0 0 7.93 3H4a2 2 0 0 0-2 2v13c0 1.1.9 2 2 2Z" />
-    </svg>
+    <Card className="flex flex-col">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">
+          {props.title}{' '}
+          {props.count !== null && (
+            <span className="font-normal text-muted-foreground">({props.count})</span>
+          )}
+        </CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-1 flex-col">
+        {props.error && (
+          <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+            {props.error}
+          </div>
+        )}
+        {!props.error && !props.loaded && (
+          <div className="py-10 text-center text-sm text-muted-foreground">Loading…</div>
+        )}
+        {props.loaded && props.count === 0 && (
+          <EmptyState icon={props.emptyIcon} message={props.emptyMessage} cta={props.cta} />
+        )}
+        {props.loaded && props.count !== null && props.count > 0 && props.children}
+        <p className="mt-auto pt-3 text-sm">
+          <Link className="text-primary hover:underline" to={props.moreTo}>
+            {props.moreLabel}
+            {props.count !== null && ` (${props.count})`} →
+          </Link>
+        </p>
+      </CardContent>
+    </Card>
   );
 }
 
@@ -174,53 +149,45 @@ function TasksDashlet() {
       moreLabel="All my tasks"
       error={error}
       loaded={loaded}
-      empty={
-        <>
-          <InboxIcon />
-          <span>Nothing waiting for you — no approvals, no acknowledgments.</span>
-        </>
-      }
+      emptyIcon={Inbox}
+      emptyMessage="Nothing waiting for you — no approvals, no acknowledgments."
     >
-      <ul className="dash-list">
+      <ul className="max-h-96 list-none overflow-y-auto p-0">
         {rows.map((row) =>
           row.kind === 'approval' ? (
-            <li key={row.key}>
-              <span className="badge kind-approval">Approval</span>{' '}
-              <Link to={`/documents/${row.task.documentId}`}>
+            <li key={row.key} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+              <StatusBadge status="kind-approval">Approval</StatusBadge>{' '}
+              <Link className="hover:underline" to={`/documents/${row.task.documentId}`}>
                 {row.task.documentNumber} — {row.task.name}
               </Link>
-              <div className="muted">
+              <div className="text-xs text-muted-foreground">
                 {row.task.departmentCode && (
-                  <span className="badge dept">{row.task.departmentCode}</span>
-                )}
-                <span className="badge"> v{row.task.versionNumber}</span>
-                {row.task.reapproval && <span className="badge reapproval"> re-approval</span>}
+                  <StatusBadge status="dept">{row.task.departmentCode}</StatusBadge>
+                )}{' '}
+                <StatusBadge status="dept">v{row.task.versionNumber}</StatusBadge>{' '}
+                {row.task.reapproval && (
+                  <StatusBadge status="reapproval">re-approval</StatusBadge>
+                )}{' '}
                 {row.task.dueDate && new Date(row.task.dueDate) < startOfToday && (
-                  <span className="badge overdue"> overdue</span>
-                )}
-                <span>
-                  {' '}
-                  due {row.task.dueDate ? new Date(row.task.dueDate).toLocaleDateString() : '—'}
-                </span>
+                  <StatusBadge status="overdue">overdue</StatusBadge>
+                )}{' '}
+                due {row.task.dueDate ? new Date(row.task.dueDate).toLocaleDateString() : '—'}
               </div>
             </li>
           ) : (
-            <li key={row.key}>
-              <span className="badge kind-acknowledgment">Acknowledgment</span>{' '}
-              <Link to={`/documents/${row.entry.documentId}`}>
+            <li key={row.key} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+              <StatusBadge status="kind-acknowledgment">Acknowledgment</StatusBadge>{' '}
+              <Link className="hover:underline" to={`/documents/${row.entry.documentId}`}>
                 {row.entry.documentNumber} — {row.entry.name}
               </Link>
-              <div className="muted">
-                <span className="badge dept">{row.entry.departmentCode}</span>
-                <span className="badge"> v{row.entry.versionNumber}</span>
-                {row.entry.overdue && <span className="badge overdue"> overdue</span>}
-                <span>
-                  {' '}
-                  window closes{' '}
-                  {row.entry.windowClosesAt
-                    ? new Date(row.entry.windowClosesAt).toLocaleDateString()
-                    : '—'}
-                </span>
+              <div className="text-xs text-muted-foreground">
+                <StatusBadge status="dept">{row.entry.departmentCode}</StatusBadge>{' '}
+                <StatusBadge status="dept">v{row.entry.versionNumber}</StatusBadge>{' '}
+                {row.entry.overdue && <StatusBadge status="overdue">overdue</StatusBadge>}{' '}
+                window closes{' '}
+                {row.entry.windowClosesAt
+                  ? new Date(row.entry.windowClosesAt).toLocaleDateString()
+                  : '—'}
               </div>
             </li>
           ),
@@ -262,21 +229,20 @@ function DepartmentsDashlet() {
       moreLabel="All departments"
       error={error}
       loaded={departments !== null}
-      empty={
-        <>
-          <FolderIcon />
-          <span>You belong to no departments.</span>
-        </>
-      }
+      emptyIcon={Folder}
+      emptyMessage="You belong to no departments."
     >
-      <ul className="dash-list">
+      <ul className="max-h-96 list-none overflow-y-auto p-0">
         {(departments ?? [])
           .slice()
           .sort((a, b) => a.code.localeCompare(b.code))
           .map((d) => (
-            <li key={d.id}>
-              <Link to={`/departments/${d.id}`}>{d.code}</Link> — {d.label}
-              {!d.active && <span className="muted"> (inactive)</span>}
+            <li key={d.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+              <Link className="hover:underline" to={`/departments/${d.id}`}>
+                {d.code}
+              </Link>{' '}
+              — {d.label}
+              {!d.active && <span className="text-xs text-muted-foreground"> (inactive)</span>}
             </li>
           ))}
       </ul>
@@ -313,23 +279,19 @@ function ActivityDashlet() {
       moreLabel="All my activity"
       error={error}
       loaded={page !== null}
-      empty={
-        <>
-          <InboxIcon />
-          <span>No activity in the last 7 days.</span>
-        </>
-      }
+      emptyIcon={Inbox}
+      emptyMessage="No activity in the last 7 days."
     >
-      <ul className="dash-list">
+      <ul className="max-h-96 list-none overflow-y-auto p-0">
         {(page?.content ?? []).map((entry) => (
-          <li key={entry.id}>
+          <li key={entry.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
             <ActivitySentence entry={entry} />
-            <div className="muted">
+            <div className="text-xs text-muted-foreground">
               {new Date(entry.performedAt).toLocaleString()}
               {entry.departmentCode && (
                 <>
                   {' '}
-                  <span className="badge dept">{entry.departmentCode}</span>
+                  <StatusBadge status="dept">{entry.departmentCode}</StatusBadge>
                 </>
               )}
             </div>
@@ -362,28 +324,24 @@ function DocumentsDashlet() {
       moreLabel="All my documents"
       error={error}
       loaded={page !== null}
-      empty={
-        <>
-          <FolderIcon />
-          <span>You own no documents yet.</span>
-        </>
-      }
+      emptyIcon={Folder}
+      emptyMessage="You own no documents yet."
       cta={
         // creation itself stays on the Documents page (?create=1 opens the
         // form there — the dashboard stays read-only)
-        <Link className="dash-cta" to="/documents?create=1">
-          + New document
-        </Link>
+        <Button asChild size="sm" className="mt-1">
+          <Link to="/documents?create=1">+ New document</Link>
+        </Button>
       }
     >
-      <ul className="dash-list">
+      <ul className="max-h-96 list-none overflow-y-auto p-0">
         {(page?.content ?? []).map((doc: DocumentSummary) => (
-          <li key={doc.id}>
-            <Link to={`/documents/${doc.id}`}>
+          <li key={doc.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+            <Link className="hover:underline" to={`/documents/${doc.id}`}>
               {doc.documentNumber} — {doc.name}
             </Link>
-            <div className="muted">
-              <span className={`badge ${doc.status}`}>{doc.status}</span>
+            <div className="text-xs text-muted-foreground">
+              <StatusBadge status={doc.status as StatusBadgeKind}>{doc.status}</StatusBadge>
             </div>
           </li>
         ))}

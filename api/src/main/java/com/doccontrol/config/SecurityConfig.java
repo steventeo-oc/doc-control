@@ -49,7 +49,8 @@ public class SecurityConfig {
             .addFilterAfter(new CsrfCookieFilter(), AnonymousAuthenticationFilter.class)
             .sessionManagement(session -> session.sessionCreationPolicy(SessionCreationPolicy.IF_REQUIRED))
             .authorizeHttpRequests(auth -> auth
-                .requestMatchers(org.springframework.http.HttpMethod.POST, "/auth/login").permitAll()
+                .requestMatchers(org.springframework.http.HttpMethod.POST,
+                        "/auth/login", "/auth/forgot-password", "/auth/reset-password").permitAll()
                 // lookup usage counts power the admin deactivate/delete
                 // confirmations — same surface as the writes they precede
                 .requestMatchers(org.springframework.http.HttpMethod.GET,

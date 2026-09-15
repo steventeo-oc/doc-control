@@ -219,7 +219,7 @@ export default function Layout() {
                 to={item.to}
                 className={() =>
                   cn(
-                    'rounded-md px-3 py-1.5 text-sm text-foreground hover:bg-accent',
+                    'rounded-md px-3 py-1.5 text-sm text-foreground no-underline hover:bg-accent',
                     location.pathname + location.search === item.to &&
                       'bg-primary/10 font-medium text-primary hover:bg-primary/10',
                   )

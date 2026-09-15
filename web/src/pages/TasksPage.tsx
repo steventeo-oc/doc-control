@@ -135,6 +135,12 @@ function MyApprovals() {
         </tbody>
       </table>
 
+      <p className="muted">
+        <Link to="/activity?scope=mine&category=workflow">
+          View your approval history →
+        </Link>
+      </p>
+
       {approving && (
         <div className="card">
           <h2>

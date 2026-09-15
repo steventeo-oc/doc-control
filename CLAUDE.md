@@ -333,17 +333,86 @@
   checklist's "mint a second break-glass Admin" item below — **but
   confirm that**, since real login with the reset password hasn't been
   confirmed back in the session that did this work.
-  **OPEN, first thing to check next session**: whether the owner actually
-  received the reset email at `steven.teo@overclock.sg`, completed the
-  reset, and confirmed login with the new password — the request was
-  confirmed accepted by Graph (202, clean logs, token row persisted) but
-  actual delivery/completion was still unconfirmed when this session's
-  context ran out. Also **no full `scripts/smoke.sh` run happened this
-  session** (targeted verification only) despite several stack rebuilds —
-  the compose stack is current through commit ebc0477, but run smoke
-  before treating the stack as fully verified (standard notification-flag
-  habit applies: `false` for smoke, `true` for the real-email check, back
-  to `true` for normal operation — it's currently `true`).
+  **RESOLVED 2026-09-16**: the owner confirmed the reset email arrived at
+  `steven.teo@overclock.sg`, the reset completed, and login with the new
+  password succeeded — the break-glass-admin checklist item above is now
+  checked off. Still open: **no full `scripts/smoke.sh` run happened in
+  the session that built forgot-password** (targeted verification only)
+  despite several stack rebuilds — the compose stack is current through
+  commit ebc0477, but run smoke before treating that stack as fully
+  verified (standard notification-flag habit applies: `false` for smoke,
+  `true` for the real-email check, back to `true` for normal operation —
+  it's currently `true`).
+  **Login page UI/UX pass (2026-09-16, six rounds, each independently
+  browser-verified before approval — bug fixes plus visual polish within
+  already-approved Phase 1 scope, no new plan-back needed for these)**:
+  triggered by finally doing the deferred §7 look at Login. Found a real,
+  **systemic** bug, not just a Login problem: `web/src/index.css` puts
+  Tailwind's theme/utilities imports into named cascade layers but left
+  every legacy hand-rolled rule (`button`, `input`, `label`, etc.)
+  unlayered — per the CSS spec, an unlayered rule always beats a layered
+  one regardless of specificity, so legacy `button { background:#fff }`
+  silently overrode shadcn's `bg-primary` on every already-migrated
+  button (Login's Sign in was rendering white-on-white; also affected
+  Layout's password-change dialog and Dashboard's "+ New document" CTA).
+  Fixed by wrapping the legacy block in `@layer base`, restoring the
+  precedence the file's own top comment already assumed — verified zero
+  effect on not-yet-migrated pages (DocumentsPage's legacy button
+  unchanged). Login then got a full visual pass: icon-badge header,
+  `size="lg"` CTA, a password show/hide toggle (composed locally in
+  LoginPage.tsx, doesn't touch the shared Input primitive; `type="button"`
+  confirmed so it can't submit the form), a 45%-wide Overclock-branded
+  panel replacing the flat centered card (real product facts only —
+  version control, department scoping, audit trail; no fabricated
+  marketing claims), and a `© {year} Overclock Pte. Ltd.` footer with a
+  computed, not hardcoded, year. The real logo took two iterations: a
+  flat JPEG (no transparency) first rendered inside a white chip on the
+  panel at a 59.8x downscale — genuinely illegible, caught by actually
+  opening the screenshot rather than trusting geometry alone (the
+  `naturalWidth / renderedWidth` ratio is a good sanity check but not a
+  substitute for looking); the owner then supplied a real transparent
+  PNG export, which now renders as a clean white mark directly on the
+  panel via `brightness-0 invert` (verified: real alpha, `A=0` at
+  background sample points) — no chip, no fabricated monochrome asset.
+  Process note: an external-sounding UI critique arrived mid-session
+  proposing several changes; each was checked against the live app
+  rather than implemented on authority. "Labels are center-aligned" was
+  initially (wrongly) waved off after checking only
+  `text-align`/`justify-content`/bounding-box equality — missed that
+  the label's `flex-direction` (same unlayered-legacy-CSS bug class,
+  now harmless in `@layer base` for every component that redeclares
+  direction, but the shared `Label` primitive never did) was `column`,
+  and in a column flex `items-center` centers the *cross* axis
+  (horizontal), so the text really was centered; fixed with one class
+  (`flex-row`) on `web/src/components/ui/label.tsx`, which also
+  corrected ForgotPasswordPage, ResetPasswordPage, and Layout's
+  password-change dialog for free. That critique's other asks —
+  fabricated Okta/Google/Microsoft SSO buttons, a "Remember me"
+  checkbox — were declined as written (the former contradicts the
+  recorded local-accounts-only decision and would've been non-functional
+  UI; the latter needs a session-extension mechanism that doesn't
+  exist), but the owner separately asked for real **"Sign in with
+  Microsoft"** against Overclock's own tenant (this app already holds
+  Graph credentials for `overclock.sg`), with the account-linking policy
+  decided immediately: match by email → same local user; no match →
+  reject with a message to contact an admin, no auto-provisioning.
+  Written up as `Microsoft_SSO_PlanBack.md` — **awaiting the owner's F1
+  decision** (reuse the existing Graph app registration vs. a separate
+  one for login) before any code; F2–F5 (feature flag, audit approach,
+  button placement, scope) proposed with defaults, not yet confirmed.
+  Scope note: this pass covered Login only — the other 13 pages from the
+  Phase 0/1 baseline-vs-phase1 gallery were never individually
+  re-reviewed this session, so treat only Login as owner-approved, not
+  all of Phase 1. Backend untouched all six rounds (frontend/CSS only);
+  125 tests stayed green throughout (nothing to re-run). Dev-data note:
+  a throwaway user (`uicheck1758030000@doccontrol.local`, id 39,
+  QA/User, password `uitest-pass-123`) was created for live login
+  verification across every round and deliberately left rather than
+  risked with a raw SQL delete (a `user` row has enough FK fan-out —
+  audit_log, user_department, workflow tasks, notification_log — that a
+  manual delete could violate something the admin-delete endpoints
+  handle correctly); delete it via Admin > Users, or the app's own user
+  DELETE path if one exists, whenever convenient.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific
@@ -640,16 +709,15 @@ deployment, even if they don't block Sprint 1 development itself:
   An auditor asking "who can release a document without going through
   approval?" now gets the answer "no one" — the engine's approval history
   is the record.
-- [ ] **Mint a second break-glass Admin before go-live** — *(likely
-  satisfied 2026-09-15 as a side effect of the forgot-password real-email
-  verification: `steven.teo@overclock.sg` was created/promoted to Admin
-  with a real password only the owner knows, set via the reset-email flow
-  itself rather than a generated credential needing separate secure
-  storage. **Confirm, don't assume**: verify the owner actually completed
-  the reset and can log in with it before checking this off — that last
-  step was unconfirmed when the session that did this work ended.)*
-  Also note: an admin cannot change their own roles, so the second admin
-  is the only way back if the primary account is ever locked out.
+- [x] **Mint a second break-glass Admin before go-live** — satisfied as a
+  side effect of the forgot-password real-email verification:
+  `steven.teo@overclock.sg` was created/promoted to Admin with a real
+  password only the owner knows, set via the reset-email flow itself
+  rather than a generated credential needing separate secure storage.
+  **Confirmed 2026-09-16**: the owner received the reset email, completed
+  the reset, and logged in with the new password. Also note: an admin
+  cannot change their own roles, so this second admin is the only way
+  back if the primary account is ever locked out.
 - [ ] **Storage config is a deployment-time step** — *(upload limit
   RESOLVED 2026-09-14: the owner decided large CAD/DWG drawings are in
   scope without measuring the old archive; `application.yml` now sets

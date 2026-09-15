@@ -214,14 +214,28 @@
   and the 14-page baseline screenshot set captured pre-scaffold under
   `screenshots/baseline/` (gitignored). **Paused for the owner's visual
   review per §7 — Phase 1 (shell + login + dashboard) waits for it.**
+  Side fix the same day (owner caught it): the nav restructure had
+  **dropped the department admin CRUD** when it deleted the old
+  LookupsPage's departments table — create, rename (new; the old page
+  never had it), deactivate/reactivate with the usage-count confirm, and
+  delete with the server's 409 blocking sentence are restored to the
+  Departments section list page (admin-only, old styling — the redesign
+  reskins it in Phase 3); backend endpoints were intact and covered by
+  LookupAdminTests throughout; browser-verified full cycle including the
+  blocked delete.
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,
   Graph bounce monitoring); hosting decisions. Dev-data note: the owner's manual
   gap-testing left a few rows deactivated (document types DWG and WI,
   departments "it" and SMK1788933740) — they are one Activate click
-  away on Admin > Tiers / the Departments section; QA was deleted and
-  restored during verification (its audit trail records the cycle).
+  away on Admin > Tiers / the Departments section (the department half
+  of that claim became true again on 2026-09-14: the nav restructure had
+  silently dropped the department admin CRUD with the old LookupsPage —
+  create/rename/deactivate/reactivate/delete restored to the Departments
+  section, backend endpoints were intact and untouched throughout); QA
+  was deleted and restored during verification (its audit trail records
+  the cycle).
   The go-live checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
   proves submission, not delivery) — it needs a decision before real

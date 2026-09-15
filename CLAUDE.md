@@ -228,7 +228,17 @@
   `/documents?create=1&department=<code>`, which preselects that
   department in the creation form (the create form renders only once the
   departments lookup has loaded so the preselect sticks); browser-verified
-  for admin and member flows.
+  for admin and member flows. Tasks findings from the owner's manual
+  testing (2026-09-14): a convenience link "View your approval history →"
+  on the My Approvals pane now points at the Activity view pre-filtered
+  (`/activity?scope=mine&category=workflow`, commit 0d6f4b0 — no
+  duplicate history view); and a **"Started by Me" pane is drafted and
+  awaiting owner review** (`StartedByMe_PlanBack.md`): a third Tasks
+  pane + `GET /my/started-instances` listing instances the caller
+  started, with per-reviewer approved/pending state for in-progress ones
+  sourced from Flowable's finished-task history (the one new mechanism —
+  active-task queries can't show completed reviewers). **No code until
+  the owner approves.**
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,

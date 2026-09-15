@@ -169,7 +169,13 @@ How to read it:
    Windows-side Postgres on **5434** and MinIO on **9000** (see
    api/README.md); the compose stack's data lives in the WSL volume on
    15432/19000. Numbers that differ between a test run and the browser
-   are not a bug.
+   are not a bug. If the dev cluster is down, start it with the port
+   override — its `postgresql.conf` still says 5432, so without `-o
+   "-p 5434"` it comes up on the wrong port and every test 404s its
+   connection:
+   `"C:\Program Files\PostgreSQL\15\bin\pg_ctl.exe" -D
+   "C:\Users\Exp Local XYZ\.doccontrol-dev\pgdata" -l
+   "C:\Users\Exp Local XYZ\.doccontrol-dev\pg.log" -o "-p 5434" start`.
 6. **Smoke test**: `bash scripts/smoke.sh` (Git Bash, stack running)
    walks the whole system end-to-end and prints OK per section. It leaves
    its artifacts behind (see section 5) and is safe to re-run.

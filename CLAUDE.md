@@ -241,7 +241,14 @@
   create/rename/deactivate/reactivate/delete restored to the Departments
   section, backend endpoints were intact and untouched throughout); QA
   was deleted and restored during verification (its audit trail records
-  the cycle).
+  the cycle). Smoke-artifact cleanup (2026-09-14): SMK1789369503 — the
+  only SMK department with zero documents, left by the smoke re-run that
+  died at section 3 — was deleted via the API (audited cascade); the
+  other 16 SMK departments each anchor one smoke document and are
+  legitimately blocked from deletion (soft-deleting the document would
+  not free them — the blocking count includes soft-deleted rows), so
+  they stay as dev-only artifacts that a clean go-live database will
+  never carry.
   The go-live checklist now includes the
   Graph accept-then-async-bounce caveat (a `'graph'` notification_log row
   proves submission, not delivery) — it needs a decision before real

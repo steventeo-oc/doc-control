@@ -59,6 +59,13 @@ doccontrol:
     reminder-before-days: 2
     escalate-after-overdue-days: 2
 
+  password-reset:
+    # Self-service "forgot password" tokens (ForgotPassword_PlanBack.md):
+    # how long a token stays valid and how long before another can be
+    # requested for the same account.
+    expiry-minutes: 30
+    resend-cooldown-minutes: 2
+
   watermark:
     # Phase 2e (#15, plan-back approved): downloads of renditionable
     # versions return a stamped PDF rendition — mark text by version
@@ -104,6 +111,9 @@ doccontrol:
     admin-department: QA
 
 app:
+  # Base URL for links the system emails to users (e.g. password resets) —
+  # override in any real deployment (ForgotPassword_PlanBack.md).
+  base-url: http://localhost:3000
   cors:
     allowed-origins: http://localhost:3000
 

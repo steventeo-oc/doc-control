@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth/AuthContext';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -71,6 +71,11 @@ export default function LoginPage() {
               {submitting ? 'Signing in…' : 'Sign in'}
             </Button>
           </form>
+          <p className="mt-3 text-center text-sm">
+            <Link className="text-primary hover:underline" to="/forgot-password">
+              Forgot password?
+            </Link>
+          </p>
         </CardContent>
       </Card>
     </div>

@@ -21,6 +21,9 @@ export const authApi = {
     api.post<void>('/auth/login', { email, password }),
   me: () => api.get<UserSummary>('/auth/me'),
   logout: () => api.post<void>('/auth/logout'),
+  forgotPassword: (email: string) => api.post<void>('/auth/forgot-password', { email }),
+  resetPassword: (token: string, newPassword: string) =>
+    api.post<void>('/auth/reset-password', { token, newPassword }),
 };
 
 export const lookupApi = {

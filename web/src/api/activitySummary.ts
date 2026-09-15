@@ -94,7 +94,9 @@ export function activitySummary(entry: AuditLogEntry): string {
     case 'user/updated':
       return `Updated user #${entry.entityId}`;
     case 'user/password_changed':
-      return `Changed the password of user #${entry.entityId}`;
+      return detail(entry, 'via') === 'email_reset'
+        ? `Changed the password of user #${entry.entityId} (via email reset)`
+        : `Changed the password of user #${entry.entityId}`;
     case 'daily_sweep/triggered':
       return `Daily sweep ran for ${detail(entry, 'date') ?? '—'} (${detail(entry, 'triggered_by') ?? 'manual'})`;
     default:

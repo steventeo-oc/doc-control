@@ -223,3 +223,16 @@ Backend: none — 113 stay green, smoke re-runs after each stack rebuild
 browser verification (routes, params, behaviors) plus the owner's
 screenshot review per §7. No new tests are invented for styling; the
 verification IS the review protocol.
+
+## 11. Known bug found during Phase 1 prep (not a design decision — flag for Phase 2c)
+
+`TasksPage.tsx`'s `PendingMyAcknowledgment` renders an overdue acknowledgment
+with `<span className="badge reapproval">` — the **violet "periodic review"
+style**, not the red "overdue" style used everywhere else (dashboard,
+My Approvals). This pre-dates the redesign and is unrelated to any styling
+decision here. Centralizing badges through `StatusBadge` (§3/§4, F4) will
+force this to surface once Phase 2c (Tasks) migrates that page, since the
+exhaustive status→variant map has no "overdue styled as reapproval" entry —
+**when that page is migrated, map this badge to `overdue`, not `reapproval`,
+and note in the commit that this is a pre-existing bug fix riding along with
+the reskin, not an incidental behavior change.**

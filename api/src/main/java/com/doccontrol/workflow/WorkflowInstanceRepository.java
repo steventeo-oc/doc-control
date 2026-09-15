@@ -19,4 +19,7 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
     @Query("SELECT wi FROM WorkflowInstance wi WHERE wi.documentVersion.document.id = :documentId " +
             "AND wi.status = com.doccontrol.workflow.WorkflowInstanceStatus.IN_PROGRESS")
     List<WorkflowInstance> findInProgressByDocumentId(@Param("documentId") Integer documentId);
+
+    /** Instances the caller started, newest first (the "Started by Me" pane). */
+    List<WorkflowInstance> findByStartedByIdOrderByStartedAtDesc(Integer startedById);
 }

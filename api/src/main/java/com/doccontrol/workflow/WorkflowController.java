@@ -2,6 +2,7 @@ package com.doccontrol.workflow;
 
 import com.doccontrol.workflow.dto.ReviewerCandidateDto;
 import com.doccontrol.workflow.dto.StartApprovalRequest;
+import com.doccontrol.workflow.dto.StartedInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowTaskDto;
 import jakarta.validation.Valid;
@@ -60,6 +61,12 @@ public class WorkflowController {
     @GetMapping("/workflow-instances/{id}/tasks")
     public List<WorkflowTaskDto> instanceTasks(@PathVariable Integer id) {
         return workflowService.instanceTasks(id);
+    }
+
+    /** Approvals the caller started (the "Started by Me" pane, plan-back approved 2026-09-14). */
+    @GetMapping("/my/started-instances")
+    public List<StartedInstanceDto> startedByMe() {
+        return workflowService.startedByMe();
     }
 
     public record CompleteTaskRequest(@NotNull Boolean approved, String comment,

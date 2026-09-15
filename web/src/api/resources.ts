@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
@@ -101,6 +101,7 @@ export interface AssigneeInput {
 
 export const workflowApi = {
   myTasks: () => api.get<WorkflowTask[]>('/my/tasks'),
+  startedByMe: () => api.get<StartedInstance[]>('/my/started-instances'),
   instance: (id: number) => api.get<WorkflowInstance>(`/workflow-instances/${id}`),
   instanceTasks: (id: number) => api.get<WorkflowTask[]>(`/workflow-instances/${id}/tasks`),
   reviewerCandidates: (documentId: number) =>

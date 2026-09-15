@@ -232,13 +232,26 @@
   testing (2026-09-14): a convenience link "View your approval history →"
   on the My Approvals pane now points at the Activity view pre-filtered
   (`/activity?scope=mine&category=workflow`, commit 0d6f4b0 — no
-  duplicate history view); and a **"Started by Me" pane is drafted and
-  awaiting owner review** (`StartedByMe_PlanBack.md`): a third Tasks
-  pane + `GET /my/started-instances` listing instances the caller
-  started, with per-reviewer approved/pending state for in-progress ones
-  sourced from Flowable's finished-task history (the one new mechanism —
-  active-task queries can't show completed reviewers). **No code until
-  the owner approves.**
+  duplicate history view); and the **"Started by Me" pane is implemented**
+  (`StartedByMe_PlanBack.md`, approved in full, built the same day):
+  `GET /my/started-instances` lists instances the caller started, newest
+  first, with a per-reviewer approved/pending breakdown for in-progress
+  ones (approved names first, then pending — claimed tasks name the
+  assignee, pooled tasks the candidate role); the SPA adds a third Tasks
+  pane (`/tasks?view=started`) with status badges and reviewer lines.
+  **One plan-back deviation (F1), found empirically**: the engine's task
+  history does NOT reliably persist task assignees (the start-time
+  assignment happens in a task listener that bypasses assignee-change
+  history recording; even `flowable.history-level: audit` — now set
+  explicitly in application.yml for future completions — could not
+  recover names for existing rows), so **approver names come from our
+  own audit trail**: the performed_by of each `task_approved` row,
+  joined via `details->>'task_id'` against the finished-task ids the
+  history query supplies (which tasks finished + their order). This works
+  retroactively for every past approval. 116 tests green (3 new:
+  starter scoping, the approved/pending split, pooled-role rendering);
+  browser-verified live (27 started rows, the pending reviewer visible);
+  smoke 0–15 green with the notification flag flipped down and back.
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,

@@ -117,6 +117,22 @@ export interface WorkflowInstance {
   tasks: WorkflowTask[];
 }
 
+/** One approval the caller started ("Started by Me" pane): reviewers is
+ * populated only while in progress — approved entries from the engine's
+ * finished-task history, pending from active tasks (claimed tasks name
+ * their assignee, pooled tasks the candidate role). */
+export interface StartedInstance {
+  id: number;
+  documentId: number;
+  documentNumber: string;
+  versionNumber: number;
+  status: string | null;
+  reapproval: boolean;
+  startedAt: string;
+  completedAt: string | null;
+  reviewers: { name: string | null; state: 'approved' | 'pending'; role: string | null }[];
+}
+
 export interface AcknowledgmentRecord {
   id: number;
   documentId: number;

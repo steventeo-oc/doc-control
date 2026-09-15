@@ -127,3 +127,10 @@ flowable:
   # synchronous and reminders/escalation are our own scheduled job.
   database-schema-update: "true"
   async-executor-activate: false
+  # The "Started by Me" pane reads per-reviewer approved state from the
+  # engine's finished-task history (plan-back F1). The effective default
+  # level proved to drop task assignees from ACT_HI_TASKINST — audit keeps
+  # them, at trivial storage cost for this deployment's volume. Applies to
+  # completions from here on; history written before this change has no
+  # assignee recorded.
+  history-level: audit

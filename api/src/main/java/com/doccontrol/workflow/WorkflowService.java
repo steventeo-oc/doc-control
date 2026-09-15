@@ -1,5 +1,6 @@
 package com.doccontrol.workflow;
 
+import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.audit.AuditService;
 import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.ForbiddenException;
@@ -18,14 +19,17 @@ import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.security.CurrentUserProvider;
 import com.doccontrol.workflow.dto.StartApprovalRequest;
+import com.doccontrol.workflow.dto.StartedInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowTaskDto;
+import org.flowable.engine.HistoryService;
 import org.flowable.engine.RuntimeService;
 import org.flowable.engine.TaskService;
 import org.flowable.engine.runtime.ProcessInstance;
 import org.flowable.identitylink.api.IdentityLink;
 import org.flowable.identitylink.api.IdentityLinkType;
 import org.flowable.task.api.Task;
+import org.flowable.task.api.history.HistoricTaskInstance;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -36,6 +40,7 @@ import java.util.Comparator;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.stream.Collectors;
 
 @Service
 public class WorkflowService {
@@ -44,30 +49,36 @@ public class WorkflowService {
 
     private final RuntimeService runtimeService;
     private final TaskService taskService;
+    private final HistoryService historyService;
     private final WorkflowInstanceRepository instanceRepository;
     private final DocumentVersionRepository documentVersionRepository;
     private final UserRepository userRepository;
     private final RoleRepository roleRepository;
     private final DocumentService documentService;
     private final AuditService auditService;
+    private final AuditLogRepository auditLogRepository;
     private final CurrentUserProvider currentUserProvider;
     private final DepartmentAccessService departmentAccessService;
 
     public WorkflowService(RuntimeService runtimeService, TaskService taskService,
+                           HistoryService historyService,
                            WorkflowInstanceRepository instanceRepository,
                            DocumentVersionRepository documentVersionRepository,
                            UserRepository userRepository, RoleRepository roleRepository,
                            DocumentService documentService, AuditService auditService,
+                           AuditLogRepository auditLogRepository,
                            CurrentUserProvider currentUserProvider,
                            DepartmentAccessService departmentAccessService) {
         this.runtimeService = runtimeService;
         this.taskService = taskService;
+        this.historyService = historyService;
         this.instanceRepository = instanceRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.userRepository = userRepository;
         this.roleRepository = roleRepository;
         this.documentService = documentService;
         this.auditService = auditService;
+        this.auditLogRepository = auditLogRepository;
         this.currentUserProvider = currentUserProvider;
         this.departmentAccessService = departmentAccessService;
     }
@@ -377,6 +388,93 @@ public class WorkflowService {
                 .stream()
                 .map(task -> toTaskDto(task, currentUserProvider.getCurrentUser()))
                 .toList();
+    }
+
+    /**
+     * Approvals the caller started (the "Started by Me" pane, plan-back
+     * approved 2026-09-14): newest first, with the per-reviewer
+     * approved/pending breakdown for in-progress instances. The starter
+     * always passes document visibility (canEdit holders are department
+     * members, who see department drafts), so no additional gate.
+     */
+    @Transactional(readOnly = true)
+    public List<StartedInstanceDto> startedByMe() {
+        User viewer = currentUserProvider.getCurrentUser();
+        return instanceRepository.findByStartedByIdOrderByStartedAtDesc(viewer.getId())
+                .stream()
+                .map(this::toStartedDto)
+                .toList();
+    }
+
+    private StartedInstanceDto toStartedDto(WorkflowInstance instance) {
+        Document document = instance.getDocumentVersion().getDocument();
+        return new StartedInstanceDto(
+                instance.getId(),
+                document.getId(),
+                document.getDocumentNumber(),
+                instance.getDocumentVersion().getVersionNumber(),
+                instance.getStatus() == null ? null : instance.getStatus().getValue(),
+                instance.getKind() == WorkflowInstanceKind.REAPPROVAL,
+                instance.getStartedAt(),
+                instance.getCompletedAt(),
+                instance.getStatus() == WorkflowInstanceStatus.IN_PROGRESS
+                        && instance.getProcessInstanceId() != null
+                        ? reviewerStates(instance.getProcessInstanceId())
+                        : List.of());
+    }
+
+    /**
+     * Approved reviewers: WHICH tasks finished comes from the engine's
+     * history, but the approver comes from our own audit trail — every
+     * task approval writes a task_approved row whose performed_by is the
+     * approver, and the engine's task history does not reliably persist
+     * task assignees (the start-time assignment happens in a task listener
+     * that bypasses the assignee-change history recording). Pending
+     * reviewers come from the active tasks: a claimed task names its
+     * assignee, a pooled task names the candidate role, since nobody has
+     * committed until someone claims (plan-back F5).
+     */
+    private List<StartedInstanceDto.ReviewerState> reviewerStates(String processInstanceId) {
+        List<HistoricTaskInstance> finished = historyService.createHistoricTaskInstanceQuery()
+                .processInstanceId(processInstanceId)
+                .finished()
+                .orderByHistoricTaskInstanceEndTime().asc()
+                .list();
+        Map<String, String> approverByTaskId = finished.isEmpty() ? Map.of()
+                : auditLogRepository.findTaskApprovedByTaskIds(finished.stream()
+                        .map(HistoricTaskInstance::getId)
+                        .toList())
+                        .stream()
+                        .collect(Collectors.toMap(
+                                row -> String.valueOf(row.getDetails().get("task_id")),
+                                row -> row.getPerformedBy().getName(),
+                                // a task can be completed once; keep the first row per task
+                                (first, second) -> first));
+        List<StartedInstanceDto.ReviewerState> states = new ArrayList<>();
+        for (HistoricTaskInstance finishedTask : finished) {
+            states.add(new StartedInstanceDto.ReviewerState(
+                    approverByTaskId.get(finishedTask.getId()), "approved", null));
+        }
+        for (Task task : taskService.createTaskQuery()
+                .processInstanceId(processInstanceId)
+                .active()
+                .list()) {
+            if (task.getAssignee() != null) {
+                states.add(new StartedInstanceDto.ReviewerState(
+                        userRepository.findById(Integer.valueOf(task.getAssignee()))
+                                .map(User::getName).orElse(null),
+                        "pending", null));
+            } else {
+                List<String> roles = taskService.getIdentityLinksForTask(task.getId()).stream()
+                        .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
+                        .map(IdentityLink::getGroupId)
+                        .sorted()
+                        .toList();
+                states.add(new StartedInstanceDto.ReviewerState(null, "pending",
+                        roles.isEmpty() ? "unassigned" : String.join(", ", roles)));
+            }
+        }
+        return states;
     }
 
     private Task requireTask(String taskId) {

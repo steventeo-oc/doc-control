@@ -1,23 +1,33 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
 import { acknowledgmentApi, workflowApi } from '../api/resources';
-import type { PendingAcknowledgment, WorkflowTask } from '../api/types';
+import type { PendingAcknowledgment, StartedInstance, WorkflowTask } from '../api/types';
 
 /**
- * The Tasks section (nav restructure plan-back section 1): two panes via
- * the ?view= parameter. My Approvals is the existing reviewer queue
- * (GET /my/tasks); Pending My Acknowledgment is the new reverse query
+ * The Tasks section (nav restructure plan-back section 1): panes via the
+ * ?view= parameter. My Approvals is the existing reviewer queue
+ * (GET /my/tasks); Pending My Acknowledgment is the reverse query
  * (GET /my/acknowledgments) — record-only, acknowledging happens on the
- * document page.
+ * document page; Started by Me lists approvals the caller started
+ * (GET /my/started-instances, plan-back approved 2026-09-14) with
+ * per-reviewer state for in-progress ones.
  */
 export default function TasksPage() {
   const [searchParams] = useSearchParams();
-  const view = searchParams.get('view') === 'acknowledgments' ? 'acknowledgments' : 'approvals';
+  const viewParam = searchParams.get('view');
+  const view: 'approvals' | 'acknowledgments' | 'started' =
+    viewParam === 'acknowledgments' || viewParam === 'started' ? viewParam : 'approvals';
 
   return (
     <>
       <h1>Tasks</h1>
-      {view === 'approvals' ? <MyApprovals /> : <PendingMyAcknowledgment />}
+      {view === 'approvals' ? (
+        <MyApprovals />
+      ) : view === 'started' ? (
+        <StartedByMe />
+      ) : (
+        <PendingMyAcknowledgment />
+      )}
     </>
   );
 }
@@ -258,4 +268,115 @@ function PendingMyAcknowledgment() {
       </p>
     </>
   );
+}
+
+/**
+ * The "Started by Me" pane (plan-back approved 2026-09-14): approvals the
+ * caller started, newest first, with the per-reviewer approved/pending
+ * breakdown for in-progress ones (approved names from the engine's
+ * finished-task history; pooled tasks show the role — nobody has
+ * committed until someone claims). Read-only: actions stay on the
+ * document page.
+ */
+function StartedByMe() {
+  const [rows, setRows] = useState<StartedInstance[] | null>(null);
+  const [error, setError] = useState<string | null>(null);
+
+  const load = useCallback(() => {
+    workflowApi
+      .startedByMe()
+      .then(setRows)
+      .catch((err: Error) => setError(err.message));
+  }, []);
+
+  useEffect(load, [load]);
+
+  if (error && !rows) {
+    return <div className="error-banner">{error}</div>;
+  }
+  if (!rows) {
+    return <div className="page-loading">Loading…</div>;
+  }
+
+  return (
+    <>
+      <h2>Started by Me</h2>
+      {error && <div className="error-banner">{error}</div>}
+      <table className="data">
+        <thead>
+          <tr>
+            <th>Document</th>
+            <th>Version</th>
+            <th>Status</th>
+            <th>Started</th>
+            <th>Reviewers</th>
+          </tr>
+        </thead>
+        <tbody>
+          {rows.map((row) => (
+            <tr key={row.id}>
+              <td>
+                <Link to={`/documents/${row.documentId}`}>{row.documentNumber}</Link>
+                {row.reapproval && <span className="badge reapproval"> re-approval</span>}
+              </td>
+              <td>v{row.versionNumber}</td>
+              <td>
+                <span className={startedStatusBadge(row.status)}>{startedStatusLabel(row.status)}</span>
+              </td>
+              <td className="muted">{new Date(row.startedAt).toLocaleString()}</td>
+              <td className="muted">
+                {row.reviewers.length === 0 ? '—' : reviewerLine(row.reviewers)}
+              </td>
+            </tr>
+          ))}
+          {rows.length === 0 && (
+            <tr>
+              <td colSpan={5} className="muted">
+                You have not started any approvals.
+              </td>
+            </tr>
+          )}
+        </tbody>
+      </table>
+    </>
+  );
+}
+
+function startedStatusBadge(status: string | null): string {
+  switch (status) {
+    case 'in_progress':
+      return 'badge in_review';
+    case 'completed':
+      return 'badge released';
+    case 'rejected':
+      return 'badge superseded';
+    default:
+      return 'badge';
+  }
+}
+
+function startedStatusLabel(status: string | null): string {
+  switch (status) {
+    case 'in_progress':
+      return 'in review';
+    case 'completed':
+      return 'approved';
+    case 'rejected':
+      return 'rejected';
+    default:
+      return status ?? '—';
+  }
+}
+
+function reviewerLine(reviewers: StartedInstance['reviewers']) {
+  return reviewers.map((r, index) => (
+    <span key={index}>
+      {index > 0 && ', '}
+      {r.state === 'approved'
+        ? `✓ ${r.name ?? '?'}`
+        : r.role
+          ? `${r.role} (pending)`
+          : `${r.name ?? '?'} (pending)`}
+    </span>
+  ));
 }

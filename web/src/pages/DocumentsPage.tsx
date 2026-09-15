@@ -64,6 +64,20 @@ export default function DocumentsPage() {
     lookupApi.departments(true).then(setDepartments).catch(() => undefined);
   }, []);
 
+  // A ?department=<code> deep link (the department detail page's
+  // '+ New document' CTA) preselects that department in the creation
+  // form — only where the caller may actually create (active + member,
+  // or admin; the levels plan-back's canCreate rule).
+  const preselectDepartmentCode = searchParams.get('department');
+  const preselectDepartmentId = preselectDepartmentCode
+    ? departments.find(
+        (d) =>
+          d.code === preselectDepartmentCode &&
+          d.active &&
+          (isAdmin || user?.departments.some((ud) => ud.id === d.id)),
+      )?.id
+    : undefined;
+
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -173,7 +187,7 @@ export default function DocumentsPage() {
         )}
       </div>
 
-      {view !== 'trash' && showCreate && (
+      {view !== 'trash' && showCreate && departments.length > 0 && (
         <form className="stack card" onSubmit={handleCreate}>
           <h2>New document</h2>
           {createError && <div className="error-banner">{createError}</div>}
@@ -194,7 +208,11 @@ export default function DocumentsPage() {
           </label>
           <label>
             Department
-            <select name="departmentId" required defaultValue="">
+            <select
+              name="departmentId"
+              required
+              defaultValue={preselectDepartmentId ? String(preselectDepartmentId) : ''}
+            >
               <option value="" disabled>
                 Choose department…
               </option>

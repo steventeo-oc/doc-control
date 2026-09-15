@@ -22,6 +22,9 @@ export default function DepartmentDetailPage() {
 
   const membership = user?.departments.find((d) => d.id === departmentId);
   const canManage = isAdmin || membership?.level === 'MANAGER';
+  // Create rights mirror the server's canCreate rule (levels plan-back):
+  // every membership level except Consumer; admins unrestricted.
+  const canCreateHere = isAdmin || (!!membership && membership.level !== 'CONSUMER');
 
   useEffect(() => {
     if (isAdmin) {
@@ -63,6 +66,16 @@ export default function DepartmentDetailPage() {
       <h1>
         {department.code} — {department.label}
       </h1>
+      {canCreateHere && (
+        <p>
+          <Link
+            className="dash-cta"
+            to={`/documents?create=1&department=${encodeURIComponent(department.code)}`}
+          >
+            + New document
+          </Link>
+        </p>
+      )}
       <p className="muted">
         Active: {department.active ? 'yes' : 'no'} · {docs?.totalElements ?? 0} document(s)
       </p>

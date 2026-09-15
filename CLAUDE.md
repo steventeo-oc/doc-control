@@ -222,7 +222,13 @@
   Departments section list page (admin-only, old styling — the redesign
   reskins it in Phase 3); backend endpoints were intact and covered by
   LookupAdminTests throughout; browser-verified full cycle including the
-  blocked delete.
+  blocked delete. Follow-up (same day): the department detail page gains
+  a **'+ New document' CTA** for everyone who may create there (admin or
+  non-Consumer member — the server's canCreate rule) deep-linking to
+  `/documents?create=1&department=<code>`, which preselects that
+  department in the creation form (the create form renders only once the
+  departments lookup has loaded so the preselect sticks); browser-verified
+  for admin and member flows.
   Remaining work, none scheduled: the "Later" backlog;
   the remaining go-live checklist items (break-glass admin, MinIO
   dedicated user + TLS, bootstrap-credential override at deployment,

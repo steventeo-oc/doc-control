@@ -713,6 +713,51 @@
   those checks covered the icon/label/content but never the trigger
   button's own background — worth remembering when touching any raw
   (non-`Button`-component) interactive element on dark chrome again.
+  **Design redesign Phase 2a — Documents migrated (2026-09-16, commit
+  c13d74d)**: the owner asked for the same UI/UX pass on Documents next.
+  This one wasn't a fresh design question like the Dashboard — reading
+  `Design_System_Redesign_PlanBack.md` first showed Documents is
+  already **Phase 2a** of the plan approved 2026-09-14 (list, filters
+  with the F3 Select swap, create form, Trash), so this executed that
+  existing plan rather than opening a new one. The page had been 100%
+  unmigrated legacy markup this whole time — plain `<h1>`, native
+  `<select>`/`<input>`, a hand-rolled `<table className="data">`, raw
+  `badge ${status}` spans — reskinned onto `PageHeader`/`Button`/
+  `Label`/`Input`/`Select`/`Table`/`StatusBadge`/`EmptyState` with the
+  plan-back's behavior freeze honored throughout (routes, `?view=`/
+  `create`/`department` params, filter wiring, and pagination are
+  bit-for-bit unchanged). `PageHeader.tsx` — deleted two rounds ago when
+  it became unused — is recreated: Documents is a real second consumer,
+  exactly the shared "title + actions row" component the plan-back's
+  own component list intended, with "New document" moved from the
+  filter row into the header's actions slot as the page's actual
+  primary action. Radix's `SelectItem` forbids empty-string values, so
+  the three filter selects' "no filter" options use an `"all"`
+  sentinel mapped back to `''` filter state on change — confirmed the
+  filter-state shape and the API request params are unchanged. Type/
+  Dept columns render as `StatusBadge`'s existing neutral "dept"
+  outline variant (already used for department codes elsewhere in the
+  app) as a small consistency upgrade beyond the mechanical migration —
+  my own call, not in the plan-back text. The create form stays inline
+  (the `showCreate` toggle, not a Dialog) since a modal would be a real
+  interaction change the plan-back's freeze doesn't authorize; its
+  exact active-only/department-membership filtering and the
+  `?create=1`/`?department=` deep links are preserved. Independently
+  re-verified beyond the junior's report, including running my own
+  fresh create-to-list round trip (a new SOP-QA-0004 test document) and
+  a full trash/restore cycle with my own soft-deleted test data, plus
+  confirming the Select dropdown's `[role="listbox"]` computed
+  background is genuinely opaque and that a submit with no Type
+  selected is actually blocked (Radix's hidden native `<select
+  required>` mechanism) — not just trusted from the screenshots.
+  `PageHeader` now has exactly two consumers app-wide (grep-confirmed).
+  Dev-data note: two throwaway test documents from this round's
+  verification remain — SOP-QA-0003 "ZZZ UI Verification Draft" and
+  SOP-QA-0004 "Tech Lead Verification Test Doc," both draft/QA/owned by
+  admin — delete or trash at will, same as every other dev-data
+  artifact this session. Next up per the plan-back's §8 order: Phase 2b
+  (document detail — metadata, versions, upload dialog, the
+  acknowledgment panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

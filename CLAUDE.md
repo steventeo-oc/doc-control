@@ -686,6 +686,33 @@
   correctly implemented only the fully-specified first item and
   stopped rather than guessing at an unseen visual direction — the
   right call, not a failure.
+  **Bright-white account/hamburger buttons fixed (2026-09-16, commit
+  eacb8bd)**: the owner spotted the account-menu button rendering
+  bright white on the dark rail. Root cause: `index.css`'s legacy
+  base-layer `button { background: #fff; border: 1px solid #c3cdd6;
+  ... }` rule applies to every native `<button>` unless something
+  overrides it — shadcn's `Button` component always sets an explicit
+  `bg-*` class per variant so it's unaffected, but two raw buttons in
+  `Layout.tsx` never got one: the `AccountMenu` trigger (a bare Radix
+  `DropdownMenuTrigger`, covers both the rail and mobile top-bar
+  instances) and the mobile hamburger. This is a different bug class
+  than the earlier unlayered-CSS issue (Login's white-on-white button,
+  fixed by adding `@layer base`) — here there's no conflicting utility
+  at all to be out-prioritized, the buttons simply never declared a
+  background, so the legacy default (correct for un-migrated light
+  pages) applied untouched on dark chrome. Fixed with `bg-transparent
+  border-0` on just those two elements; `index.css`'s legacy rule
+  itself is untouched. Independently verified via computed styles
+  (not screenshots) at both desktop (rail trigger:
+  `background-color: rgba(0,0,0,0)`, `border-width: 0px`, hover
+  overlay still works, the dropdown itself still opaque from the
+  earlier popover-token fix) and mobile 375px (hamburger and the
+  mobile `AccountMenu` instance both transparent/borderless). This is
+  the second time a defect on this exact button escaped every prior
+  verification round (mobile collapse, the live-review fixes) because
+  those checks covered the icon/label/content but never the trigger
+  button's own background — worth remembering when touching any raw
+  (non-`Button`-component) interactive element on dark chrome again.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

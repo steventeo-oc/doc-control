@@ -66,14 +66,17 @@ function Dashlet(props: {
   return (
     <Card className="flex flex-col">
       <CardHeader>
-        <CardTitle className="text-base font-semibold">
-          {props.title}{' '}
-          {props.count !== null && (
-            <span className="font-normal text-muted-foreground">({props.count})</span>
-          )}
+        <CardTitle className="flex items-center gap-2 text-base font-semibold">
+          <props.emptyIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
+          <span>
+            {props.title}{' '}
+            {props.count !== null && (
+              <span className="font-normal text-muted-foreground">({props.count})</span>
+            )}
+          </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex flex-1 flex-col">
+      <CardContent className="flex min-h-40 flex-1 flex-col">
         {props.error && (
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {props.error}

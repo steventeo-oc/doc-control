@@ -1,6 +1,16 @@
 import { FormEvent, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
-import { ChevronDownIcon } from 'lucide-react';
+import {
+  Activity,
+  Building2,
+  CircleUserRound,
+  ClipboardCheck,
+  FileText,
+  LayoutDashboard,
+  ListChecks,
+  Settings,
+  type LucideIcon,
+} from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { lookupApi, userApi } from '../api/resources';
 import type { Department } from '../api/types';
@@ -28,26 +38,40 @@ import {
 
 /**
  * The app shell (nav restructure plan-back section 1; Dashboard added per
- * the dashboard plan-back, Activity per the activity plan-back): top
- * navigation with the section set — Dashboard | Documents | Tasks |
- * Departments | Activity | Admin — plus an Account menu, and a
- * per-section sidebar rendered from this config when the active section
- * has entries (the dashboard has none and renders full-width). The
- * Departments sidebar is built from the signed-in user's memberships;
- * admins see every department. Activity's sidebar is its scope filter
- * (Mine / My Departments, plus Company-wide for admins).
+ * the dashboard plan-back, Activity per the activity plan-back).
  *
- * Design-redesign Phase 1: reskinned with Tailwind/shadcn — the Account
- * menu is now a Radix DropdownMenu (was a native <details>) and the
- * password-change flow is a Dialog with real fields (was window.prompt /
- * window.alert, F2 in the plan-back). The nav row also gained
- * overflow-x-auto so it scrolls instead of clipping "Admin" at narrower
- * widths (UI/UX review finding #4) — no items were removed or reordered.
+ * Dashboard_And_Navigation_PlanBack.md F4 (decided: Option 2): the old
+ * horizontal top bar is replaced by a fixed-width left rail — brand mark
+ * on top, six icon+label section switchers in the middle (Admin only for
+ * admins, same as before), and the account menu anchored to the bottom.
+ * The per-section sidebar (Documents' All/Mine/Trash, Tasks' three panes,
+ * Departments' memberships, Activity's scope filter, and Admin's new
+ * Types/Tiers/Users per F3) renders as a second column immediately right
+ * of the rail — its content, data sources, and width are unchanged. The
+ * Dashboard has no sidebar and renders full-width, as before. The mobile
+ * hamburger-drawer collapse is a deliberate follow-up round — desktop
+ * only here; narrow widths simply keep the fixed rail (shrink-0 stops it
+ * ever crushing the content to zero).
  */
 type SectionItem = { label: string; to: string };
 
-const NAV_LINK_CLASS =
-  'shrink-0 whitespace-nowrap rounded-md px-3 py-1.5 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white';
+/**
+ * One rail entry: icon stacked above a short label (F4 — labeled, not
+ * icon-only-with-tooltip: this app's audience spans experience levels, and
+ * discoverability matters more than density here). Same active visual
+ * language as the old horizontal pills, applied to the stacked block.
+ */
+function RailLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; label: string }) {
+  return (
+    <NavLink
+      to={to}
+      className="flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] leading-tight text-slate-300 transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
+    >
+      <Icon className="size-5" aria-hidden="true" />
+      <span className="text-center">{label}</span>
+    </NavLink>
+  );
+}
 
 export default function Layout() {
   const { user, isAdmin, logout } = useAuth();
@@ -103,6 +127,17 @@ export default function Layout() {
         ...(isAdmin ? [{ label: 'Company-wide', to: '/activity?scope=company' }] : []),
       ],
     },
+    // F3: Admin previously had no sidebar at all — the only way between
+    // Types/Tiers/Users was editing the URL. Same shape as the other four
+    // sections, no special-casing.
+    admin: {
+      label: 'Admin',
+      items: [
+        { label: 'Types', to: '/admin/types' },
+        { label: 'Tiers', to: '/admin/tiers' },
+        { label: 'Users', to: '/admin/users' },
+      ],
+    },
   };
 
   const activeSection = sections[section];
@@ -148,38 +183,28 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col">
-      <header className="flex h-[52px] items-center gap-6 bg-slate-900 px-6 text-white">
-        <span className="shrink-0 font-bold tracking-wide">Document Control</span>
-        <nav className="flex min-w-0 flex-1 gap-1 overflow-x-auto">
-          <NavLink to="/dashboard" className={NAV_LINK_CLASS}>
-            Dashboard
-          </NavLink>
-          <NavLink to="/documents" className={NAV_LINK_CLASS}>
-            Documents
-          </NavLink>
-          <NavLink to="/tasks" className={NAV_LINK_CLASS}>
-            Tasks
-          </NavLink>
-          <NavLink to="/departments" className={NAV_LINK_CLASS}>
-            Departments
-          </NavLink>
-          <NavLink to="/activity" className={NAV_LINK_CLASS}>
-            Activity
-          </NavLink>
-          {isAdmin && (
-            <NavLink to="/admin/types" className={NAV_LINK_CLASS}>
-              Admin
-            </NavLink>
-          )}
+    <div className="flex min-h-screen">
+      <aside className="flex w-20 shrink-0 flex-col items-center gap-2 bg-slate-900 py-4 text-white">
+        {/* Brand mark: icon only — the rail is too narrow for the wordmark. */}
+        <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
+          <ClipboardCheck className="size-6" aria-hidden="true" />
+        </div>
+        <nav className="flex w-full flex-1 flex-col items-center gap-1 px-1 pt-2">
+          <RailLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
+          <RailLink to="/documents" icon={FileText} label="Documents" />
+          <RailLink to="/tasks" icon={ListChecks} label="Tasks" />
+          <RailLink to="/departments" icon={Building2} label="Depts" />
+          <RailLink to="/activity" icon={Activity} label="Activity" />
+          {isAdmin && <RailLink to="/admin/types" icon={Settings} label="Admin" />}
         </nav>
-
         <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger className="flex shrink-0 items-center gap-1.5 whitespace-nowrap rounded-md px-2 py-1.5 text-sm text-white outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50">
-            {user?.name} <span className="text-xs text-slate-300">({user?.email})</span>
-            <ChevronDownIcon className="size-3.5 text-slate-300" aria-hidden="true" />
+          <DropdownMenuTrigger
+            aria-label="Account menu"
+            className="flex shrink-0 items-center justify-center rounded-full outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
+          >
+            <CircleUserRound className="size-7 text-slate-300" aria-hidden="true" />
           </DropdownMenuTrigger>
-          <DropdownMenuContent align="end" className="w-64">
+          <DropdownMenuContent side="right" align="end" className="w-64">
             <DropdownMenuLabel className="font-normal">
               <div className="flex flex-col gap-0.5">
                 <span className="font-medium text-foreground">{user?.name}</span>
@@ -208,9 +233,9 @@ export default function Layout() {
             <DropdownMenuItem onSelect={() => void handleLogout()}>Log out</DropdownMenuItem>
           </DropdownMenuContent>
         </DropdownMenu>
-      </header>
+      </aside>
 
-      <div className="flex items-start gap-6">
+      <div className="flex min-w-0 flex-1 items-start gap-6">
         {sidebarItems.length > 0 && (
           <aside className="flex min-w-[220px] flex-col gap-0.5 border-r border-border p-4">
             {sidebarItems.map((item) => (
@@ -231,7 +256,8 @@ export default function Layout() {
           </aside>
         )}
         {/* The dashboard uses the full viewport width (round-two polish);
-            the section pages keep the centered 1100px reading width. */}
+            the section pages keep the centered 1100px reading width — now
+            measured from the rail's right edge instead of the viewport's. */}
         <main
           className={cn(
             'flex-1 p-6',

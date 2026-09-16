@@ -543,16 +543,41 @@
   as both admin (all 6 rail items, all 5 section sidebars including
   the new Admin one, the account menu, Change password, logout) and
   non-admin (Admin item correctly absent). Password login end-to-end
-  confirmed working after the change. **Desktop only** — the mobile
-  hamburger-drawer collapse (rail + secondary sidebar collapsing into
-  one drawer below `md`/768px) is a deliberate, unscheduled follow-up
-  round, not started. **One flagged quirk awaiting a decision**: the
-  Admin rail item links to and only highlights active on `/admin/types`
-  — Tiers and Users show no active rail item, identical to the old
-  header's behavior (not a regression) but worth a deliberate call
-  rather than leaving it as an accident. Backend untouched (frontend-
-  only change); full backend suite not re-run (unaffected by a
-  frontend-only diff, but not independently confirmed this session).
+  confirmed working after the change. **One flagged quirk awaiting a
+  decision**: the Admin rail item links to and only highlights active
+  on `/admin/types` — Tiers and Users show no active rail item,
+  identical to the old header's behavior (not a regression) but worth
+  a deliberate call rather than leaving it as an accident. Backend
+  untouched (frontend-only change); full backend suite not re-run
+  (unaffected by a frontend-only diff, but not independently confirmed
+  this session).
+  **Mobile collapse (2026-09-16, commit fb71522) is now also done** —
+  the deliberate follow-up round flagged above. Below `md` (768px) the
+  rail and secondary sidebar (`hidden ... md:flex`) are replaced by a
+  slim `md:hidden` top bar (hamburger, brand mark, account menu) and a
+  slide-out drawer (new `web/src/components/ui/sheet.tsx`, a shadcn-
+  style Sheet built on the same `radix-ui` package this repo's other
+  primitives already use — no new dependency) stacking the six-item
+  section switcher and the current section's own sub-nav, separated by
+  a divider and an uppercase section label; the drawer closes itself on
+  navigation. The rail item list and the account menu (identity with
+  levels, Change password, Log out) were each pulled into one shared
+  definition (`RAIL_ITEMS`, an `AccountMenu` component) so desktop and
+  mobile render identically rather than risking two forks — the account
+  menu needed a separate open-state per instance since both triggers
+  exist in the DOM at once, one always `hidden`. Independently verified
+  (not just taken from the junior's report): `npm run build` clean, no
+  package.json/lock diff; desktop at 1440px and at exactly 768px is
+  byte-identical to before (rail 80px + sidebar 220px, top bar
+  `display:none`, checked via computed styles, not just a screenshot);
+  at 767px the top bar appears and both the rail and sidebar go
+  `display:none` with zero horizontal overflow; the drawer was opened
+  and navigated from live (closed itself correctly); the account menu's
+  Change password dialog and a real Log out both worked from the mobile
+  top bar; a non-admin login showed exactly 5 drawer items with Admin
+  correctly absent. Desktop-vs-mobile is now fully done for the nav
+  rail — the Admin active-state quirk above is the only open item left
+  on this feature.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

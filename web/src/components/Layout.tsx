@@ -8,12 +8,13 @@ import {
   FileText,
   LayoutDashboard,
   ListChecks,
+  Menu,
   Settings,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
 import { lookupApi, userApi } from '../api/resources';
-import type { Department } from '../api/types';
+import type { Department, UserSummary } from '../api/types';
 import { ApiError } from '../api/client';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -35,25 +36,49 @@ import {
   DropdownMenuSeparator,
   DropdownMenuTrigger,
 } from './ui/dropdown-menu';
+import {
+  Sheet,
+  SheetContent,
+  SheetTitle,
+  SheetTrigger,
+} from './ui/sheet';
 
 /**
  * The app shell (nav restructure plan-back section 1; Dashboard added per
  * the dashboard plan-back, Activity per the activity plan-back).
  *
- * Dashboard_And_Navigation_PlanBack.md F4 (decided: Option 2): the old
- * horizontal top bar is replaced by a fixed-width left rail — brand mark
- * on top, six icon+label section switchers in the middle (Admin only for
- * admins, same as before), and the account menu anchored to the bottom.
- * The per-section sidebar (Documents' All/Mine/Trash, Tasks' three panes,
- * Departments' memberships, Activity's scope filter, and Admin's new
- * Types/Tiers/Users per F3) renders as a second column immediately right
- * of the rail — its content, data sources, and width are unchanged. The
- * Dashboard has no sidebar and renders full-width, as before. The mobile
- * hamburger-drawer collapse is a deliberate follow-up round — desktop
- * only here; narrow widths simply keep the fixed rail (shrink-0 stops it
- * ever crushing the content to zero).
+ * Dashboard_And_Navigation_PlanBack.md F4 (decided: Option 2): on md+ the
+ * shell is a fixed-width left rail — brand mark on top, six icon+label
+ * section switchers in the middle (Admin only for admins, same as before),
+ * and the account menu anchored to the bottom. The per-section sidebar
+ * (Documents' All/Mine/Trash, Tasks' three panes, Departments'
+ * memberships, Activity's scope filter, and Admin's Types/Tiers/Users per
+ * F3) renders as a second column immediately right of the rail. The
+ * Dashboard has no sidebar and renders full-width, as before.
+ *
+ * Responsive collapse (same plan-back, "Responsive collapse"): below md
+ * (768px) the rail and the secondary sidebar are hidden and replaced by a
+ * slim top bar — hamburger trigger, brand mark, account menu — plus one
+ * slide-out drawer stacking the section switcher and the current section's
+ * sub-nav. Desktop (md+) markup and geometry are unchanged; the drawer is
+ * additive for narrow widths. The drawer closes itself whenever a link
+ * inside it is followed.
  */
 type SectionItem = { label: string; to: string };
+
+/**
+ * The section switcher's single source of truth — the desktop rail and the
+ * mobile drawer both render from this list. `adminOnly` entries are filtered
+ * by role at render time (same visibility rule as before).
+ */
+const RAIL_ITEMS: { to: string; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
+  { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
+  { to: '/documents', icon: FileText, label: 'Documents' },
+  { to: '/tasks', icon: ListChecks, label: 'Tasks' },
+  { to: '/departments', icon: Building2, label: 'Depts' },
+  { to: '/activity', icon: Activity, label: 'Activity' },
+  { to: '/admin/types', icon: Settings, label: 'Admin', adminOnly: true },
+];
 
 /**
  * One rail entry: icon stacked above a short label (F4 — labeled, not
@@ -70,6 +95,63 @@ function RailLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; lab
       <Icon className="size-5" aria-hidden="true" />
       <span className="text-center">{label}</span>
     </NavLink>
+  );
+}
+
+/**
+ * The account menu (identity with department levels, Change password, Log
+ * out) — one shared content definition rendered by BOTH chrome surfaces:
+ * the desktop rail's bottom anchor (side="right") and the mobile top bar
+ * (side="bottom"). Only the trigger's position differs; the contents must
+ * never fork. Open state is per-instance because both triggers exist in the
+ * DOM at once (one behind `hidden md:flex`, one behind `md:hidden`) — a
+ * single shared state would portal-render two menus simultaneously.
+ */
+function AccountMenu(props: {
+  user: UserSummary | null;
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  side: 'right' | 'bottom';
+  onOpenPassword: () => void;
+  onLogout: () => void;
+}) {
+  return (
+    <DropdownMenu open={props.open} onOpenChange={props.onOpenChange}>
+      <DropdownMenuTrigger
+        aria-label="Account menu"
+        className="flex shrink-0 items-center justify-center rounded-full outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
+      >
+        <CircleUserRound className="size-7 text-slate-300" aria-hidden="true" />
+      </DropdownMenuTrigger>
+      <DropdownMenuContent side={props.side} align="end" className="w-64">
+        <DropdownMenuLabel className="font-normal">
+          <div className="flex flex-col gap-0.5">
+            <span className="font-medium text-foreground">{props.user?.name}</span>
+            <span className="text-xs text-muted-foreground">{props.user?.email}</span>
+            <span className="text-xs text-muted-foreground">
+              {props.user?.departments.map((d) => `${d.code}: ${d.level}`).join(' · ')}
+            </span>
+          </div>
+        </DropdownMenuLabel>
+        <DropdownMenuSeparator />
+        <DropdownMenuItem
+          onSelect={(event) => {
+            // Prevent Radix from returning focus to the trigger before the
+            // Dialog mounts — a known conflict when a Dialog is opened
+            // from inside a DropdownMenuItem's onSelect handler. The
+            // preventDefault also stops Radix's own close, so the menu
+            // is closed explicitly here (verified: otherwise the Dialog
+            // opens layered over a still-open menu).
+            event.preventDefault();
+            props.onOpenChange(false);
+            props.onOpenPassword();
+          }}
+        >
+          Change password
+        </DropdownMenuItem>
+        <DropdownMenuItem onSelect={props.onLogout}>Log out</DropdownMenuItem>
+      </DropdownMenuContent>
+    </DropdownMenu>
   );
 }
 
@@ -142,6 +224,7 @@ export default function Layout() {
 
   const activeSection = sections[section];
   const sidebarItems = activeSection?.items ?? [];
+  const visibleRailItems = RAIL_ITEMS.filter((item) => !item.adminOnly || isAdmin);
 
   async function handleLogout() {
     await logout();
@@ -150,7 +233,10 @@ export default function Layout() {
 
   // --- Change-password dialog (F2: replaces window.prompt/window.alert) ---
   const [passwordOpen, setPasswordOpen] = useState(false);
-  const [menuOpen, setMenuOpen] = useState(false);
+  // Separate open state per account-menu instance — see AccountMenu's doc.
+  const [railMenuOpen, setRailMenuOpen] = useState(false);
+  const [mobileMenuOpen, setMobileMenuOpen] = useState(false);
+  const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
   const [passwordError, setPasswordError] = useState<string | null>(null);
@@ -183,61 +269,106 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen">
-      <aside className="flex w-20 shrink-0 flex-col items-center gap-2 bg-slate-900 py-4 text-white">
+    <div className="flex min-h-screen flex-col md:flex-row">
+      {/* Mobile top bar (below md only): hamburger, brand mark, account menu —
+          the three ways in, without the full-height rail. */}
+      <header className="flex h-12 shrink-0 items-center justify-between bg-slate-900 px-3 text-white md:hidden">
+        <Sheet open={drawerOpen} onOpenChange={setDrawerOpen}>
+          <SheetTrigger asChild>
+            <button
+              type="button"
+              aria-label="Open navigation"
+              className="flex size-9 items-center justify-center rounded-md outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
+            >
+              <Menu className="size-5" aria-hidden="true" />
+            </button>
+          </SheetTrigger>
+          <SheetContent
+            side="left"
+            className="w-72 gap-0 bg-slate-900 p-0 text-white [&>button[data-slot=sheet-close]]:text-slate-300"
+          >
+            <SheetTitle className="sr-only">Navigation</SheetTitle>
+            <nav className="flex flex-col gap-1 p-3 pt-12" aria-label="Sections">
+              {visibleRailItems.map(({ to, icon: Icon, label }) => (
+                <NavLink
+                  key={to}
+                  to={to}
+                  onClick={() => setDrawerOpen(false)}
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
+                >
+                  <Icon className="size-4" aria-hidden="true" />
+                  {label}
+                </NavLink>
+              ))}
+            </nav>
+            {sidebarItems.length > 0 && (
+              <>
+                <div className="mx-3 border-t border-white/10" />
+                <p className="px-6 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                  {activeSection.label}
+                </p>
+                <nav
+                  className="flex flex-col gap-0.5 px-3 pb-4"
+                  aria-label={`${activeSection.label} pages`}
+                >
+                  {sidebarItems.map((item) => (
+                    <NavLink
+                      key={item.to}
+                      to={item.to}
+                      onClick={() => setDrawerOpen(false)}
+                      className={() =>
+                        cn(
+                          'rounded-lg px-3 py-2 text-sm text-slate-300 no-underline transition-colors hover:bg-white/10 hover:text-white',
+                          location.pathname + location.search === item.to &&
+                            'bg-white/15 font-medium text-white hover:bg-white/15',
+                        )
+                      }
+                    >
+                      {item.label}
+                    </NavLink>
+                  ))}
+                </nav>
+              </>
+            )}
+          </SheetContent>
+        </Sheet>
+        <div className="flex size-8 items-center justify-center rounded-lg bg-white/10">
+          <ClipboardCheck className="size-5" aria-hidden="true" />
+        </div>
+        <AccountMenu
+          user={user}
+          open={mobileMenuOpen}
+          onOpenChange={setMobileMenuOpen}
+          side="bottom"
+          onOpenPassword={openPasswordDialog}
+          onLogout={() => void handleLogout()}
+        />
+      </header>
+
+      {/* Desktop rail (md+): unchanged from the previous round. */}
+      <aside className="hidden w-20 shrink-0 flex-col items-center gap-2 bg-slate-900 py-4 text-white md:flex">
         {/* Brand mark: icon only — the rail is too narrow for the wordmark. */}
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
           <ClipboardCheck className="size-6" aria-hidden="true" />
         </div>
         <nav className="flex w-full flex-1 flex-col items-center gap-1 px-1 pt-2">
-          <RailLink to="/dashboard" icon={LayoutDashboard} label="Dashboard" />
-          <RailLink to="/documents" icon={FileText} label="Documents" />
-          <RailLink to="/tasks" icon={ListChecks} label="Tasks" />
-          <RailLink to="/departments" icon={Building2} label="Depts" />
-          <RailLink to="/activity" icon={Activity} label="Activity" />
-          {isAdmin && <RailLink to="/admin/types" icon={Settings} label="Admin" />}
+          {visibleRailItems.map(({ to, icon, label }) => (
+            <RailLink key={to} to={to} icon={icon} label={label} />
+          ))}
         </nav>
-        <DropdownMenu open={menuOpen} onOpenChange={setMenuOpen}>
-          <DropdownMenuTrigger
-            aria-label="Account menu"
-            className="flex shrink-0 items-center justify-center rounded-full outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
-          >
-            <CircleUserRound className="size-7 text-slate-300" aria-hidden="true" />
-          </DropdownMenuTrigger>
-          <DropdownMenuContent side="right" align="end" className="w-64">
-            <DropdownMenuLabel className="font-normal">
-              <div className="flex flex-col gap-0.5">
-                <span className="font-medium text-foreground">{user?.name}</span>
-                <span className="text-xs text-muted-foreground">{user?.email}</span>
-                <span className="text-xs text-muted-foreground">
-                  {user?.departments.map((d) => `${d.code}: ${d.level}`).join(' · ')}
-                </span>
-              </div>
-            </DropdownMenuLabel>
-            <DropdownMenuSeparator />
-            <DropdownMenuItem
-              onSelect={(event) => {
-                // Prevent Radix from returning focus to the trigger before the
-                // Dialog mounts — a known conflict when a Dialog is opened
-                // from inside a DropdownMenuItem's onSelect handler. The
-                // preventDefault also stops Radix's own close, so the menu
-                // is closed explicitly here (verified: otherwise the Dialog
-                // opens layered over a still-open menu).
-                event.preventDefault();
-                setMenuOpen(false);
-                openPasswordDialog();
-              }}
-            >
-              Change password
-            </DropdownMenuItem>
-            <DropdownMenuItem onSelect={() => void handleLogout()}>Log out</DropdownMenuItem>
-          </DropdownMenuContent>
-        </DropdownMenu>
+        <AccountMenu
+          user={user}
+          open={railMenuOpen}
+          onOpenChange={setRailMenuOpen}
+          side="right"
+          onOpenPassword={openPasswordDialog}
+          onLogout={() => void handleLogout()}
+        />
       </aside>
 
       <div className="flex min-w-0 flex-1 items-start gap-6">
         {sidebarItems.length > 0 && (
-          <aside className="flex min-w-[220px] flex-col gap-0.5 border-r border-border p-4">
+          <aside className="hidden min-w-[220px] flex-col gap-0.5 border-r border-border p-4 md:flex">
             {sidebarItems.map((item) => (
               <NavLink
                 key={item.to}

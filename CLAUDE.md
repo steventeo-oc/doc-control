@@ -411,8 +411,79 @@
   risked with a raw SQL delete (a `user` row has enough FK fan-out —
   audit_log, user_department, workflow tasks, notification_log — that a
   manual delete could violate something the admin-delete endpoints
-  handle correctly); delete it via Admin > Users, or the app's own user
-  DELETE path if one exists, whenever convenient.
+  handle correctly); a later attempt to clean it up via the Admin >
+  Users UI using the dev-default bootstrap credentials
+  (`admin@doccontrol.local` / `changeme_admin`) bounced back to the
+  login page rather than authenticating — not investigated further
+  (low priority; either the dev-default password was changed at some
+  point this session or something else is off) — still just sitting in
+  dev data, delete whenever convenient.
+  **Microsoft SSO login is implemented, reviewed, and verified
+  end-to-end against the real Overclock tenant (2026-09-16, two commits
+  9749bd1 plan-back update / 47970a9 implementation, exactly per the
+  approved `Microsoft_SSO_PlanBack.md`)**: F1 (reuse the existing Graph
+  app registration) confirmed by the owner, who then completed the
+  required Azure Portal steps themselves (redirect URI + delegated
+  `openid`/`profile`/`email` permissions, admin consent granted) —
+  recorded in the plan-back for reference. Account-linking is exactly
+  the policy the owner specified: Microsoft only proves identity, the
+  local account must already exist (matched case-insensitively by
+  email, same rule the `user` table already enforces) and be active —
+  no auto-provisioning, no default role; no match rejects with a
+  specific message directing the person to an admin, everything else
+  fails to a generic message, neither is silently swallowed. The one
+  thing that would have silently broken this without extra care: this
+  app's authorization model (`CurrentUserProvider`, every `hasRole()`
+  check) hard-requires the SecurityContext's principal to be an actual
+  `AppUserPrincipal`, which Spring Security's default OIDC login does
+  not produce — a custom `OidcUserService` enforces the account-linking
+  policy, and a custom `AuthenticationSuccessHandler` then replaces the
+  stock `OidcUser` principal with a real `AppUserPrincipal` built
+  exactly like `AppUserDetailsService` builds it, saved via the same
+  `HttpSessionSecurityContextRepository` pattern `AuthController.login()`
+  uses — proven by a test that reads the authentication back out of the
+  actual saved session (not just the thread-local) and asserts the
+  principal type, id, and case-normalized `ROLE_*` authorities.
+  Gated behind `doccontrol.auth.sso.enabled` (env `DOCCONTROL_SSO_ENABLED`,
+  currently `true` in this machine's `.env` — **not yet decided whether
+  that should be the ongoing default or was just for this session's
+  testing, ask the owner**), reusing the Graph sender's existing
+  `DOCCONTROL_NOTIFICATION_TENANT_ID`/`_CLIENT_ID`/`_CLIENT_SECRET` —
+  the flag is the only new secret-adjacent env var. One real bug found
+  and fixed during live verification, by the tech lead directly rather
+  than routed through the usual junior-implements loop (the owner was
+  actively blocked mid-test): the OAuth2 client's redirect URI defaulted
+  to Spring's request-derived `{baseUrl}` template, but nginx's
+  `proxy_set_header Host $host` (`web/nginx.conf`) strips the port
+  before forwarding to the api container, so the built redirect_uri
+  silently dropped `:3000` and would have mismatched what's registered
+  in Azure. Fixed by setting the client registration's redirect URI
+  explicitly from `app.base-url` (the same explicit, trusted config
+  `PasswordResetService` already uses for reset-link URLs) instead of
+  relying on proxy-header inference. Second finding during the same live
+  round: the brand-panel logo's `brightness-0 invert` treatment (an
+  earlier round's fix for a since-resolved white-background problem)
+  made the whole mark monochrome white; the owner wanted white
+  "Over"/icon with red "clock" preserved, which no single CSS filter can
+  do (filters transform every pixel by the same formula). Solved with
+  two stacked copies of the same transparent PNG, each clipped to show
+  only its half — one filtered white, one left original — split at
+  57.25%/42.75%. That exact split point took two rounds to get right:
+  the junior caught (via a full-height pixel scan, correctly refusing to
+  "nudge blind" per instruction) that the tech lead's first measurement
+  landed 3px inside the "r" rather than in the true 10-native-pixel
+  gap between letters — a useful reminder that a handful of sampled rows
+  isn't the same as scanning all of them. Final result verified at the
+  actual rendered size (192px, ~14.8x downscale from the 2842px source),
+  not just at full resolution. **Not yet done, deliberately deferred as
+  a small non-blocking follow-up**: F3's audit-logging-on-rejection
+  (System-actor pattern, matching the daily sweep) — `AuditService`'s
+  `Propagation.MANDATORY` doesn't fit the OIDC filter's transaction
+  boundary the same way the success handler needed its own
+  `@Transactional`, so this needs its own small transaction, not yet
+  written. Backend test suite not re-run in full this round (targeted
+  `SsoLoginTests` plus a clean full-context boot were the verification
+  bar) — run the whole suite before treating the stack as fully proven.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

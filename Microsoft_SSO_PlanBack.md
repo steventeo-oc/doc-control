@@ -35,27 +35,30 @@ the local `user` by email (case-insensitive, same uniqueness rule the
 This needs no new table or column: it's a lookup at login time against
 data that already exists.
 
-## F1 — Azure app registration: reuse or new
+## F1 — Azure app registration: reuse or new — **DECIDED: reuse**
 
-The existing Graph integration's app registration almost certainly
-holds an **application permission** (`Mail.Send`, client-credentials
-flow, no user ever signs into it) — a different permission model from
-an **interactive login** (`openid`/`profile`/`email`, delegated,
-authorization-code flow with a browser redirect). Azure AD supports
-both on one app registration.
+Confirmed by the owner. Reuses the existing Graph app registration —
+add the delegated `openid`, `profile`, `email` permissions and a login
+redirect URI to it (exact values in "Azure Portal steps" below). One
+app, one set of secrets; `doccontrol.auth.sso.*` config points at the
+*same* `DOCCONTROL_NOTIFICATION_TENANT_ID` / `_CLIENT_ID` /
+`_CLIENT_SECRET` values already in the gitignored `.env` — no new
+secrets needed, just one new flag to flip on.
 
-- **Recommended default**: reuse the existing app registration. Add the
-  delegated `openid`, `profile`, `email` permissions and a new redirect
-  URI (`{base-url}/api/login/oauth2/code/microsoft`) to it. One app to
-  manage, one set of secrets already handled correctly (gitignored
-  `.env`, real values only at deployment).
-- **Alternative**: a separate app registration for login, isolating
-  "can send mail as the service" from "can authenticate users" so a
-  problem with one credential can't affect the other.
-- **This step happens in the Azure Portal, outside this codebase** —
-  whichever way you go, that's a manual step for whoever administers
-  the Overclock tenant (you, or IT). I'll document the exact redirect
-  URI and permissions needed once this is picked.
+### Azure Portal steps (manual, outside this codebase — for whoever
+administers the Overclock tenant)
+
+1. In the existing app registration (the one `GraphNotificationSender`
+   already uses) → **Authentication** → Add a platform → **Web** →
+   redirect URI: `{app.base-url}/api/login/oauth2/code/microsoft`
+   (for the current dev stack: `http://localhost:3000/api/login/oauth2/code/microsoft`;
+   a real deployment uses its real `app.base-url` instead).
+2. **API permissions** → Add a permission → **Microsoft Graph** →
+   **Delegated permissions** → add `openid`, `profile`, `email`. These
+   are separate from the existing `Mail.Send` **application**
+   permission already granted — both can coexist on one registration.
+   Grant admin consent for the tenant if prompted.
+3. No new client secret needed — the existing one is reused.
 
 ## F2 — Feature flag
 
@@ -101,33 +104,55 @@ Out of scope for this pass (say so if any should be in):
 ## Technical shape (for reference, not itself a decision)
 
 - Backend: `spring-boot-starter-oauth2-client`, Spring Security OAuth2
-  Login configured against Microsoft's OIDC endpoints for the org's
-  tenant. A custom `OidcUserService` wraps the default one: after
-  Microsoft returns the authenticated identity, look up `user` by the
-  email claim; found+active → proceed (Spring Security establishes the
-  normal session cookie, identical to password login from here on);
-  not found → throw `OAuth2AuthenticationException`, caught by a
-  failure handler that redirects to `/login?error=sso_no_account`.
-- New env vars (gitignored `.env`, matching the existing Graph secret
-  discipline): `DOCCONTROL_OAUTH2_MICROSOFT_CLIENT_ID`,
-  `_CLIENT_SECRET`, `_TENANT_ID` (reuse the existing Graph
-  client id/secret if F1 goes with "reuse the app registration" and
-  they're the same values — tenant id likely already implicit in the
-  Graph config, will confirm).
+  Login gated behind `doccontrol.auth.sso.enabled` (new
+  `SsoProperties`, same `@ConfigurationProperties` pattern as
+  `NotificationProperties`; `tenant-id`/`client-id`/`client-secret`
+  default to `${DOCCONTROL_NOTIFICATION_TENANT_ID}` etc. in
+  application.yml per F1 — no new secrets in `.env`, only
+  `DOCCONTROL_SSO_ENABLED`).
+- **The one thing that must not be gotten wrong**: this app's
+  authorization model (`CurrentUserProvider`, every `hasRole()` check
+  in `SecurityConfig`, ownership checks) hard-requires
+  `Authentication.getPrincipal()` to be an actual `AppUserPrincipal` —
+  `CurrentUserProvider.principal()` throws 401 for anything else.
+  Spring Security's default OAuth2 login produces an `OidcUser`
+  principal instead, which would NOT satisfy that check — a login that
+  *looks* successful (session established, redirected in) would then
+  401 on every subsequent API call, or silently fail role checks for a
+  real admin. The fix is a known, standard pattern, not a new
+  invention: a custom `OidcUserService.loadUser()` does the email
+  lookup (`UserRepository.findByEmailIgnoreCase`, mirroring
+  `AppUserDetailsService`) and rejects (throws
+  `OAuth2AuthenticationException`) when there's no active match; on
+  success, a custom `AuthenticationSuccessHandler` then *replaces* the
+  SecurityContext's Authentication with a real
+  `UsernamePasswordAuthenticationToken(AppUserPrincipal, null,
+  authorities)` — built exactly the way `AppUserDetailsService` builds
+  it — saved via the same `HttpSessionSecurityContextRepository`
+  `AuthController.login()` already uses, before redirecting. From that
+  point on an SSO session and a password session are indistinguishable
+  to the rest of the app. A custom `AuthenticationFailureHandler`
+  handles the reject case, redirecting to `/login?error=sso_no_account`.
 - Frontend: one button + a divider + one error-message branch on
-  LoginPage. `AuthContext`/`/auth/me` need zero changes — a session
-  cookie is a session cookie regardless of how it was established.
-- Tests: `SsoLoginServiceTests` (or similar) for the match/reject
-  branching against a real test database, same pattern as
-  `PasswordResetTests`. The actual browser round-trip through
+  LoginPage. `AuthContext`/`/auth/me` need zero changes beyond that —
+  once the principal-bridging above is correct, a session cookie is a
+  session cookie regardless of how it was established.
+- Tests: a service-level test for the email match/reject branching
+  against a real test database (same pattern as `PasswordResetTests`),
+  PLUS a test that actually asserts the post-login principal is an
+  `AppUserPrincipal` with the correct authorities — the failure mode
+  above is exactly the kind of thing that "the redirect worked" alone
+  would not catch. The actual browser round-trip through
   login.microsoftonline.com can't be unit-tested — real end-to-end
-  verification against the live Azure tenant, same as how the Graph
-  sender itself was verified with a real email.
+  verification against the live Azure tenant is required before this
+  is considered done, same bar as the Graph sender's real-email
+  verification: log in as a real matched account, confirm `/auth/me`
+  and at least one role-gated action (e.g. an admin-only page if the
+  test account is Admin) both work.
 
-## What I need from you before any code
+## Status
 
-1. F1: reuse the existing app registration, or a new one?
-2. Anything to change in F2–F5, or approve the recommended defaults?
-3. Once F1 is picked, you'll need to go into the Azure Portal yourself
-   and add the redirect URI + delegated permissions (or create the new
-   app) — I'll give you the exact values to enter once F1 is settled.
+F1 is decided (reuse). F2–F5 proposed defaults stand — proceeding on
+that basis; say so if any should change. Remaining before this is
+live: the Azure Portal steps above (owner/tenant-admin action, outside
+this codebase) and the implementation itself.

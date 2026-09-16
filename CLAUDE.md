@@ -758,6 +758,51 @@
   artifact this session. Next up per the plan-back's §8 order: Phase 2b
   (document detail — metadata, versions, upload dialog, the
   acknowledgment panel), not started.
+  **Design redesign Phase 2b — Document Detail + AcknowledgmentPanel
+  migrated (2026-09-16, commit c240149)**: the densest surface in the
+  app — metadata, the rename/trash card, the two-form Approval card,
+  the versions table, the upload-version card, and
+  `AcknowledgmentPanel.tsx` (F5's first shared component to actually
+  migrate, riding with its host page as the plan-back said it would).
+  Same behavior-freeze discipline as Phase 2a: every request shape,
+  every conditional card, and the pre-existing two-form Approval
+  layout (the assignee fields live in form 1 and silently feed the
+  re-approval submit in form 2 — a real, confirmed, pre-existing quirk,
+  flagged not fixed) are bit-for-bit unchanged. The header doesn't use
+  the shared `PageHeader` (it only takes a plain string title) — a
+  custom header block instead, same pattern `DashboardPage`'s greeting
+  header already set. Reviewer/grant-user picker state moved from
+  `number | ''` to a plain string (Radix Select works in strings), with
+  exactly one `Number()` conversion at each request boundary — confirmed
+  the wire format is unchanged. Independently re-verified well beyond
+  the junior's report: I deliberately re-triggered "Send v1 for
+  approval" on the document the report said already had one in progress
+  and got a live `409 An approval is already in progress for this
+  document` — which resolved what first looked like a real discrepancy
+  (the document's `status` field reads `draft` via the API even with an
+  approval actively running; `status` only moves on approval
+  *completion*, per the existing Phase 2b design note above — starting
+  one doesn't touch it, so "draft" was correct, not stale data or a
+  migration bug) and confirmed the migrated error banner renders a
+  real 409 correctly. Also independently confirmed the released
+  document's acknowledgment counts, the revoked-access default state,
+  and the trashed-badge styling live. **Two pre-existing gaps flagged
+  for a separate decision, deliberately left as-is**: "Move to trash"
+  on this page has zero confirmation of any kind (same as Documents'
+  create-form finding last round, another `RejectConfirmation_
+  PlanBack.md`-style candidate); the metadata-edit card renders for
+  viewers who can't actually save (the server 403s the rename, the UI
+  doesn't hide the form first). Dev-data note: id 24 (SOP-QA-0003) now
+  has a genuine in-progress by-user approval and a renamed
+  "(renamed)" suffix; id 25 (SOP-QA-0004) has a genuine in-progress
+  by-role approval and was trashed/restored twice during verification
+  (net zero); id 21 (SOP-QA-0002, released) has a real recorded
+  acknowledgment from the admin account and a started-then-completed
+  grant/revoke cycle — all genuine workflow records from required
+  verification, adjust at will. Next up per the plan-back's §8 order:
+  Phase 2c (Tasks — both panes, including the completion form, and the
+  known pre-existing overdue-badge-styled-as-reapproval bug flagged in
+  §11 to fix deliberately when this page migrates), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

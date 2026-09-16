@@ -39,15 +39,22 @@ function isoDaysAgo(days: number): string {
 
 export default function DashboardPage() {
   return (
-    <>
-      <PageHeader title="Dashboard" />
-      <div className="grid grid-cols-2 items-start gap-4 max-[860px]:grid-cols-1">
+    // ≥861px (dashboard & navigation plan-back round two, superseding F7
+    // for this width only): the page is exactly the shell's height and the
+    // grid fills it — each card is a fixed cell and overflow scrolls
+    // inside the card, never the page. Below 861px none of these apply:
+    // natural content-sized cards with normal page scroll, as before.
+    <div className="min-[861px]:flex min-[861px]:h-full min-[861px]:min-h-0 min-[861px]:flex-col">
+      <div className="shrink-0 border-b border-border pb-3">
+        <PageHeader title="Dashboard" />
+      </div>
+      <div className="grid grid-cols-2 items-start gap-4 max-[860px]:grid-cols-1 min-[861px]:flex-1 min-[861px]:min-h-0 min-[861px]:grid-rows-2 min-[861px]:items-stretch">
         <TasksDashlet />
         <DocumentsDashlet />
         <DepartmentsDashlet />
         <ActivityDashlet />
       </div>
-    </>
+    </div>
   );
 }
 
@@ -64,7 +71,7 @@ function Dashlet(props: {
   children: React.ReactNode;
 }) {
   return (
-    <Card className="flex flex-col">
+    <Card className="flex min-[861px]:h-full flex-col">
       <CardHeader>
         <CardTitle className="flex items-center gap-2 text-base font-semibold">
           <props.emptyIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
@@ -76,7 +83,7 @@ function Dashlet(props: {
           </span>
         </CardTitle>
       </CardHeader>
-      <CardContent className="flex min-h-40 flex-1 flex-col">
+      <CardContent className="flex min-h-40 min-[861px]:min-h-0 flex-1 flex-col">
         {props.error && (
           <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
             {props.error}
@@ -155,7 +162,7 @@ function TasksDashlet() {
       emptyIcon={Inbox}
       emptyMessage="Nothing waiting for you — no approvals, no acknowledgments."
     >
-      <ul className="max-h-96 list-none overflow-y-auto p-0">
+      <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {rows.map((row) =>
           row.kind === 'approval' ? (
             <li key={row.key} className="border-b border-border py-1.5 leading-normal last:border-b-0">
@@ -235,7 +242,7 @@ function DepartmentsDashlet() {
       emptyIcon={Folder}
       emptyMessage="You belong to no departments."
     >
-      <ul className="max-h-96 list-none overflow-y-auto p-0">
+      <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {(departments ?? [])
           .slice()
           .sort((a, b) => a.code.localeCompare(b.code))
@@ -285,7 +292,7 @@ function ActivityDashlet() {
       emptyIcon={Inbox}
       emptyMessage="No activity in the last 7 days."
     >
-      <ul className="max-h-96 list-none overflow-y-auto p-0">
+      <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {(page?.content ?? []).map((entry) => (
           <li key={entry.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
             <ActivitySentence entry={entry} />
@@ -337,7 +344,7 @@ function DocumentsDashlet() {
         </Button>
       }
     >
-      <ul className="max-h-96 list-none overflow-y-auto p-0">
+      <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {(page?.content ?? []).map((doc: DocumentSummary) => (
           <li key={doc.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
             <Link className="hover:underline" to={`/documents/${doc.id}`}>

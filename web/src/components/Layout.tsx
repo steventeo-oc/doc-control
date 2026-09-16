@@ -119,9 +119,24 @@ function AccountMenu(props: {
     <DropdownMenu open={props.open} onOpenChange={props.onOpenChange}>
       <DropdownMenuTrigger
         aria-label="Account menu"
-        className="flex shrink-0 items-center justify-center rounded-full outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
+        title="Account menu"
+        className={cn(
+          'shrink-0 rounded-lg text-slate-300 transition-colors outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50',
+          props.side === 'right'
+            ? // Desktop rail: the same stacked icon+label treatment as
+              // RailLink, so the account entry reads as part of the same
+              // list instead of a floating icon.
+              'flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] leading-tight'
+            : // Mobile top bar: there is horizontal room here — icon with a
+              // visible label beside it.
+              'flex items-center gap-2 px-2 py-1.5 text-sm',
+        )}
       >
-        <CircleUserRound className="size-7 text-slate-300" aria-hidden="true" />
+        <CircleUserRound
+          className={cn('text-slate-300', props.side === 'right' ? 'size-5' : 'size-6')}
+          aria-hidden="true"
+        />
+        <span>Account</span>
       </DropdownMenuTrigger>
       <DropdownMenuContent side={props.side} align="end" className="w-64">
         <DropdownMenuLabel className="font-normal">
@@ -269,7 +284,16 @@ export default function Layout() {
   }
 
   return (
-    <div className="flex min-h-screen flex-col md:flex-row">
+    <div
+      className={cn(
+        'flex min-h-screen flex-col md:flex-row',
+        // Dashboard & navigation plan-back round two: on the dashboard at
+        // ≥861px the shell is exactly the viewport and nothing page-scrolls —
+        // each dashboard card scrolls internally instead. Every other route,
+        // and narrower widths on the dashboard, keep the natural page scroll.
+        section === 'dashboard' && 'min-[861px]:h-screen min-[861px]:overflow-hidden',
+      )}
+    >
       {/* Mobile top bar (below md only): hamburger, brand mark, account menu —
           the three ways in, without the full-height rail. */}
       <header className="flex h-12 shrink-0 items-center justify-between bg-slate-900 px-3 text-white md:hidden">
@@ -366,7 +390,12 @@ export default function Layout() {
         />
       </aside>
 
-      <div className="flex min-w-0 flex-1 items-start gap-6">
+      <div
+        className={cn(
+          'flex min-w-0 flex-1 items-start gap-6',
+          section === 'dashboard' && 'min-[861px]:items-stretch',
+        )}
+      >
         {sidebarItems.length > 0 && (
           <aside className="hidden min-w-[220px] flex-col gap-0.5 border-r border-border p-4 md:flex">
             {sidebarItems.map((item) => (
@@ -393,6 +422,8 @@ export default function Layout() {
           className={cn(
             'flex-1 p-6',
             section === 'dashboard' ? 'max-w-none' : 'mx-auto w-full max-w-[1100px]',
+            section === 'dashboard' &&
+              'min-[861px]:flex min-[861px]:flex-col min-[861px]:overflow-hidden',
           )}
         >
           <Outlet />

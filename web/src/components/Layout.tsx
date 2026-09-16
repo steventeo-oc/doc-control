@@ -121,7 +121,10 @@ function AccountMenu(props: {
         aria-label="Account menu"
         title="Account menu"
         className={cn(
-          'shrink-0 rounded-lg text-slate-300 transition-colors outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50',
+          // bg-transparent/border-0: raw <button> elements fall through to
+          // the legacy base-layer button rule (white bg + gray border) —
+          // fine on un-migrated pages, wrong on this dark chrome.
+          'shrink-0 rounded-lg border-0 bg-transparent text-slate-300 transition-colors outline-none hover:bg-white/10 hover:text-white focus-visible:ring-2 focus-visible:ring-white/50',
           props.side === 'right'
             ? // Desktop rail: the same stacked icon+label treatment as
               // RailLink, so the account entry reads as part of the same
@@ -302,7 +305,7 @@ export default function Layout() {
             <button
               type="button"
               aria-label="Open navigation"
-              className="flex size-9 items-center justify-center rounded-md outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
+              className="flex size-9 items-center justify-center rounded-md border-0 bg-transparent outline-none hover:bg-white/10 focus-visible:ring-2 focus-visible:ring-white/50"
             >
               <Menu className="size-5" aria-hidden="true" />
             </button>

@@ -1,5 +1,5 @@
 import { FormEvent, useState } from 'react';
-import { Link, Navigate, useNavigate } from 'react-router-dom';
+import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import {
   Building2,
   ClipboardCheck,
@@ -38,6 +38,8 @@ export default function LoginPage() {
   const [error, setError] = useState<string | null>(null);
   const [submitting, setSubmitting] = useState(false);
   const [showPassword, setShowPassword] = useState(false);
+  const [searchParams] = useSearchParams();
+  const ssoError = searchParams.get('error');
 
   if (!loading && user) {
     return <Navigate to="/" replace />;
@@ -60,7 +62,7 @@ export default function LoginPage() {
   return (
     <div className="flex min-h-screen flex-col bg-background">
       <div className="flex flex-1">
-        <aside className="relative hidden flex-col justify-between overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:w-[45%] lg:max-w-3xl">
+        <aside className="relative hidden flex-col overflow-hidden bg-primary p-12 text-primary-foreground lg:flex lg:w-[45%] lg:max-w-3xl">
           <div
             className="pointer-events-none absolute inset-0 bg-linear-to-br from-primary-foreground/10 via-transparent to-transparent"
             aria-hidden="true"
@@ -69,11 +71,22 @@ export default function LoginPage() {
             className="pointer-events-none absolute -bottom-20 -right-20 size-80 opacity-10"
             aria-hidden="true"
           />
-          <img
-            src={overclockLogo}
-            alt="Overclock"
-            className="relative h-auto w-48 brightness-0 invert"
-          />
+          <div className="relative w-48" style={{ aspectRatio: '2842 / 1913' }}>
+            <img
+              src={overclockLogo}
+              alt=""
+              aria-hidden="true"
+              className="absolute inset-0 h-full w-full brightness-0 invert"
+              style={{ clipPath: 'inset(0 42.75% 0 0)' }}
+            />
+            <img
+              src={overclockLogo}
+              alt="Overclock"
+              className="absolute inset-0 h-full w-full"
+              style={{ clipPath: 'inset(0 0 0 57.25%)' }}
+            />
+          </div>
+          <div className="flex flex-1 flex-col justify-center">
           <div className="relative max-w-md">
             <h1 className="text-3xl font-semibold leading-tight">
               Controlled documents, from draft to release.
@@ -94,6 +107,7 @@ export default function LoginPage() {
               ))}
             </ul>
           </div>
+          </div>
           <p className="relative text-xs text-primary-foreground/60">
             Internal quality system · ISO 9001 document control
           </p>
@@ -110,6 +124,16 @@ export default function LoginPage() {
             </CardHeader>
             <CardContent>
               <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                {ssoError === 'sso_no_account' && (
+                  <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    No account found for this email. Contact your administrator.
+                  </div>
+                )}
+                {ssoError && ssoError !== 'sso_no_account' && (
+                  <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    Microsoft sign-in failed. Please try again.
+                  </div>
+                )}
                 {error && (
                   <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                     {error}
@@ -158,6 +182,22 @@ export default function LoginPage() {
                   {submitting ? 'Signing in…' : 'Sign in'}
                 </Button>
               </form>
+              <div className="mt-4 flex items-center gap-3">
+                <div className="h-px flex-1 bg-border" />
+                <span className="text-xs text-muted-foreground">or</span>
+                <div className="h-px flex-1 bg-border" />
+              </div>
+              <Button asChild variant="outline" className="mt-4 w-full">
+                <a href="/api/oauth2/authorization/microsoft">
+                  <svg aria-hidden="true" viewBox="0 0 23 23" className="size-4">
+                    <rect x="1" y="1" width="10" height="10" fill="#f25022" />
+                    <rect x="12" y="1" width="10" height="10" fill="#7fba00" />
+                    <rect x="1" y="12" width="10" height="10" fill="#00a4ef" />
+                    <rect x="12" y="12" width="10" height="10" fill="#ffb900" />
+                  </svg>
+                  Sign in with Microsoft
+                </a>
+              </Button>
               <p className="mt-4 border-t pt-4 text-center text-sm">
                 <Link className="text-primary hover:underline" to="/forgot-password">
                   Forgot password?

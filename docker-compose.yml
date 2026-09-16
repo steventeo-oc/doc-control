@@ -71,6 +71,9 @@ services:
       DOCCONTROL_NOTIFICATION_CLIENT_ID: ${DOCCONTROL_NOTIFICATION_CLIENT_ID:-}
       DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ${DOCCONTROL_NOTIFICATION_CLIENT_SECRET:-}
       DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: ${DOCCONTROL_NOTIFICATION_SENDER_MAILBOX:-}
+      # "Sign in with Microsoft" (Microsoft_SSO_PlanBack.md): reuses the Graph
+      # app registration values above — the flag is the only new variable.
+      DOCCONTROL_SSO_ENABLED: ${DOCCONTROL_SSO_ENABLED:-false}
       # Phase 2e watermarking: office downloads convert to PDF in the
       # Gotenberg sidecar (LibreOffice headless) and get stamped —
       # rendition-url defaults to the compose service name:

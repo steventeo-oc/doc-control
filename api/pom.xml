@@ -38,6 +38,12 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-security</artifactId>
         </dependency>
+        <!-- "Sign in with Microsoft" OIDC login (Microsoft_SSO_PlanBack.md) —
+             gated behind doccontrol.auth.sso.enabled, inactive unless enabled -->
+        <dependency>
+            <groupId>org.springframework.boot</groupId>
+            <artifactId>spring-boot-starter-oauth2-client</artifactId>
+        </dependency>
 
         <!-- Schema is owned by Flyway migrations (db/migration); Hibernate only validates -->
         <dependency>

@@ -32,6 +32,18 @@ spring:
       max-request-size: 110MB
 
 doccontrol:
+  auth:
+    sso:
+      # "Sign in with Microsoft" (Microsoft_SSO_PlanBack.md, F1/F2): reuses the
+      # Graph sender's Azure app registration, so tenant/client/secret are the
+      # SAME DOCCONTROL_NOTIFICATION_* env vars — DOCCONTROL_SSO_ENABLED is the
+      # only new one. When false, none of the OAuth2 wiring activates at all:
+      # no discovery call, and missing credentials never matter.
+      enabled: ${DOCCONTROL_SSO_ENABLED:false}
+      tenant-id: ${DOCCONTROL_NOTIFICATION_TENANT_ID:}
+      client-id: ${DOCCONTROL_NOTIFICATION_CLIENT_ID:}
+      client-secret: ${DOCCONTROL_NOTIFICATION_CLIENT_SECRET:}
+
   workflow:
     # Escalation/reminder tuning confirmed with QA; overridable via
     # DOCCONTROL_WORKFLOW_* env vars (see WorkflowProperties).

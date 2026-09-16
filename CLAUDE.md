@@ -484,6 +484,75 @@
   written. Backend test suite not re-run in full this round (targeted
   `SsoLoginTests` plus a clean full-context boot were the verification
   bar) — run the whole suite before treating the stack as fully proven.
+  **Still open, carried forward, none resolved yet**:
+  `DOCCONTROL_SSO_ENABLED=true` is live in this machine's `.env` — still
+  not confirmed whether that's the intended ongoing default or was only
+  for this session's real-login test; F3 (audit-logging the SSO
+  rejection path, System-actor pattern) remains designed but not
+  implemented; the full backend suite has not been re-run since the
+  SSO work began.
+  **Phase 1 §7 gallery refreshed (2026-09-16), then immediately went
+  stale again the same day**: all 14 `screenshots/phase1/*.png` were
+  recaptured fresh (the prior set predated the Login redesign and the
+  two site-wide CSS fixes) and the gallery republished to the same
+  Artifact URL as Version 2 (storage key bumped to `-v2` so any old
+  "reviewed" marks don't carry over against different images). Owner
+  review of that gallery led straight into a UI/UX pass on the
+  Dashboard (below) that changed `Layout.tsx` — the shell every one of
+  those 14 screenshots shows chrome from. **The gallery is stale again
+  as of the nav-rail change and has not been re-refreshed** — don't
+  treat it as current. Recommend holding the actual page-by-page §7
+  sign-off until the nav work fully settles (including a decision on
+  whether the mobile round below happens first), then refresh once
+  more and do the real review — refreshing after every subsequent
+  change would just repeat this cycle indefinitely.
+  Correction to the dev-data note above: the "bounced back to login"
+  admin-credential failure was transient, not a real problem —
+  `admin@doccontrol.local` / `changeme_admin` authenticated
+  successfully on a later, unrelated attempt the same day. The
+  leftover temp user is still undeleted, but purely because hunting it
+  by hand in the unpaginated 39-row Users table wasn't worth the
+  effort, not because it's blocked on anything.
+  **Dashboard & Navigation (2026-09-16, plan-back
+  `Dashboard_And_Navigation_PlanBack.md`, two commits e429cdc plan-back
+  / 86d0e3c implementation, F1-F4 all decided same session)**:
+  triggered by the owner asking for an opinion on the Dashboard and
+  whether the system needs a side nav. F1 (show each Dashboard card's
+  existing `emptyIcon` in its header even when populated, not just when
+  empty) and F2 (a 160px `min-h-40` on each card's content area so a
+  short list like a 1-task Tasks card doesn't look accidentally empty
+  next to a scrolling 22-document sibling) are both small, contained
+  fixes inside the one shared `Dashlet` component in
+  `DashboardPage.tsx`. F3 fixed a real, confirmed gap: `Layout.tsx`'s
+  `sections` sidebar map had `documents`/`tasks`/`departments`/
+  `activity` but never `admin` — Admin's three sub-pages
+  (Types/Tiers/Users) had **no in-app navigation between them at all**,
+  only direct URL editing, confirmed by reading the source and loading
+  `/admin/types` live before proposing the fix. F4 was the real
+  decision: the owner chose **Option 2** (a persistent left icon rail
+  replacing the horizontal top bar) over the smaller patch-the-top-bar
+  option the tech lead had leaned toward — a genuine reversal of part
+  of the already-approved Phase 1 shell design, made deliberately, not
+  backed into. Full technical design (icon per section — all
+  lucide-react, no new dependency: `LayoutDashboard`/`FileText`/
+  `ListChecks`/`Building2`/`Activity`/`Settings` — rail width `w-20`,
+  labeled not icon-only given this app's audience spans experience
+  levels, account menu moved to the rail's bottom with the same
+  dropdown content, unchanged) was written up and decided before any
+  code, then implemented in one round and independently verified live
+  as both admin (all 6 rail items, all 5 section sidebars including
+  the new Admin one, the account menu, Change password, logout) and
+  non-admin (Admin item correctly absent). Password login end-to-end
+  confirmed working after the change. **Desktop only** — the mobile
+  hamburger-drawer collapse (rail + secondary sidebar collapsing into
+  one drawer below `md`/768px) is a deliberate, unscheduled follow-up
+  round, not started. **One flagged quirk awaiting a decision**: the
+  Admin rail item links to and only highlights active on `/admin/types`
+  — Tiers and Users show no active rail item, identical to the old
+  header's behavior (not a regression) but worth a deliberate call
+  rather than leaving it as an accident. Backend untouched (frontend-
+  only change); full backend suite not re-run (unaffected by a
+  frontend-only diff, but not independently confirmed this session).
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

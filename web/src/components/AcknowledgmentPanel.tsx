@@ -2,6 +2,18 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { acknowledgmentApi, userApi } from '../api/resources';
 import type { AcknowledgmentStatus, UserRow } from '../api/types';
 import { ApiError } from '../api/client';
+import { StatusBadge } from './StatusBadge';
+import { Button } from './ui/button';
+import { Card, CardContent, CardHeader, CardTitle } from './ui/card';
+import { Input } from './ui/input';
+import { Label } from './ui/label';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from './ui/select';
 
 /**
  * Read & understood acknowledgment (Phase 2d) — record-only. Department
@@ -9,6 +21,13 @@ import { ApiError } from '../api/client';
  * the owner, admins, and users granted access (per-document, per-user
  * grants). The whole panel stays hidden for viewers without status access
  * (the API decides — a 403 here simply means "not for you").
+ *
+ * Design-redesign Phase 2b (F5 — migrates with its first host page,
+ * DocumentDetailPage): reskinned onto Card/StatusBadge/Button/Label/
+ * Input/Select with the shared banner and list-row patterns. Behavior
+ * unchanged, including the grant picker's two paths: a Select when the
+ * admin-only user list loaded, a plain number Input for non-admin owners
+ * who cannot enumerate users.
  */
 export default function AcknowledgmentPanel(props: {
   documentId: number;
@@ -20,7 +39,8 @@ export default function AcknowledgmentPanel(props: {
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [users, setUsers] = useState<UserRow[] | null>(null);
-  const [grantUserId, setGrantUserId] = useState<number | ''>('');
+  // Radix Select works in strings — converted to a number for the request.
+  const [grantUserId, setGrantUserId] = useState('');
   const [accessRefresh, setAccessRefresh] = useState(0);
 
   const load = useCallback(() => {
@@ -68,7 +88,7 @@ export default function AcknowledgmentPanel(props: {
     }
     setError(null);
     acknowledgmentApi
-      .grant(props.documentId, grantUserId)
+      .grant(props.documentId, Number(grantUserId))
       .then(() => {
         setNotice('Status access granted.');
         setGrantUserId('');
@@ -82,99 +102,113 @@ export default function AcknowledgmentPanel(props: {
   }
 
   return (
-    <div className="card">
-      <h2>Acknowledgment</h2>
-      {error && <div className="error-banner">{error}</div>}
-      {notice && <div className="success-banner">{notice}</div>}
-      {status && (
-        <>
-          <p className="muted">
-            {status.versionNumber !== null ? (
-              <>
-                Version {status.versionNumber}
-                {status.opensAt && <> — window {status.opensAt} to {status.closesAt}</>}
-                {status.overdue && <span className="badge overdue"> overdue</span>}
-                {' '}· record-only: nothing is blocked by a missing acknowledgment.
-              </>
-            ) : (
-              'Nothing in effect to acknowledge yet.'
-            )}
-          </p>
-          {props.documentStatus === 'released' && (
-            <p>
-              <button type="button" className="primary" onClick={() => void handleAcknowledge()}>
-                I have read and understood this document
-              </button>
+    <Card className="mt-4">
+      <CardHeader>
+        <CardTitle className="text-base font-semibold">Acknowledgment</CardTitle>
+      </CardHeader>
+      <CardContent className="flex flex-col gap-4">
+        {error && (
+          <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
+        )}
+        {notice && (
+          <div className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">{notice}</div>
+        )}
+        {status && (
+          <>
+            <p className="text-sm text-muted-foreground">
+              {status.versionNumber !== null ? (
+                <>
+                  Version {status.versionNumber}
+                  {status.opensAt && <> — window {status.opensAt} to {status.closesAt}</>}
+                  {status.overdue && <StatusBadge status="overdue">overdue</StatusBadge>}
+                  {' '}· record-only: nothing is blocked by a missing acknowledgment.
+                </>
+              ) : (
+                'Nothing in effect to acknowledge yet.'
+              )}
             </p>
-          )}
-          <div className="ack-columns">
-            <div>
-              <h3>Acknowledged ({status.acknowledged.length})</h3>
-              <ul>
-                {status.acknowledged.map((record) => (
-                  <li key={record.id}>
-                    {record.userName}{' '}
-                    <span className="muted">
-                      {new Date(record.acknowledgedAt).toLocaleString()}
-                    </span>
-                  </li>
-                ))}
-                {status.acknowledged.length === 0 && <li className="muted">Nobody yet.</li>}
-              </ul>
+            {props.documentStatus === 'released' && (
+              <div>
+                <Button type="button" onClick={() => void handleAcknowledge()}>
+                  I have read and understood this document
+                </Button>
+              </div>
+            )}
+            <div className="flex flex-wrap gap-8">
+              <div className="min-w-[240px] flex-1">
+                <h3 className="text-sm font-semibold">Acknowledged ({status.acknowledged.length})</h3>
+                <ul className="mt-1 flex flex-col">
+                  {status.acknowledged.map((record) => (
+                    <li key={record.id} className="border-b border-border py-1.5 text-sm">
+                      {record.userName}{' '}
+                      <span className="text-muted-foreground">
+                        {new Date(record.acknowledgedAt).toLocaleString()}
+                      </span>
+                    </li>
+                  ))}
+                  {status.acknowledged.length === 0 && (
+                    <li className="py-1.5 text-sm text-muted-foreground">Nobody yet.</li>
+                  )}
+                </ul>
+              </div>
+              <div className="min-w-[240px] flex-1">
+                <h3 className="text-sm font-semibold">Outstanding ({status.outstanding.length})</h3>
+                <ul className="mt-1 flex flex-col">
+                  {status.outstanding.map((member) => (
+                    <li key={member.userId} className="border-b border-border py-1.5 text-sm">
+                      {member.userName}
+                    </li>
+                  ))}
+                  {status.outstanding.length === 0 && (
+                    <li className="py-1.5 text-sm text-muted-foreground">Everybody is caught up.</li>
+                  )}
+                </ul>
+              </div>
             </div>
-            <div>
-              <h3>Outstanding ({status.outstanding.length})</h3>
-              <ul>
-                {status.outstanding.map((member) => (
-                  <li key={member.userId}>{member.userName}</li>
-                ))}
-                {status.outstanding.length === 0 && <li className="muted">Everybody is caught up.</li>}
-              </ul>
-            </div>
-          </div>
-          {props.canManage && (
-            <div>
-              <h3>Status access</h3>
-              <ul>
-                <AccessList documentId={props.documentId} refreshKey={accessRefresh} />
-              </ul>
-              <form className="inline" onSubmit={handleGrant}>
-                {users && users.length > 0 ? (
-                  <label>
-                    User
-                    <select
-                      value={grantUserId}
-                      onChange={(e) => setGrantUserId(Number(e.target.value))}
-                      required
-                    >
-                      <option value="" disabled>
-                        Choose a user…
-                      </option>
-                      {users.map((candidate) => (
-                        <option key={candidate.id} value={candidate.id}>
-                          {candidate.name} ({candidate.email})
-                        </option>
-                      ))}
-                    </select>
-                  </label>
-                ) : (
-                  <label>
-                    User id
-                    <input
-                      type="number"
-                      value={grantUserId}
-                      onChange={(e) => setGrantUserId(Number(e.target.value))}
-                      required
-                    />
-                  </label>
-                )}
-                <button type="submit">Grant status access</button>
-              </form>
-            </div>
-          )}
-        </>
-      )}
-    </div>
+            {props.canManage && (
+              <div className="flex flex-col gap-2">
+                <h3 className="text-sm font-semibold">Status access</h3>
+                <ul className="flex flex-col">
+                  <AccessList documentId={props.documentId} refreshKey={accessRefresh} />
+                </ul>
+                <form className="flex flex-wrap items-end gap-3" onSubmit={handleGrant}>
+                  {users && users.length > 0 ? (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="ack-grant-user">User</Label>
+                      <Select value={grantUserId} onValueChange={setGrantUserId} required>
+                        <SelectTrigger id="ack-grant-user" className="w-64">
+                          <SelectValue placeholder="Choose a user…" />
+                        </SelectTrigger>
+                        <SelectContent>
+                          {users.map((candidate) => (
+                            <SelectItem key={candidate.id} value={String(candidate.id)}>
+                              {candidate.name} ({candidate.email})
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                    </div>
+                  ) : (
+                    <div className="flex flex-col gap-1.5">
+                      <Label htmlFor="ack-grant-userid">User id</Label>
+                      <Input
+                        id="ack-grant-userid"
+                        type="number"
+                        value={grantUserId}
+                        onChange={(e) => setGrantUserId(e.target.value)}
+                        required
+                        className="w-32"
+                      />
+                    </div>
+                  )}
+                  <Button type="submit">Grant status access</Button>
+                </form>
+              </div>
+            )}
+          </>
+        )}
+      </CardContent>
+    </Card>
   );
 }
 
@@ -202,22 +236,25 @@ function AccessList(props: { documentId: number; refreshKey: number }) {
   }
 
   if (error) {
-    return <li className="error-banner">{error}</li>;
+    return <li className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</li>;
   }
   if (!access) {
-    return <li className="muted">Loading…</li>;
+    return <li className="py-1.5 text-sm text-muted-foreground">Loading…</li>;
   }
   if (access.length === 0) {
-    return <li className="muted">Only the owner and admins (default).</li>;
+    return <li className="py-1.5 text-sm text-muted-foreground">Only the owner and admins (default).</li>;
   }
   return (
     <>
       {access.map((grant) => (
-        <li key={grant.userId}>
+        <li
+          key={grant.userId}
+          className="flex items-center justify-between gap-3 border-b border-border py-1.5 text-sm"
+        >
           {grant.userName}{' '}
-          <button type="button" onClick={() => void revoke(grant.userId)}>
+          <Button type="button" variant="outline" size="sm" onClick={() => void revoke(grant.userId)}>
             Revoke
-          </button>
+          </Button>
         </li>
       ))}
     </>

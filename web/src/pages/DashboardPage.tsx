@@ -59,7 +59,7 @@ function sgtDateString(now: Date): string {
  * The Dashboard landing page (Dashboard_Design_PlanBack.md, approved
  * 2026-09-14; round-three structure per owner review; Activity made real
  * per the approved activity plan-back). Design-redesign Phase 1: reskinned
- * onto Card/StatusBadge/EmptyState/PageHeader — the 2×2 grid, the 384px
+ * onto Card/StatusBadge/EmptyState — the 2×2 grid, the 384px
  * scrolling list cap, the empty-state CTA, and every data source/href are
  * unchanged from the pre-redesign version (F7 in the plan-back). The grid
  * keeps the original 860px collapse breakpoint exactly (an arbitrary-value
@@ -95,8 +95,52 @@ export default function DashboardPage() {
   );
 }
 
+type DashletAccent = 'warning' | 'primary' | 'violet' | 'teal';
+
+/**
+ * The Warm Elevated accent per card (owner-reviewed mockup): one lookup so
+ * the color mapping lives here rather than across the four callers.
+ * warning/primary reuse the existing semantic tokens; violet/teal have no
+ * token and follow StatusBadge's precedent of stock Tailwind colors for a
+ * non-semantic, single-page accent (no new CSS variable).
+ */
+const DASHLET_ACCENTS: Record<
+  DashletAccent,
+  { bar: string; badgeBg: string; badgeText: string; pill: string; link: string }
+> = {
+  warning: {
+    bar: 'bg-warning',
+    badgeBg: 'bg-warning/10',
+    badgeText: 'text-warning',
+    pill: 'bg-warning/10 text-warning',
+    link: 'text-warning',
+  },
+  primary: {
+    bar: 'bg-primary',
+    badgeBg: 'bg-primary/10',
+    badgeText: 'text-primary',
+    pill: 'bg-primary/10 text-primary',
+    link: 'text-primary',
+  },
+  violet: {
+    bar: 'bg-violet-600',
+    badgeBg: 'bg-violet-100',
+    badgeText: 'text-violet-600',
+    pill: 'bg-violet-100 text-violet-600',
+    link: 'text-violet-600',
+  },
+  teal: {
+    bar: 'bg-teal-600',
+    badgeBg: 'bg-teal-100',
+    badgeText: 'text-teal-600',
+    pill: 'bg-teal-100 text-teal-600',
+    link: 'text-teal-600',
+  },
+};
+
 function Dashlet(props: {
   title: string;
+  accent: DashletAccent;
   count: number | null;
   moreTo: string;
   moreLabel: string;
@@ -107,17 +151,23 @@ function Dashlet(props: {
   loaded: boolean;
   children: React.ReactNode;
 }) {
+  const accent = DASHLET_ACCENTS[props.accent];
   return (
-    <Card className="flex min-[861px]:h-full flex-col">
+    <Card className="relative flex overflow-hidden rounded-2xl border-0 shadow-md min-[861px]:h-full flex-col">
+      <div className={`absolute inset-x-0 top-0 h-1 ${accent.bar}`} aria-hidden="true" />
       <CardHeader>
-        <CardTitle className="flex items-center gap-2 text-base font-semibold">
-          <props.emptyIcon className="size-4 shrink-0 text-muted-foreground" aria-hidden="true" />
-          <span>
-            {props.title}{' '}
-            {props.count !== null && (
-              <span className="font-normal text-muted-foreground">({props.count})</span>
-            )}
+        <CardTitle className="flex items-center gap-3 text-base font-semibold">
+          <span
+            className={`flex size-10 shrink-0 items-center justify-center rounded-lg ${accent.badgeBg} ${accent.badgeText}`}
+          >
+            <props.emptyIcon className="size-5" aria-hidden="true" />
           </span>
+          <span>{props.title}</span>
+          {props.count !== null && (
+            <span className={`ml-auto rounded-full px-2.5 py-0.5 text-xs font-medium ${accent.pill}`}>
+              {props.count}
+            </span>
+          )}
         </CardTitle>
       </CardHeader>
       <CardContent className="flex min-h-40 min-[861px]:min-h-0 flex-1 flex-col">
@@ -134,7 +184,7 @@ function Dashlet(props: {
         )}
         {props.loaded && props.count !== null && props.count > 0 && props.children}
         <p className="mt-auto pt-3 text-sm">
-          <Link className="text-primary hover:underline" to={props.moreTo}>
+          <Link className={`hover:underline ${accent.link}`} to={props.moreTo}>
             {props.moreLabel}
             {props.count !== null && ` (${props.count})`} →
           </Link>
@@ -191,6 +241,7 @@ function TasksDashlet() {
   return (
     <Dashlet
       title="Tasks"
+      accent="warning"
       count={count}
       moreTo="/tasks?view=approvals"
       moreLabel="All my tasks"
@@ -202,7 +253,7 @@ function TasksDashlet() {
       <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {rows.map((row) =>
           row.kind === 'approval' ? (
-            <li key={row.key} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+            <li key={row.key} className="border-b border-border py-2.5 leading-normal last:border-b-0">
               <StatusBadge status="kind-approval">Approval</StatusBadge>{' '}
               <Link className="hover:underline" to={`/documents/${row.task.documentId}`}>
                 {row.task.documentNumber} — {row.task.name}
@@ -222,7 +273,7 @@ function TasksDashlet() {
               </div>
             </li>
           ) : (
-            <li key={row.key} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+            <li key={row.key} className="border-b border-border py-2.5 leading-normal last:border-b-0">
               <StatusBadge status="kind-acknowledgment">Acknowledgment</StatusBadge>{' '}
               <Link className="hover:underline" to={`/documents/${row.entry.documentId}`}>
                 {row.entry.documentNumber} — {row.entry.name}
@@ -271,6 +322,7 @@ function DepartmentsDashlet() {
   return (
     <Dashlet
       title="Departments"
+      accent="violet"
       count={count}
       moreTo="/departments"
       moreLabel="All departments"
@@ -284,7 +336,7 @@ function DepartmentsDashlet() {
           .slice()
           .sort((a, b) => a.code.localeCompare(b.code))
           .map((d) => (
-            <li key={d.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+            <li key={d.id} className="border-b border-border py-2.5 leading-normal last:border-b-0">
               <Link className="hover:underline" to={`/departments/${d.id}`}>
                 {d.code}
               </Link>{' '}
@@ -321,6 +373,7 @@ function ActivityDashlet() {
   return (
     <Dashlet
       title="Activity"
+      accent="teal"
       count={page?.totalElements ?? null}
       moreTo="/activity?scope=mine"
       moreLabel="All my activity"
@@ -331,7 +384,7 @@ function ActivityDashlet() {
     >
       <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {(page?.content ?? []).map((entry) => (
-          <li key={entry.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+          <li key={entry.id} className="border-b border-border py-2.5 leading-normal last:border-b-0">
             <ActivitySentence entry={entry} />
             <div className="text-xs text-muted-foreground">
               {new Date(entry.performedAt).toLocaleString()}
@@ -366,6 +419,7 @@ function DocumentsDashlet() {
   return (
     <Dashlet
       title="My Documents"
+      accent="primary"
       count={page?.totalElements ?? null}
       moreTo="/documents?view=mine"
       moreLabel="All my documents"
@@ -383,7 +437,7 @@ function DocumentsDashlet() {
     >
       <ul className="max-h-96 list-none overflow-y-auto p-0 min-[861px]:max-h-none min-[861px]:flex-1 min-[861px]:min-h-0">
         {(page?.content ?? []).map((doc: DocumentSummary) => (
-          <li key={doc.id} className="border-b border-border py-1.5 leading-normal last:border-b-0">
+          <li key={doc.id} className="border-b border-border py-2.5 leading-normal last:border-b-0">
             <Link className="hover:underline" to={`/documents/${doc.id}`}>
               {doc.documentNumber} — {doc.name}
             </Link>

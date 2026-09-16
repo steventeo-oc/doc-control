@@ -424,6 +424,11 @@ export default function Layout() {
             section === 'dashboard' ? 'max-w-none' : 'mx-auto w-full max-w-[1100px]',
             section === 'dashboard' &&
               'min-[861px]:flex min-[861px]:flex-col min-[861px]:overflow-hidden',
+            // Warm Elevated (owner-reviewed mockup): a subtle warm off-white
+            // page surface for the dashboard route only — every other page
+            // keeps the shared --background. Deliberately page-scoped, not a
+            // token change.
+            section === 'dashboard' && 'bg-[#faf9f7]',
           )}
         >
           <Outlet />

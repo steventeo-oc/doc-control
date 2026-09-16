@@ -18,6 +18,8 @@
   --color-foreground: var(--foreground);
   --color-card: var(--card);
   --color-card-foreground: var(--card-foreground);
+  --color-popover: var(--popover);
+  --color-popover-foreground: var(--popover-foreground);
   --color-primary: var(--primary);
   --color-primary-foreground: var(--primary-foreground);
   --color-secondary: var(--secondary);
@@ -43,6 +45,8 @@
   --foreground: #0f172a;       /* slate-900 */
   --card: #ffffff;
   --card-foreground: #0f172a;
+  --popover: #ffffff;
+  --popover-foreground: #0f172a;
   --primary: #1d4ed8;          /* blue-700 family — heir of #1a6fb5 */
   --primary-foreground: #eff6ff;
   --secondary: #f1f5f9;        /* slate-100 */

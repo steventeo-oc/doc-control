@@ -627,6 +627,65 @@
   the real, inspectable variable is the raw `--popover` declared in
   `:root`. Cost a few minutes chasing a false "the container must be
   stale" theory before checking the actual served CSS file directly.
+  **Dashboard "Warm Elevated" redesign (2026-09-16, two commits e05f540
+  greeting / ef4f7d1 card reskin)**: the owner said the dashboard was
+  still "ugly" after the live-review fixes above and asked for an
+  actual redesign. Two full visual directions ("Warm Elevated":
+  greeting header, soft shadows, colored per-card accents;
+  "Crisp Data-Forward": a KPI number strip, tighter monochrome-plus-
+  blue cards) were drafted as a Claude Design canvas — a multi-artboard
+  mockup Artifact, not code — built from the real running app's actual
+  tokens/components (`index.css`, `card.tsx`, `badge.tsx`,
+  `StatusBadge.tsx`) and the real dashboard content (real document
+  names, department codes, activity entries), not generic placeholder
+  content. A background content-consistency check caught two real
+  mismatches between the two mockup concepts before the owner ever saw
+  them (Departments missing the inactive-department example in one
+  concept, Documents/Activity row counts differing between the two) —
+  fixed before publishing, since the two concepts are only meant to
+  differ in styling, not in what data they show. The owner picked
+  **Warm Elevated**, built in two rounds: (1) the plain "Dashboard"
+  title replaced with a real greeting — "{Good morning/afternoon/
+  evening}, {actual signed-in user's name}" plus a date line — computed
+  in **Asia/Singapore time specifically** (fixed UTC+8, no DST) via
+  `Intl.DateTimeFormat` rather than the browser's local timezone, since
+  this app's users are in Singapore/Malaysia and a misconfigured device
+  clock shouldn't produce a wrong greeting; uses `hourCycle: 'h23'`
+  rather than the equivalent `hour12: false` to dodge an ICU quirk
+  where `en-US` can read midnight as "24" and mis-bucket it into
+  "evening" (a real correctness catch, not asked for). (2) Each of the
+  4 Dashlet cards gets a color identity via one new `accent` prop and a
+  single `DASHLET_ACCENTS` lookup, not duplicated per card:
+  Tasks=amber (reuses the existing `--warning` token), My
+  Documents=blue (reuses `--primary`), Departments=violet,
+  Activity=teal (violet/teal have no existing token and use stock
+  Tailwind colors directly, matching `StatusBadge`'s existing
+  `reapproval` badge precedent for a single-page, non-semantic accent
+  — no new CSS variable). `rounded-2xl` replacing `rounded-xl`, a soft
+  shadow replacing the flat border, a 4px accent-colored top bar, the
+  header icon in a tinted rounded-square badge, the count as a colored
+  pill instead of muted text, the footer link in the card's accent
+  color, more row padding (`py-1.5`→`py-2.5`); a subtle warm background
+  scoped to the dashboard route only (every other route keeps the
+  shared `--background`, confirmed transparent on `/documents`).
+  `StatusBadge` itself is untouched throughout. Side finding: `PageHeader`
+  (the shared component the old bordered title used) turned out to be
+  used nowhere else in the app once its one caller was replaced —
+  confirmed via a repo-wide grep before deleting the file outright.
+  Everything independently re-verified after each round, not just
+  taken from the junior's report, including re-deriving the correct
+  greeting/date by hand from the real current time and checking exact
+  computed colors (`rgb(217,119,6)`/`rgb(29,78,216)` matching
+  `--warning`/`--primary` precisely) rather than trusting the visual
+  read. The already-approved fixed-2×2-grid-with-internal-scroll
+  mechanism from the live-review-fixes round was not touched by either
+  round and was re-confirmed intact both times (zero page scroll at
+  ≥861px, untouched natural-scroll fallback below it, both now with the
+  new styling applied at every width). One process note: a
+  mid-response message got cut off before reaching the junior, who
+  correctly implemented only the fully-specified first item and
+  stopped rather than guessing at an unseen visual direction — the
+  right call, not a failure.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

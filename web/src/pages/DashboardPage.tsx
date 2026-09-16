@@ -13,7 +13,6 @@ import type {
 import { useAuth } from '../auth/AuthContext';
 import ActivitySentence from '../components/ActivitySentence';
 import { EmptyState } from '../components/EmptyState';
-import { PageHeader } from '../components/PageHeader';
 import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
 import { Button } from '../components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
@@ -24,6 +23,36 @@ function isoDaysAgo(days: number): string {
   const month = String(date.getMonth() + 1).padStart(2, '0');
   const day = String(date.getDate()).padStart(2, '0');
   return `${date.getFullYear()}-${month}-${day}`;
+}
+
+/**
+ * The dashboard greeting is computed in Singapore time specifically
+ * (Asia/Singapore, fixed UTC+8 — this app's users are in Singapore and
+ * Malaysia, and a misconfigured device clock must not produce a wrong
+ * greeting), never the browser's local timezone. hourCycle h23 (rather
+ * than the equivalent hour12: false) sidesteps en-US's "24" reading of
+ * midnight, which would mis-bucket 00:00 into the evening.
+ */
+function sgtGreeting(now: Date): string {
+  const hour = parseInt(
+    new Intl.DateTimeFormat('en-US', {
+      timeZone: 'Asia/Singapore',
+      hour: 'numeric',
+      hourCycle: 'h23',
+    }).format(now),
+    10,
+  );
+  return hour < 12 ? 'Good morning' : hour < 18 ? 'Good afternoon' : 'Good evening';
+}
+
+function sgtDateString(now: Date): string {
+  return new Intl.DateTimeFormat('en-GB', {
+    timeZone: 'Asia/Singapore',
+    weekday: 'long',
+    day: 'numeric',
+    month: 'long',
+    year: 'numeric',
+  }).format(now);
 }
 
 /**
@@ -38,6 +67,8 @@ function isoDaysAgo(days: number): string {
  */
 
 export default function DashboardPage() {
+  const { user } = useAuth();
+  const now = new Date();
   return (
     // ≥861px (dashboard & navigation plan-back round two, superseding F7
     // for this width only): the page is exactly the shell's height and the
@@ -45,8 +76,14 @@ export default function DashboardPage() {
     // inside the card, never the page. Below 861px none of these apply:
     // natural content-sized cards with normal page scroll, as before.
     <div className="min-[861px]:flex min-[861px]:h-full min-[861px]:min-h-0 min-[861px]:flex-col">
-      <div className="shrink-0 border-b border-border pb-3">
-        <PageHeader title="Dashboard" />
+      <div className="shrink-0">
+        <h1 className="text-xl font-semibold tracking-tight text-foreground">
+          {sgtGreeting(now)}
+          {user?.name ? `, ${user.name}` : ''}
+        </h1>
+        <p className="mt-1 text-sm text-muted-foreground">
+          {sgtDateString(now)} — Here's what's happening across Document Control today.
+        </p>
       </div>
       <div className="grid grid-cols-2 items-start gap-4 max-[860px]:grid-cols-1 min-[861px]:flex-1 min-[861px]:min-h-0 min-[861px]:grid-rows-2 min-[861px]:items-stretch">
         <TasksDashlet />

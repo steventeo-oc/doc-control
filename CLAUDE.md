@@ -578,6 +578,55 @@
   correctly absent. Desktop-vs-mobile is now fully done for the nav
   rail — the Admin active-state quirk above is the only open item left
   on this feature.
+  **Dashboard live-review fixes (2026-09-16, commits 4759e74 / 7690360)**
+  — three issues the owner spotted looking directly at the running
+  Dashboard, no screenshot round needed. (1) The account-menu dropdown
+  had been rendering fully transparent since it was introduced: Phase
+  0's shadcn token scaffold never defined `--popover`/
+  `--popover-foreground`, even though `dropdown-menu.tsx` (and
+  `select.tsx`, unused so far) reference `bg-popover`. Fixed by adding
+  both tokens to `index.css`, mirroring the existing `--card` pair
+  exactly — confirmed live via the menu's own computed
+  `background-color`, not just visually. (2) The account-menu trigger
+  was the one rail item with no visible label and no hover affordance;
+  it now matches `RailLink`'s stacked icon+label treatment on the rail
+  and an inline icon+label on the mobile top bar, plus a native `title`
+  tooltip on both. (3) The real one: `Dashboard_Design_PlanBack.md` F7
+  (cards size to their own content, never stretch to a row sibling)
+  meant a content-heavy card could make its whole row taller than the
+  viewport, so the entire shell — rail included — scrolled together
+  just to see the second grid row. The owner wanted the opposite: a
+  fixed 2×2 grid filling the screen, with overflow scrolling inside
+  each card instead. This **supersedes F7 at ≥861px only**, matching
+  the grid's own existing 2-col/1-col collapse point exactly
+  (`min-[861px]:` throughout) — below it, nothing changed: content-
+  sized cards, normal page scroll, exactly as before. Mechanism: the
+  shell root becomes `h-screen overflow-hidden` on the dashboard route
+  only, the content-row flexes to `items-stretch` instead of
+  `items-start` (dashboard never has a secondary sidebar, so this has
+  zero effect on any other section), `<main>` becomes a `flex-col`
+  that clips, and each card/list drops its `max-h-96` cap for
+  `flex-1 min-h-0` so it fills its cell and scrolls internally. The
+  Dashboard title also gained a bordered header band separating it
+  from the grid, scoped to the Dashboard's own wrapper — the shared
+  `PageHeader` component itself is untouched. All independently
+  verified after the junior's report, not just trusted: exact
+  pixel-level agreement on every measurement (root height 900px with
+  `overflow:hidden` and zero page scroll at 1440×900; the four cards
+  uniformly 648×382 with three of four lists proven to actually
+  overflow their 202px visible area on the admin account; at 860px —
+  one below the breakpoint — root `overflow:visible`, page
+  `scrollHeight` 1265px, card heights 266/564/564/504 with no forced
+  stretch, matching the pre-existing behavior exactly; the Documents
+  page at 1440px confirmed unaffected at `rootHeight` 974px with
+  normal overflow). One dead end during verification worth recording:
+  checking `--color-popover` (the `@theme inline` mapped name) via
+  `getComputedStyle` reads empty even when the fix is live — Tailwind
+  v4 inlines that mapping straight into the generated utility rules at
+  build time rather than re-exposing it as a runtime custom property;
+  the real, inspectable variable is the raw `--popover` declared in
+  `:root`. Cost a few minutes chasing a false "the container must be
+  stale" theory before checking the actual served CSS file directly.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

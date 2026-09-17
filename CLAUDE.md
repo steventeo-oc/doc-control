@@ -865,7 +865,28 @@
     backdrop click, Escape). Deep link support (`?create=1&department=<code>`)
     intact with automated open and asynchronous department preselection.
     Independently verified live via Edge CDP with zero table shift confirmed
-    and screenshots under `screenshots/drawer/`. Next up per the plan-back's
+    and screenshots under `screenshots/drawer/`.
+    **Sheet drawer slide & fade animations (2026-09-17, commit e7a01aa)**:
+    per owner request, added smooth slide-in and slide-out animations to the
+    Sheet drawer and fade animations to the backdrop overlay. In Tailwind CSS
+    v4 without legacy `tailwindcss-animate`, Radix UI's `@radix-ui/react-presence`
+    inspects `animationName` on `[data-state="closed"]` to suspend DOM unmounting
+    until exit animations finish. Added CSS `@keyframes` (`sheet-in-right`,
+    `sheet-out-right`, `sheet-in-left`, `sheet-out-left`, `sheet-in-top`,
+    `sheet-out-top`, `sheet-in-bottom`, `sheet-out-bottom`, `sheet-overlay-in`,
+    `sheet-overlay-out`) in `web/src/index.css` mapped to `[data-slot="sheet-content"]`
+    and `[data-slot="sheet-overlay"]` with exponential ease-out curves
+    (`cubic-bezier(0.16, 1, 0.3, 1)`), hardware acceleration (`will-change: transform`),
+    and a `prefers-reduced-motion` 1ms fallback. Updated `web/src/components/ui/sheet.tsx`
+    to pass `data-side={side}` to `SheetPrimitive.Content` and cleaned dead
+    Tailwind animate classes. Independently verified live in the running stack via
+    Edge CDP: entering animation `sheet-in-right` (350ms) and `sheet-overlay-in` (300ms),
+    settled transform `matrix(1, 0, 0, 1, 0, 0)`, mid-flight exit transform
+    `matrix(1, 0, 0, 1, 432.61, 0)` (+432px sliding out), clean DOM unmounting
+    upon animation completion (`sheetUnmounted: true, overlayUnmounted: true`),
+    mobile navigation drawer slide animations (`sheet-in-left` and `sheet-out-left`),
+    and full regression test confirming 0px table layout shift and deep links intact.
+    Reference screenshots under `screenshots/drawer/`. Next up per the plan-back's
     §8 order: Phase 3 (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**

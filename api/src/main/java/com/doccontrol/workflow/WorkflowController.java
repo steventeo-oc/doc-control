@@ -53,6 +53,20 @@ public class WorkflowController {
         return workflowService.reviewerCandidates(documentId);
     }
 
+    /** Role picklist for role-based approval assignments — gated like the start endpoints. */
+    @GetMapping("/documents/{documentId}/reviewer-roles")
+    public List<String> reviewerRoles(@PathVariable Integer documentId) {
+        return workflowService.reviewerRoles(documentId);
+    }
+
+    /** Details of the active approval workflow on this document, if any. */
+    @GetMapping("/documents/{documentId}/workflow")
+    public ResponseEntity<StartedInstanceDto> activeWorkflow(@PathVariable Integer documentId) {
+        return workflowService.activeWorkflowForDocument(documentId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/workflow-instances/{id}")
     public WorkflowInstanceDto instance(@PathVariable Integer id) {
         return workflowService.get(id);

@@ -6,6 +6,7 @@ export interface DocumentFilters {
   department?: string;
   status?: string;
   q?: string;
+  sort?: string;
   /** Trash view (nav restructure plan-back F2): list soft-deleted documents. */
   trashed?: boolean;
   /** My Documents view: `owner=me` filters to the caller's own documents. */
@@ -67,6 +68,7 @@ export const documentApi = {
     if (filters.department) params.set('department', filters.department);
     if (filters.status) params.set('status', filters.status);
     if (filters.q) params.set('q', filters.q);
+    if (filters.sort) params.set('sort', filters.sort);
     if (filters.trashed) params.set('trashed', 'true');
     if (filters.owner) params.set('owner', filters.owner);
     params.set('page', String(filters.page ?? 0));
@@ -109,6 +111,10 @@ export const workflowApi = {
   instanceTasks: (id: number) => api.get<WorkflowTask[]>(`/workflow-instances/${id}/tasks`),
   reviewerCandidates: (documentId: number) =>
     api.get<ReviewerCandidate[]>(`/documents/${documentId}/reviewer-candidates`),
+  reviewerRoles: (documentId: number) =>
+    api.get<string[]>(`/documents/${documentId}/reviewer-roles`),
+  activeWorkflow: (documentId: number) =>
+    api.get<StartedInstance | null>(`/documents/${documentId}/workflow`),
   startApproval: (documentId: number, versionId: number, assignees: AssigneeInput[]) =>
     api.post<WorkflowInstance>(
       `/documents/${documentId}/versions/${versionId}/workflow/start`,

@@ -175,8 +175,15 @@ public class DocumentService {
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
                                  String q, Boolean reviewOverdue, Boolean trashed, String owner,
                                  int page, int pageSize) {
-        Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100),
-                Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id")));
+        return list(typeCode, departmentCode, status, q, reviewOverdue, trashed, owner, null, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
+                                 String q, Boolean reviewOverdue, Boolean trashed, String owner,
+                                 String sort, int page, int pageSize) {
+        Sort sortSpec = parseSort(sort);
+        Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100), sortSpec);
 
         List<Specification<Document>> parts = new ArrayList<>();
         if (Boolean.TRUE.equals(trashed)) {
@@ -214,7 +221,9 @@ public class DocumentService {
         }
         if (q != null && !q.isBlank()) {
             String needle = q.toLowerCase();
-            parts.add((root, query, cb) -> cb.like(cb.lower(root.get("name")), "%" + needle + "%"));
+            parts.add((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("name")), "%" + needle + "%"),
+                    cb.like(cb.lower(root.get("documentNumber")), "%" + needle + "%")));
         }
         if (reviewOverdue != null) {
             // same derivation as Document.isReviewOverdue, in-query: the
@@ -565,5 +574,23 @@ public class DocumentService {
             throw new ForbiddenException("Only members of department '" + department.getCode()
                     + "' at Contributor level or above can create documents in it.");
         }
+    }
+
+    private Sort parseSort(String sort) {
+        if (sort == null || sort.isBlank()) {
+            return Sort.by(Sort.Direction.DESC, "createdAt").and(Sort.by(Sort.Direction.DESC, "id"));
+        }
+        String[] tokens = sort.split(",");
+        String property = tokens[0].trim().toLowerCase();
+        Sort.Direction direction = tokens.length > 1 && "asc".equalsIgnoreCase(tokens[1].trim())
+                ? Sort.Direction.ASC : Sort.Direction.DESC;
+        String field = switch (property) {
+            case "number", "documentnumber", "document_number" -> "documentNumber";
+            case "name" -> "name";
+            case "status" -> "status";
+            case "updated", "updatedat", "updated_at" -> "updatedAt";
+            default -> "createdAt";
+        };
+        return Sort.by(direction, field).and(Sort.by(Sort.Direction.DESC, "id"));
     }
 }

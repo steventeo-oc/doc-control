@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useSearchParams } from 'react-router-dom';
-import { FileX } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, FileX, Loader2, X } from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
 import type { Department, DocumentSummary, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
@@ -35,22 +35,6 @@ import {
   TableRow,
 } from '../components/ui/table';
 
-/**
- * The Documents section (nav restructure plan-back F1/F2): one page, three
- * sidebar views via the ?view= parameter — all (default), mine (owner=me),
- * and trash (trashed=true, rows restorable). The view keeps ?view= off the
- * route tree so /documents/:id stays unambiguous.
- *
- * Design-redesign Phase 2a (Design_System_Redesign_PlanBack.md): reskinned
- * onto PageHeader/Button/Label/Input/Select/Table/StatusBadge/EmptyState.
- * Behavior freeze — routes, ?view=/create/department params, filter wiring,
- * pagination, and every interaction are unchanged; the only structural
- * swaps are the F3 native-select → Radix Select replacements (sentinel
- * "all" values for the "no filter" options, since Radix SelectItem forbids
- * empty strings) and the empty result row becoming the shared EmptyState.
- * The create form stays inline (showCreate toggle, not a Dialog) and keeps
- * its exact validation, deep links, and active-only/membership filtering.
- */
 export default function DocumentsPage() {
   const { user, isAdmin } = useAuth();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -63,59 +47,70 @@ export default function DocumentsPage() {
   const [error, setError] = useState<string | null>(null);
 
   const [filters, setFilters] = useState({ type: '', department: '', status: '', q: '' });
+  const [searchInput, setSearchInput] = useState('');
   const [pageNumber, setPageNumber] = useState(0);
+  const [pageSize, setPageSize] = useState(10);
+  const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated' | null>(null);
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
+  const [loading, setLoading] = useState(false);
 
   const [showCreate, setShowCreate] = useState(false);
   const [createError, setCreateError] = useState<string | null>(null);
   const [creating, setCreating] = useState(false);
 
+  useEffect(() => {
+    const timer = setTimeout(() => {
+      setFilters((prev) => (prev.q === searchInput ? prev : { ...prev, q: searchInput }));
+      setPageNumber(0);
+    }, 300);
+    return () => clearTimeout(timer);
+  }, [searchInput]);
+
   const load = useCallback(() => {
     setError(null);
+    setLoading(true);
     documentApi
       .list({
         type: filters.type || undefined,
         department: filters.department || undefined,
         status: filters.status || undefined,
         q: filters.q || undefined,
+        sort: sortField ? `${sortField},${sortOrder}` : undefined,
         trashed: view === 'trash' || undefined,
         owner: view === 'mine' ? 'me' : undefined,
         page: pageNumber,
+        pageSize,
       })
       .then(setPage)
-      .catch((err: Error) => setError(err.message));
-  }, [filters, pageNumber, view]);
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setLoading(false));
+  }, [filters, pageNumber, pageSize, sortField, sortOrder, view]);
 
   useEffect(load, [load]);
   useEffect(() => {
     setPageNumber(0);
   }, [view]);
   useEffect(() => {
-    // '+ New document' deep link from the dashboard's empty My Documents
-    // card (?create=1) — creation itself stays on this page
     if (searchParams.get('create') === '1' && view !== 'trash') {
       setShowCreate(true);
     }
   }, [searchParams, view]);
   useEffect(() => {
-    // includeInactive: filter dropdowns must offer deactivated types and
-    // departments so existing documents referencing them stay searchable
-    // (lookup admin plan-back F2); the creation form filters to active.
     lookupApi.types(true).then(setTypes).catch(() => undefined);
     lookupApi.departments(true).then(setDepartments).catch(() => undefined);
   }, []);
 
-  // A ?department=<code> deep link (the department detail page's
-  // '+ New document' CTA) preselects that department in the creation
-  // form — only where the caller may actually create (active + member,
-  // or admin; the levels plan-back's canCreate rule).
+  const eligibleDepartments = isAdmin
+    ? departments.filter((d) => d.active)
+    : departments.filter(
+        (d) =>
+          d.active &&
+          user?.departments.some((ud) => ud.id === d.id && ud.level !== 'CONSUMER'),
+      );
+
   const preselectDepartmentCode = searchParams.get('department');
   const preselectDepartmentId = preselectDepartmentCode
-    ? departments.find(
-        (d) =>
-          d.code === preselectDepartmentCode &&
-          d.active &&
-          (isAdmin || user?.departments.some((ud) => ud.id === d.id)),
-      )?.id
+    ? eligibleDepartments.find((d) => d.code === preselectDepartmentCode)?.id
     : undefined;
 
   const handleOpenChange = useCallback(
@@ -166,6 +161,26 @@ export default function DocumentsPage() {
       .catch((err: Error) => setError(err.message));
   }
 
+  function handleSort(field: 'number' | 'name' | 'status' | 'updated') {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'updated' ? 'desc' : 'asc');
+    }
+    setPageNumber(0);
+  }
+
+  const hasActiveFilters = Boolean(
+    filters.type || filters.department || filters.status || searchInput,
+  );
+
+  function handleClearFilters() {
+    setFilters({ type: '', department: '', status: '', q: '' });
+    setSearchInput('');
+    setPageNumber(0);
+  }
+
   return (
     <>
       <PageHeader
@@ -179,9 +194,7 @@ export default function DocumentsPage() {
         }
       />
 
-      {/* Filters: plain flex row per the plan-back — no Card wrapper. The
-          Select "all" entries use a sentinel value because Radix SelectItem
-          forbids empty strings; the sentinel maps back to '' filter state. */}
+      {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="filter-type">Type</Label>
@@ -257,14 +270,28 @@ export default function DocumentsPage() {
             id="filter-search"
             type="search"
             className="w-56"
-            placeholder="Name contains…"
-            value={filters.q}
-            onChange={(e) => {
-              setFilters({ ...filters, q: e.target.value });
-              setPageNumber(0);
-            }}
+            placeholder="Search name or number…"
+            value={searchInput}
+            onChange={(e) => setSearchInput(e.target.value)}
           />
         </div>
+        {hasActiveFilters && (
+          <Button
+            type="button"
+            variant="ghost"
+            size="sm"
+            onClick={handleClearFilters}
+            className="h-9 gap-1 text-muted-foreground hover:text-foreground"
+          >
+            <X className="size-4" />
+            Clear filters
+          </Button>
+        )}
+        {loading && (
+          <div className="flex items-center pb-2 text-muted-foreground">
+            <Loader2 className="size-4 animate-spin" />
+          </div>
+        )}
       </div>
 
       <Sheet open={view !== 'trash' && showCreate} onOpenChange={handleOpenChange}>
@@ -280,6 +307,11 @@ export default function DocumentsPage() {
               {createError && (
                 <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {createError}
+                </div>
+              )}
+              {eligibleDepartments.length === 0 && (
+                <div className="rounded-md bg-amber-500/10 border border-amber-500/20 px-3 py-2 text-sm text-amber-700 dark:text-amber-400">
+                  You do not have Contributor or Manager permissions in any department. Document creation requires at least Contributor membership.
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
@@ -311,12 +343,7 @@ export default function DocumentsPage() {
                     <SelectValue placeholder="Choose department…" />
                   </SelectTrigger>
                   <SelectContent>
-                    {(isAdmin
-                      ? departments.filter((d) => d.active)
-                      : departments.filter(
-                          (d) => d.active && user?.departments.some((ud) => ud.id === d.id),
-                        )
-                    ).map((d) => (
+                    {eligibleDepartments.map((d) => (
                       <SelectItem key={d.id} value={String(d.id)}>
                         {d.code} — {d.label}
                       </SelectItem>
@@ -355,7 +382,7 @@ export default function DocumentsPage() {
               >
                 Cancel
               </Button>
-              <Button type="submit" disabled={creating}>
+              <Button type="submit" disabled={creating || eligibleDepartments.length === 0}>
                 {creating ? 'Creating…' : 'Create document'}
               </Button>
             </SheetFooter>
@@ -374,16 +401,64 @@ export default function DocumentsPage() {
           <EmptyState icon={FileX} message="No documents match." />
         </div>
       ) : (
-        <Table className="mt-4">
+        <Table className={`mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
           <TableHeader>
             <TableRow>
-              <TableHead>Number</TableHead>
-              <TableHead>Name</TableHead>
-              <TableHead>Status</TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground"
+                onClick={() => handleSort('number')}
+              >
+                <div className="flex items-center gap-1">
+                  <span>Number</span>
+                  {sortField === 'number' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                  ) : (
+                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground"
+                onClick={() => handleSort('name')}
+              >
+                <div className="flex items-center gap-1">
+                  <span>Name</span>
+                  {sortField === 'name' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                  ) : (
+                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                  )}
+                </div>
+              </TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground"
+                onClick={() => handleSort('status')}
+              >
+                <div className="flex items-center gap-1">
+                  <span>Status</span>
+                  {sortField === 'status' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                  ) : (
+                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                  )}
+                </div>
+              </TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Dept</TableHead>
               <TableHead>Owner</TableHead>
-              <TableHead>Updated</TableHead>
+              <TableHead
+                className="cursor-pointer select-none hover:text-foreground"
+                onClick={() => handleSort('updated')}
+              >
+                <div className="flex items-center gap-1">
+                  <span>Updated</span>
+                  {sortField === 'updated' ? (
+                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                  ) : (
+                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                  )}
+                </div>
+              </TableHead>
               {view === 'trash' && <TableHead />}
             </TableRow>
           </TableHeader>
@@ -391,7 +466,11 @@ export default function DocumentsPage() {
             {(page?.content ?? []).map((doc: DocumentSummary) => (
               <TableRow key={doc.id}>
                 <TableCell>
-                  <Link className="text-primary hover:underline" to={`/documents/${doc.id}`}>
+                  <Link
+                    className="text-primary hover:underline font-medium"
+                    to={`/documents/${doc.id}`}
+                    state={{ fromView: view }}
+                  >
                     {doc.documentNumber}
                   </Link>
                 </TableCell>
@@ -423,28 +502,49 @@ export default function DocumentsPage() {
       )}
 
       {page && page.totalPages > 0 && (
-        <div className="mt-4 flex items-center gap-3 text-sm text-muted-foreground">
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={page.page === 0}
-            onClick={() => setPageNumber(page.page - 1)}
-          >
-            ← Prev
-          </Button>
-          <span>
-            Page {page.page + 1} of {page.totalPages} ({page.totalElements} documents)
-          </span>
-          <Button
-            type="button"
-            variant="outline"
-            size="sm"
-            disabled={page.page + 1 >= page.totalPages}
-            onClick={() => setPageNumber(page.page + 1)}
-          >
-            Next →
-          </Button>
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-4 text-sm text-muted-foreground">
+          <div className="flex items-center gap-3">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page.page === 0 || loading}
+              onClick={() => setPageNumber(page.page - 1)}
+            >
+              ← Prev
+            </Button>
+            <span>
+              Page {page.page + 1} of {page.totalPages} ({page.totalElements} documents)
+            </span>
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              disabled={page.page + 1 >= page.totalPages || loading}
+              onClick={() => setPageNumber(page.page + 1)}
+            >
+              Next →
+            </Button>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className="text-xs">Rows per page:</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => {
+                setPageSize(Number(val));
+                setPageNumber(0);
+              }}
+            >
+              <SelectTrigger className="h-8 w-18">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="10">10</SelectItem>
+                <SelectItem value="20">20</SelectItem>
+                <SelectItem value="50">50</SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
         </div>
       )}
     </>

@@ -90,6 +90,78 @@ class DocumentListFilterTests {
         assertThat(fx.listNumbers(null, fx.manager, "me")).anyMatch(n -> n.contains("Manager Live"));
     }
 
+    @Test
+    void qSearchesBothNameAndDocumentNumber() throws Exception {
+        Fixture fx = new Fixture("SRC");
+
+        Integer docId = fx.createDocument("collaborator", "Unique Title Calibration Guide");
+        MvcResult docRes = mockMvc.perform(get("/documents/{id}", docId).session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        String docNumber = objectMapper.readTree(docRes.getResponse().getContentAsString())
+                .path("documentNumber").asText();
+
+        // 1. Search by unique title keyword
+        MvcResult titleMatch = mockMvc.perform(get("/documents")
+                        .queryParam("q", "Calibration")
+                        .session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(titleMatch.getResponse().getContentAsString()).contains(docNumber);
+
+        // 2. Search by document number (e.g. SOP-SRC... or exact number)
+        MvcResult numberMatch = mockMvc.perform(get("/documents")
+                        .queryParam("q", docNumber)
+                        .session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(numberMatch.getResponse().getContentAsString()).contains(docNumber);
+
+        // 3. Search by partial document number prefix
+        String prefix = docNumber.substring(0, Math.min(docNumber.length(), 6));
+        MvcResult prefixMatch = mockMvc.perform(get("/documents")
+                        .queryParam("q", prefix)
+                        .session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        assertThat(prefixMatch.getResponse().getContentAsString()).contains(docNumber);
+    }
+
+    @Test
+    void sortingByColumnSupportsAscAndDesc() throws Exception {
+        Fixture fx = new Fixture("SRT");
+        fx.createDocument("collaborator", "Alpha Doc");
+        fx.createDocument("collaborator", "Zulu Doc");
+
+        MvcResult ascResult = mockMvc.perform(get("/documents")
+                        .queryParam("sort", "name,asc")
+                        .queryParam("page_size", "50")
+                        .session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<String> ascNames = new java.util.ArrayList<>();
+        for (var node : objectMapper.readTree(ascResult.getResponse().getContentAsString()).path("content")) {
+            ascNames.add(node.path("name").asText());
+        }
+        int alphaIdx = ascNames.indexOf("Alpha Doc");
+        int zuluIdx = ascNames.indexOf("Zulu Doc");
+        assertThat(alphaIdx).isLessThan(zuluIdx);
+
+        MvcResult descResult = mockMvc.perform(get("/documents")
+                        .queryParam("sort", "name,desc")
+                        .queryParam("page_size", "50")
+                        .session(fx.admin))
+                .andExpect(status().isOk())
+                .andReturn();
+        List<String> descNames = new java.util.ArrayList<>();
+        for (var node : objectMapper.readTree(descResult.getResponse().getContentAsString()).path("content")) {
+            descNames.add(node.path("name").asText());
+        }
+        alphaIdx = descNames.indexOf("Alpha Doc");
+        zuluIdx = descNames.indexOf("Zulu Doc");
+        assertThat(zuluIdx).isLessThan(alphaIdx);
+    }
+
     // ---- fixture ----
 
     private class Fixture {

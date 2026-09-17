@@ -194,6 +194,27 @@ public class WorkflowService {
                 .toList();
     }
 
+    /** Role picklist for role-based approval assignments — gated like the start endpoints. */
+    @Transactional(readOnly = true)
+    public List<String> reviewerRoles(Integer documentId) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanEdit(document);
+        return roleRepository.findAll(org.springframework.data.domain.Sort.by("name")).stream()
+                .map(Role::getName)
+                .toList();
+    }
+
+    /** Returns details of the currently in-progress approval workflow on this document, if any. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<StartedInstanceDto> activeWorkflowForDocument(Integer documentId) {
+        Document document = documentService.requireVisible(documentId);
+        List<WorkflowInstance> inProgress = instanceRepository.findInProgressByDocumentId(document.getId());
+        if (inProgress.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        return java.util.Optional.of(toStartedDto(inProgress.get(0)));
+    }
+
     /**
      * Validates and expands the assignee inputs. Named assignees whose
      * membership level in the document's department is CONSUMER are

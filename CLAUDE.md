@@ -886,7 +886,18 @@
     upon animation completion (`sheetUnmounted: true, overlayUnmounted: true`),
     mobile navigation drawer slide animations (`sheet-in-left` and `sheet-out-left`),
     and full regression test confirming 0px table layout shift and deep links intact.
-    Reference screenshots under `screenshots/drawer/`. Next up per the plan-back's
+    Reference screenshots under `screenshots/drawer/`.
+    **Drawer line border removed & file input hand cursor (2026-09-17, commit c376cdc)**:
+    per owner request, removed the 1px solid black/dark border line down the
+    left edge of the Sheet drawer (`border-l`), defaulting the drawer to a clean
+    elevated borderless surface (`border-0 shadow-2xl`) consistent with the
+    app's card visual language. Also configured file inputs (`type="file"`) and
+    their native file selector buttons to display the hand cursor (`cursor: pointer`)
+    on hover across `input.tsx`, `DocumentsPage.tsx`, `DocumentDetailPage.tsx`, and
+    `index.css`. Independently verified live in the running stack via Edge CDP
+    (computed `borderLeftWidth: 0px`, `borderLeftStyle: none`, `fileCursor: pointer`,
+    `fileSelectorButtonCursor: pointer`). Reference screenshot saved to
+    `screenshots/drawer/07-drawer-noborder-pointer.png`. Next up per the plan-back's
     §8 order: Phase 3 (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**

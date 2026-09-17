@@ -422,12 +422,12 @@ export default function Layout() {
           </aside>
         )}
         {/* The dashboard uses the full viewport width (round-two polish);
-            the section pages keep the centered 1100px reading width — now
-            measured from the rail's right edge instead of the viewport's. */}
+            the section pages keep the 1100px reading width anchored next to
+            the sub-nav sidebar with consistent spacing. */}
         <main
           className={cn(
             'flex-1 p-6',
-            section === 'dashboard' ? 'max-w-none' : 'mx-auto w-full max-w-[1100px]',
+            section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1100px]',
             section === 'dashboard' &&
               'min-[861px]:flex min-[861px]:flex-col min-[861px]:overflow-hidden',
           )}

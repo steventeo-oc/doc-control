@@ -73,10 +73,13 @@ type SectionItem = { label: string; to: string };
  */
 const RAIL_ITEMS: { to: string; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
-  { to: '/documents', icon: FileText, label: 'Documents' },
-  { to: '/tasks', icon: ListChecks, label: 'Tasks' },
+  // Sections with a fixed default view point at the same canonical URL as
+  // their first sidebar item, so the sidebar's exact-match highlight works
+  // when navigating via the rail (a bare path matches nothing).
+  { to: '/documents?view=all', icon: FileText, label: 'Documents' },
+  { to: '/tasks?view=approvals', icon: ListChecks, label: 'Tasks' },
   { to: '/departments', icon: Building2, label: 'Depts' },
-  { to: '/activity', icon: Activity, label: 'Activity' },
+  { to: '/activity?scope=mine', icon: Activity, label: 'Activity' },
   { to: '/admin/types', icon: Settings, label: 'Admin', adminOnly: true },
 ];
 
@@ -289,7 +292,7 @@ export default function Layout() {
   return (
     <div
       className={cn(
-        'flex min-h-screen flex-col md:flex-row',
+        'flex min-h-screen flex-col md:flex-row bg-background',
         // Dashboard & navigation plan-back round two: on the dashboard at
         // ≥861px the shell is exactly the viewport and nothing page-scrolls —
         // each dashboard card scrolls internally instead. Every other route,
@@ -427,11 +430,6 @@ export default function Layout() {
             section === 'dashboard' ? 'max-w-none' : 'mx-auto w-full max-w-[1100px]',
             section === 'dashboard' &&
               'min-[861px]:flex min-[861px]:flex-col min-[861px]:overflow-hidden',
-            // Warm Elevated (owner-reviewed mockup): a subtle warm off-white
-            // page surface for the dashboard route only — every other page
-            // keeps the shared --background. Deliberately page-scoped, not a
-            // token change.
-            section === 'dashboard' && 'bg-[#faf9f7]',
           )}
         >
           <Outlet />

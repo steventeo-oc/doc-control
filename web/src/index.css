@@ -79,7 +79,7 @@ body {
     sans-serif;
   font-size: 14px;
   color: #1c2733;
-  background: #f4f6f8;
+  background: var(--background);
 }
 
 .layout {
@@ -161,9 +161,10 @@ h2 {
 }
 
 .card {
-  background: #fff;
-  border: 1px solid #dde4ea;
-  border-radius: 6px;
+  background: var(--card, #fff);
+  border: 0;
+  border-radius: 1rem;
+  box-shadow: 0 4px 6px -1px rgb(0 0 0 / 0.1), 0 2px 4px -2px rgb(0 0 0 / 0.1);
   padding: 16px;
   margin-bottom: 16px;
 }

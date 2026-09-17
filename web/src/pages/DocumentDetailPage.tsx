@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useParams } from 'react-router-dom';
-import { FileX } from 'lucide-react';
+import { ArrowLeft, FileX } from 'lucide-react';
 import { downloadFile } from '../api/client';
 import { documentApi, workflowApi, type AssigneeInput } from '../api/resources';
 import type { DocumentDetail, DocumentVersion, ReviewerCandidate } from '../api/types';
@@ -177,7 +177,13 @@ export default function DocumentDetailPage() {
     return (
       <>
         <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">{error}</div>
-        <Link to="/" className="text-sm text-muted-foreground hover:underline">← Back to documents</Link>
+        <Link
+          to="/documents?view=all"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to documents
+        </Link>
       </>
     );
   }
@@ -188,8 +194,12 @@ export default function DocumentDetailPage() {
   return (
     <>
       <div>
-        <Link to="/" className="text-sm text-muted-foreground hover:text-foreground hover:underline">
-          ← Back to documents
+        <Link
+          to="/documents?view=all"
+          className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
+        >
+          <ArrowLeft className="size-4" aria-hidden="true" />
+          Back to documents
         </Link>
         <div className="mt-1 flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{doc.documentNumber}</h1>

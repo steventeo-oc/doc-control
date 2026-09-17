@@ -824,8 +824,29 @@
    three views, including the complete-review card toggle and inputs,
    empty states, active table rows with outline dept badges, and mobile
    (375px) responsive checks. Reference screenshots saved under
-   `screenshots/phase2c/`. Next up per the plan-back's §8 order: Phase 3
-   (Departments — list, detail, members panel), not started.
+   `screenshots/phase2c/`.
+    **App-wide card & background visual consistency (2026-09-17, commit
+    8f11c11)**: per owner request, unified the page background and card
+    treatment across the entire application to match the Login page
+    aesthetic. The subtle cool blue-grey background (`slate-50`, `#f8fafc`,
+    `var(--background)`) is now consistent everywhere: added `bg-background`
+    to the Layout root container, removed the dashboard-specific warm
+    `bg-[#faf9f7]` override, and updated `body` in `index.css` from legacy
+    `#f4f6f8` to `var(--background)`. All cards are now pure white borderless
+    elevated surfaces (`bg-card`, `border-0`, `rounded-2xl`, `shadow-md`):
+    updated the default `Card` primitive in `web/src/components/ui/card.tsx`
+    and the legacy `.card` rule in `index.css` so both migrated and
+    unmigrated pages (Dashboard, Documents create form, Document Detail
+    metadata/approval/versions, Tasks review form, AcknowledgmentPanel,
+    Departments, Admin) share the exact same clean, elevated styling. Rail
+    items updated with canonical `?view=` parameters and Document Detail
+    back link updated to `/documents?view=all`. Independently verified live
+    in the running stack via Edge CDP (computed background `rgb(248, 250, 252)`
+    and computed card styles `borderWidth: 0px`, `borderRadius: 16px`,
+    `boxShadow` shadow-md, and pure white background across Login, Dashboard,
+    Documents, Tasks, Document Detail, and Departments). Reference
+    screenshots under `screenshots/consistency/`. Next up per the plan-back's
+    §8 order: Phase 3 (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

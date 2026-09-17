@@ -809,10 +809,23 @@
   `ForgotPasswordPage.tsx`, and `ResetPasswordPage.tsx`. Verified live in
   the running stack via computed styles (borderWidth: 0px, borderRadius:
   16px, boxShadow matching shadow-md) and visual checks on desktop
-  (1280px) and mobile (375px). Next up per the plan-back's §8 order remains:
-  Phase 2c (Tasks — both panes, including the completion form, and the
-  known pre-existing overdue-badge-styled-as-reapproval bug flagged in
-  §11 to fix deliberately when this page migrates), not started.
+  (1280px) and mobile (375px).
+   **Design redesign Phase 2c — Tasks migrated (2026-09-17, commit
+   68c3165)**: TasksPage (all three panes: My Approvals, Pending My
+   Acknowledgment, Started by Me, plus the complete-review form) reskinned
+   onto PageHeader, Table, Button, Input, Label, Card, StatusBadge, and
+   EmptyState. The pre-existing §11 bug — overdue acknowledgment badge
+   styled with the violet `reapproval` class — is deliberately fixed:
+   it now uses StatusBadge `overdue` (destructive red, verified computed
+   color `rgb(220, 38, 38)` on `bg-destructive/15`). Behavior freeze
+   honored: query params `?view=approvals`/`acknowledgments`/`started`,
+   approval completion, rejection semantics, and deep links bit-for-bit
+   unchanged. Independently verified live in the running stack across all
+   three views, including the complete-review card toggle and inputs,
+   empty states, active table rows with outline dept badges, and mobile
+   (375px) responsive checks. Reference screenshots saved under
+   `screenshots/phase2c/`. Next up per the plan-back's §8 order: Phase 3
+   (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

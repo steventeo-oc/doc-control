@@ -799,7 +799,17 @@
   (net zero); id 21 (SOP-QA-0002, released) has a real recorded
   acknowledgment from the admin account and a started-then-completed
   grant/revoke cycle — all genuine workflow records from required
-  verification, adjust at will. Next up per the plan-back's §8 order:
+  verification, adjust at will.
+  **Auth card border polish (2026-09-17, commit 0c664ea)**: per owner
+  feedback, the login card's rigid 1px grey border (`border rounded-xl
+  shadow-sm`) was softened to match the Dashboard's Warm Elevated style
+  (`border-0 shadow-md rounded-2xl`). The perimeter is now defined by a
+  soft drop shadow fading smoothly into the background, eliminating the
+  hard `#e2e8f0` outline; applied consistently to `LoginPage.tsx`,
+  `ForgotPasswordPage.tsx`, and `ResetPasswordPage.tsx`. Verified live in
+  the running stack via computed styles (borderWidth: 0px, borderRadius:
+  16px, boxShadow matching shadow-md) and visual checks on desktop
+  (1280px) and mobile (375px). Next up per the plan-back's §8 order remains:
   Phase 2c (Tasks — both panes, including the completion form, and the
   known pre-existing overdue-badge-styled-as-reapproval bug flagged in
   §11 to fix deliberately when this page migrates), not started.

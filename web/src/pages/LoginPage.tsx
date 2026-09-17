@@ -113,7 +113,7 @@ export default function LoginPage() {
           </p>
         </aside>
         <main className="flex flex-1 items-center justify-center p-6">
-          <Card className="w-full max-w-sm">
+          <Card className="w-full max-w-sm rounded-2xl border-0 shadow-md">
             <CardHeader>
               <div className="flex items-center gap-3">
                 <div className="flex size-9 shrink-0 items-center justify-center rounded-lg bg-primary/10 text-primary">

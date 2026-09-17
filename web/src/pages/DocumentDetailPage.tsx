@@ -438,8 +438,14 @@ export default function DocumentDetailPage() {
         <CardContent>
           <form className="flex flex-wrap items-end gap-3" onSubmit={handleUpload}>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="upload-file">File</Label>
-              <Input id="upload-file" name="file" type="file" required />
+              <Label htmlFor="upload-file" className="cursor-pointer">File</Label>
+              <Input
+                id="upload-file"
+                name="file"
+                type="file"
+                required
+                className="cursor-pointer file:cursor-pointer"
+              />
             </div>
             <div className="flex flex-col gap-1.5">
               <Label htmlFor="upload-notes">Change notes</Label>

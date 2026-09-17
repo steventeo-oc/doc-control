@@ -268,7 +268,7 @@ export default function DocumentsPage() {
       </div>
 
       <Sheet open={view !== 'trash' && showCreate} onOpenChange={handleOpenChange}>
-        <SheetContent side="right" className="flex flex-col p-6 sm:max-w-lg overflow-y-auto">
+        <SheetContent side="right" className="flex flex-col p-6 sm:max-w-lg overflow-y-auto border-0">
           <SheetHeader className="p-0">
             <SheetTitle className="text-xl font-semibold">New document</SheetTitle>
             <SheetDescription>
@@ -335,8 +335,15 @@ export default function DocumentsPage() {
                 />
               </div>
               <div className="flex flex-col gap-1.5">
-                <Label htmlFor="create-file">File (optional — becomes version 1)</Label>
-                <Input id="create-file" name="file" type="file" />
+                <Label htmlFor="create-file" className="cursor-pointer">
+                  File (optional — becomes version 1)
+                </Label>
+                <Input
+                  id="create-file"
+                  name="file"
+                  type="file"
+                  className="cursor-pointer file:cursor-pointer"
+                />
               </div>
             </div>
             <SheetFooter className="p-0 flex flex-row justify-end gap-2">

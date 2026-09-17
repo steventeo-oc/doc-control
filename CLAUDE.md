@@ -845,8 +845,19 @@
     and computed card styles `borderWidth: 0px`, `borderRadius: 16px`,
     `boxShadow` shadow-md, and pure white background across Login, Dashboard,
     Documents, Tasks, Document Detail, and Departments). Reference
-    screenshots under `screenshots/consistency/`. Next up per the plan-back's
-    §8 order: Phase 3 (Departments — list, detail, members panel), not started.
+    screenshots under `screenshots/consistency/`.
+    **Widescreen sidebar spacing fix (2026-09-17, commit cd48410)**:
+    identified that `<main>` in `Layout.tsx` had `mx-auto w-full max-w-[1100px]`,
+    which caused the main content on wide viewports (≥1440px/1920px) to
+    center itself in the space right of the sidebar, creating a ~250px+
+    empty gap between the secondary sidebar and page content. Removed
+    `mx-auto` so content across all section pages (Documents, Tasks,
+    Departments, Activity, Admin) remains cleanly anchored immediately
+    next to the sub-nav sidebar with a consistent 24px/48px spacing regardless
+    of window width. Independently verified at 1920x1080 across all 10 section
+    routes with screenshots under `screenshots/widescreen/`. Next up per the
+    plan-back's §8 order: Phase 3 (Departments — list, detail, members panel),
+    not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

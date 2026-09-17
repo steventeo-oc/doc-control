@@ -9,7 +9,14 @@ import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
 import { Button } from '../components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '../components/ui/card';
+import {
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/sheet';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import {
@@ -46,7 +53,7 @@ import {
  */
 export default function DocumentsPage() {
   const { user, isAdmin } = useAuth();
-  const [searchParams] = useSearchParams();
+  const [searchParams, setSearchParams] = useSearchParams();
   const view = searchParams.get('view') === 'mine' || searchParams.get('view') === 'trash'
     ? (searchParams.get('view') as 'mine' | 'trash')
     : 'all';
@@ -111,6 +118,22 @@ export default function DocumentsPage() {
       )?.id
     : undefined;
 
+  const handleOpenChange = useCallback(
+    (open: boolean) => {
+      setShowCreate(open);
+      if (!open) {
+        setCreateError(null);
+        if (searchParams.get('create')) {
+          const nextParams = new URLSearchParams(searchParams);
+          nextParams.delete('create');
+          nextParams.delete('department');
+          setSearchParams(nextParams, { replace: true });
+        }
+      }
+    },
+    [searchParams, setSearchParams],
+  );
+
   function handleCreate(event: FormEvent<HTMLFormElement>) {
     event.preventDefault();
     const form = event.currentTarget;
@@ -128,7 +151,7 @@ export default function DocumentsPage() {
       )
       .then(() => {
         form.reset();
-        setShowCreate(false);
+        handleOpenChange(false);
         load();
       })
       .catch((err: Error) => setCreateError(err.message))
@@ -149,8 +172,8 @@ export default function DocumentsPage() {
         title="Documents"
         actions={
           view !== 'trash' && (
-            <Button type="button" onClick={() => setShowCreate((v) => !v)}>
-              {showCreate ? 'Cancel' : 'New document'}
+            <Button type="button" onClick={() => handleOpenChange(true)}>
+              New document
             </Button>
           )
         }
@@ -244,13 +267,16 @@ export default function DocumentsPage() {
         </div>
       </div>
 
-      {view !== 'trash' && showCreate && departments.length > 0 && (
-        <Card className="mt-4 max-w-xl">
-          <CardHeader>
-            <CardTitle className="text-base font-semibold">New document</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <form className="flex flex-col gap-4" onSubmit={handleCreate}>
+      <Sheet open={view !== 'trash' && showCreate} onOpenChange={handleOpenChange}>
+        <SheetContent side="right" className="flex flex-col p-6 sm:max-w-lg overflow-y-auto">
+          <SheetHeader className="p-0">
+            <SheetTitle className="text-xl font-semibold">New document</SheetTitle>
+            <SheetDescription>
+              Create a new controlled document and optionally upload its initial version file.
+            </SheetDescription>
+          </SheetHeader>
+          <form className="mt-4 flex flex-1 flex-col justify-between gap-6" onSubmit={handleCreate}>
+            <div className="flex flex-col gap-4">
               {createError && (
                 <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
                   {createError}
@@ -276,6 +302,7 @@ export default function DocumentsPage() {
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="create-department">Department</Label>
                 <Select
+                  key={preselectDepartmentId ? String(preselectDepartmentId) : 'default'}
                   name="departmentId"
                   required
                   defaultValue={preselectDepartmentId ? String(preselectDepartmentId) : undefined}
@@ -311,13 +338,23 @@ export default function DocumentsPage() {
                 <Label htmlFor="create-file">File (optional — becomes version 1)</Label>
                 <Input id="create-file" name="file" type="file" />
               </div>
+            </div>
+            <SheetFooter className="p-0 flex flex-row justify-end gap-2">
+              <Button
+                type="button"
+                variant="outline"
+                onClick={() => handleOpenChange(false)}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
               <Button type="submit" disabled={creating}>
                 {creating ? 'Creating…' : 'Create document'}
               </Button>
-            </form>
-          </CardContent>
-        </Card>
-      )}
+            </SheetFooter>
+          </form>
+        </SheetContent>
+      </Sheet>
 
       {error && (
         <div className="mt-4 rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">

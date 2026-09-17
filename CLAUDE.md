@@ -855,9 +855,18 @@
     Departments, Activity, Admin) remains cleanly anchored immediately
     next to the sub-nav sidebar with a consistent 24px/48px spacing regardless
     of window width. Independently verified at 1920x1080 across all 10 section
-    routes with screenshots under `screenshots/widescreen/`. Next up per the
-    plan-back's §8 order: Phase 3 (Departments — list, detail, members panel),
-    not started.
+    routes with screenshots under `screenshots/widescreen/`.
+    **New Document slide-over Sheet drawer (2026-09-17, commit 6d09025)**:
+    per owner request, replaced the inline expanding Card on DocumentsPage
+    with a modern right-side slide-over Sheet drawer (`SheetContent side="right"`).
+    Eliminates layout shift on the document table (0px vertical shift verified),
+    preserves context with a dimmed backdrop overlay, and provides dedicated
+    header, description, cancel/submit buttons, and close handlers (X, Cancel,
+    backdrop click, Escape). Deep link support (`?create=1&department=<code>`)
+    intact with automated open and asynchronous department preselection.
+    Independently verified live via Edge CDP with zero table shift confirmed
+    and screenshots under `screenshots/drawer/`. Next up per the plan-back's
+    §8 order: Phase 3 (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

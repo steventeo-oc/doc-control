@@ -897,7 +897,26 @@
     `index.css`. Independently verified live in the running stack via Edge CDP
     (computed `borderLeftWidth: 0px`, `borderLeftStyle: none`, `fileCursor: pointer`,
     `fileSelectorButtonCursor: pointer`). Reference screenshot saved to
-    `screenshots/drawer/07-drawer-noborder-pointer.png`. Next up per the plan-back's
+    `screenshots/drawer/07-drawer-noborder-pointer.png`.
+    **Document Section UX & Logic Improvements (2026-09-17, commit fb92a57)**:
+    implemented and verified 14 user-approved enhancements across `DocumentsPage`,
+    `DocumentDetailPage`, `SheetContent` drawer, and backend endpoints:
+    1. Unconfirmed "Move to Trash" wrapped in `AlertDialog` confirmation dialog.
+    2. Read-only viewers (`!canModify`) presented clean read-only metadata without mutation forms.
+    3. Trashed documents hide version upload and display informational alert banner; upload hidden for read-only viewers.
+    4. Backend `DocumentService` searches dual `name` OR `documentNumber` via `cb.or()`.
+    5. Search input debounced at 300ms with updated placeholder `Search name or number…`.
+    6. Table loading spinner and opacity transition during filter and query changes.
+    7. "Clear filters" action appears whenever search or select filters are active.
+    8. Audited "Original" download button (`?original=true`) alongside rendition download for editors (`canModify`).
+    9. "Approval in progress" card with pulsing status dot and reviewer badges while workflow in flight; "Send for approval" form hidden while active.
+    10. Transfer document ownership dropdown for managers and admins populated with eligible department members.
+    11. Approval form role selection changed to picklist populated via new `workflowApi.reviewerRoles(documentId)`.
+    12. "Back to documents" button preserves previous sidebar view context (`?view=mine`, `?view=trash`, etc.).
+    13. Clickable table column sort headers (`number`, `name`, `status`, `updated`) with indicators, and page size selector defaulting to 10 rows to fit 1440x900 viewport without vertical scrolling.
+    14. New Document drawer filters creator departments by `level !== 'CONSUMER'`, warning banner displayed and submission disabled if user has no contributor/manager permissions.
+    Verified with unit test `DocumentListFilterTests`, frontend TypeScript build (0 errors),
+    and automated Edge CDP browser testing across 12 reference screenshots in `screenshots/improvements/`. Next up per the plan-back's
     §8 order: Phase 3 (Departments — list, detail, members panel), not started.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**

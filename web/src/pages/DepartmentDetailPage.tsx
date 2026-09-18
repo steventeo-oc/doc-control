@@ -1,8 +1,8 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Link, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, ChevronLeft, ChevronRight, FileText, Plus, Search } from 'lucide-react';
+import { Link, useNavigate, useParams } from 'react-router-dom';
+import { ArrowLeft, Building2, ChevronLeft, ChevronRight, FileText, Loader2, Plus, Search } from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
-import type { Department, DocumentsPage as PageResult } from '../api/types';
+import type { Department, DocumentNumberPreview, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
 import DepartmentMembersPanel from '../components/DepartmentMembersPanel';
@@ -12,6 +12,15 @@ import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -31,6 +40,7 @@ import {
 export default function DepartmentDetailPage() {
   const { id } = useParams();
   const departmentId = Number(id);
+  const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
   const [department, setDepartment] = useState<Department | null>(null);
   const [resolved, setResolved] = useState(false);
@@ -43,6 +53,15 @@ export default function DepartmentDetailPage() {
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const pageSize = 15;
+
+  // In-place document creation state
+  const [createOpen, setCreateOpen] = useState(false);
+  const [types, setTypes] = useState<DocumentType[]>([]);
+  const [selectedTypeId, setSelectedTypeId] = useState<number | null>(null);
+  const [numberPreview, setNumberPreview] = useState<DocumentNumberPreview | null>(null);
+  const [loadingNumber, setLoadingNumber] = useState(false);
+  const [creating, setCreating] = useState(false);
+  const [createError, setCreateError] = useState<string | null>(null);
 
   const membership = user?.departments.find((d) => d.id === departmentId);
   const canManage = isAdmin || membership?.level === 'MANAGER';
@@ -67,6 +86,35 @@ export default function DepartmentDetailPage() {
         setResolved(true);
       });
   }, [departmentId, membership]);
+
+  // Load Document Types for in-place creation
+  useEffect(() => {
+    lookupApi.types(true).then(setTypes).catch(() => undefined);
+  }, []);
+
+  // Calculate Next Document Number Preview
+  useEffect(() => {
+    if (!selectedTypeId || !department) {
+      setNumberPreview(null);
+      return;
+    }
+    setLoadingNumber(true);
+    let active = true;
+    documentApi
+      .previewNextNumber(selectedTypeId, department.id)
+      .then((res) => {
+        if (active) setNumberPreview(res);
+      })
+      .catch(() => {
+        if (active) setNumberPreview(null);
+      })
+      .finally(() => {
+        if (active) setLoadingNumber(false);
+      });
+    return () => {
+      active = false;
+    };
+  }, [selectedTypeId, department]);
 
   // Load Documents with Filters & Pagination
   const loadDocuments = useCallback(() => {
@@ -100,6 +148,37 @@ export default function DepartmentDetailPage() {
     setPage(0);
   }
 
+  function openCreateModal() {
+    setCreateError(null);
+    setSelectedTypeId(null);
+    setNumberPreview(null);
+    setCreateOpen(true);
+  }
+
+  function handleCreateDocument(e: React.FormEvent<HTMLFormElement>) {
+    e.preventDefault();
+    if (!selectedTypeId || !department) return;
+    const form = e.currentTarget;
+    const data = new FormData(form);
+    const name = String(data.get('name') ?? '').trim();
+    if (!name) return;
+    const file =
+      data.get('file') instanceof File && (data.get('file') as File).size > 0
+        ? (data.get('file') as File)
+        : null;
+
+    setCreating(true);
+    setCreateError(null);
+    documentApi
+      .create(selectedTypeId, department.id, name, file)
+      .then((created) => {
+        setCreateOpen(false);
+        navigate(`/documents/${created.id}`);
+      })
+      .catch((err: Error) => setCreateError(err.message))
+      .finally(() => setCreating(false));
+  }
+
   if (!resolved) {
     return (
       <div className="py-12 text-center text-xs text-muted-foreground">
@@ -128,6 +207,24 @@ export default function DepartmentDetailPage() {
   }
 
   const totalPages = docs?.totalPages ?? 0;
+  const selectedType = types.find((t) => t.id === selectedTypeId);
+
+  let previewDisplayNumber = '—';
+  let previewHelperText = 'Select a document type to preview the next allocated document number.';
+
+  if (selectedTypeId && department) {
+    if (numberPreview?.nextDocumentNumber) {
+      previewDisplayNumber = numberPreview.nextDocumentNumber;
+      if (numberPreview.currentLatestDocumentNumber) {
+        previewHelperText = `Current latest: ${numberPreview.currentLatestDocumentNumber} · Next allocated: ${numberPreview.nextDocumentNumber}`;
+      } else {
+        previewHelperText = `First document for ${selectedType?.code ?? ''}-${department.code} · Allocated: ${numberPreview.nextDocumentNumber}`;
+      }
+    } else {
+      previewDisplayNumber = selectedType ? `${selectedType.code}-${department.code}-????` : '—';
+      previewHelperText = 'Calculating next document number…';
+    }
+  }
 
   return (
     <div className="space-y-6">
@@ -178,11 +275,13 @@ export default function DepartmentDetailPage() {
           </div>
 
           {canCreateHere && (
-            <Button size="sm" asChild className="gap-1.5 rounded-xl shadow-xs self-start sm:self-auto">
-              <Link to={`/documents?create=1&department=${encodeURIComponent(department.code)}`}>
-                <Plus className="size-4" />
-                <span>New Document</span>
-              </Link>
+            <Button
+              size="sm"
+              className="gap-1.5 rounded-xl shadow-xs self-start sm:self-auto"
+              onClick={openCreateModal}
+            >
+              <Plus className="size-4" />
+              <span>New Document</span>
             </Button>
           )}
         </div>
@@ -301,10 +400,13 @@ export default function DepartmentDetailPage() {
                       }
                       cta={
                         canCreateHere && !docSearch && statusFilter === 'ALL' ? (
-                          <Button size="sm" variant="outline" asChild className="mt-2 text-xs rounded-xl">
-                            <Link to={`/documents?create=1&department=${encodeURIComponent(department.code)}`}>
-                              Create First Document
-                            </Link>
+                          <Button
+                            size="sm"
+                            variant="outline"
+                            className="mt-2 text-xs rounded-xl"
+                            onClick={openCreateModal}
+                          >
+                            Create First Document
                           </Button>
                         ) : undefined
                       }
@@ -347,6 +449,142 @@ export default function DepartmentDetailPage() {
           </div>
         )}
       </Card>
+
+      {/* In-Place Create Document Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle className="flex items-center gap-2">
+              <FileText className="size-5 text-primary" />
+              <span>New Document</span>
+            </DialogTitle>
+            <DialogDescription className="text-xs text-muted-foreground">
+              Create a new controlled document in department{' '}
+              <strong className="font-semibold text-foreground">{department.code}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+
+          {createError && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+              {createError}
+            </div>
+          )}
+
+          <form onSubmit={handleCreateDocument} className="space-y-4 mt-2">
+            {/* Department (Fixed) */}
+            <div className="space-y-1">
+              <Label className="text-xs font-semibold">Department</Label>
+              <div className="rounded-xl border border-border/40 bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
+                <span className="font-medium text-foreground">
+                  {department.label}
+                </span>
+                <Badge variant="outline" className="font-mono text-[10px] font-semibold bg-background">
+                  {department.code}
+                </Badge>
+              </div>
+            </div>
+
+            {/* Document Type */}
+            <div className="space-y-1">
+              <Label htmlFor="doc-type" className="text-xs font-semibold">
+                Document Type
+              </Label>
+              <Select
+                value={selectedTypeId ? String(selectedTypeId) : ''}
+                onValueChange={(val) => setSelectedTypeId(Number(val))}
+                required
+              >
+                <SelectTrigger id="doc-type" className="text-xs rounded-xl border-border/40">
+                  <SelectValue placeholder="Select a document type…" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/40 shadow-xl max-h-56">
+                  {types
+                    .filter((t) => t.active)
+                    .map((t) => (
+                      <SelectItem key={t.id} value={String(t.id)} className="text-xs">
+                        <span className="font-mono font-semibold mr-1.5">{t.code}</span>
+                        <span className="text-muted-foreground">— {t.label}</span>
+                      </SelectItem>
+                    ))}
+                </SelectContent>
+              </Select>
+            </div>
+
+            {/* Allocated Number Preview */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between">
+                <Label className="text-xs font-semibold">Allocated Document Number</Label>
+                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                  Auto-assigned
+                </span>
+              </div>
+              <div className="relative">
+                <Input
+                  readOnly
+                  tabIndex={-1}
+                  value={previewDisplayNumber}
+                  className="bg-muted/50 font-mono text-xs font-semibold tracking-wide cursor-default select-all rounded-xl border-border/40"
+                />
+                {loadingNumber && (
+                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                    <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                  </div>
+                )}
+              </div>
+              <p className="text-[11px] text-muted-foreground">
+                {previewHelperText}
+              </p>
+            </div>
+
+            {/* Document Title / Name */}
+            <div className="space-y-1">
+              <Label htmlFor="doc-name" className="text-xs font-semibold">
+                Document Title
+              </Label>
+              <Input
+                id="doc-name"
+                name="name"
+                required
+                maxLength={255}
+                placeholder="e.g. Standard Operating Procedure for Assembly Calibration"
+                className="text-xs rounded-xl border-border/40"
+              />
+            </div>
+
+            {/* Initial File (Optional) */}
+            <div className="space-y-1">
+              <Label htmlFor="doc-file" className="text-xs font-semibold cursor-pointer">
+                Initial File <span className="text-muted-foreground font-normal">(optional — creates v1 draft)</span>
+              </Label>
+              <Input
+                id="doc-file"
+                name="file"
+                type="file"
+                className="cursor-pointer file:cursor-pointer text-xs rounded-xl border-border/40"
+              />
+            </div>
+
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateOpen(false)}
+                disabled={creating}
+              >
+                Cancel
+              </Button>
+              <Button
+                type="submit"
+                size="sm"
+                disabled={creating || !selectedTypeId}
+              >
+                {creating ? 'Creating…' : 'Create Document'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }

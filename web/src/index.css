@@ -65,8 +65,11 @@
   --radius: 0.5rem;
 }
 
-* {
+*,
+::after,
+::before {
   box-sizing: border-box;
+  border-color: var(--border);
   -webkit-tap-highlight-color: transparent;
 }
 

@@ -301,7 +301,11 @@ export default function ActivityPage() {
         </CardContent>
       </Card>
 
-      {error && <div className="error-banner">{error}</div>}
+      {error && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 px-4 py-3 text-sm text-destructive">
+          {error}
+        </div>
+      )}
 
       {/* Table */}
       <Card className="py-0">

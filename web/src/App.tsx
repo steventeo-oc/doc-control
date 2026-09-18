@@ -18,7 +18,11 @@ import UsersPage from './pages/UsersPage';
 function Protected({ children }: { children: React.ReactNode }) {
   const { user, loading } = useAuth();
   if (loading) {
-    return <div className="page-loading">Loading…</div>;
+    return (
+      <div className="flex min-h-screen items-center justify-center text-sm text-muted-foreground">
+        Loading…
+      </div>
+    );
   }
   if (!user) {
     return <Navigate to="/login" replace />;

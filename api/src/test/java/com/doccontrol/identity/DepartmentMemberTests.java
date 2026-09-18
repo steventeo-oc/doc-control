@@ -215,4 +215,106 @@ class DepartmentMemberTests {
                         .contentType("application/json").content("{}"))
                 .andExpect(status().isBadRequest());
     }
+
+    @Test
+    void getDepartmentReturnsDetailsForMembersAndAdmins() throws Exception {
+        Fixture fx = new Fixture(mockMvc, objectMapper, "DET");
+
+        mockMvc.perform(get("/departments/{id}", fx.departmentId).session(fx.managerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(fx.departmentId))
+                .andExpect(jsonPath("$.label").value("Member test dept"));
+
+        mockMvc.perform(get("/departments/{id}", fx.departmentId).session(fx.adminSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.id").value(fx.departmentId));
+    }
+
+    @Test
+    void managerCanListAvailableUsersAddMemberAndRemoveMember() throws Exception {
+        Fixture fx = new Fixture(mockMvc, objectMapper, "SVC");
+
+        // Create an outsider user not in fx.departmentId
+        UserRef candidate = fx.createUser("svc-candidate", fx.departmentId, "CONSUMER");
+        // Create another department and move candidate there so they are not in fx.departmentId
+        MvcResult otherDept = mockMvc.perform(post("/departments").with(csrf()).session(fx.adminSession)
+                        .contentType("application/json")
+                        .content("{\"code\":\"OTH" + System.nanoTime() % 100000 + "\",\"label\":\"Other dept\"}"))
+                .andExpect(status().isCreated())
+                .andReturn();
+        Integer otherDeptId = objectMapper.readTree(otherDept.getResponse().getContentAsString()).path("id").asInt();
+        UserRef outsider = fx.createUser("svc-outsider", otherDeptId, "CONTRIBUTOR");
+
+        // Available users endpoint lists outsider but not existing members
+        mockMvc.perform(get("/departments/{id}/available-users", fx.departmentId).session(fx.managerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == " + outsider.id() + ")]").isNotEmpty())
+                .andExpect(jsonPath("$[?(@.id == " + fx.manager.id() + ")]").isEmpty());
+
+        // Collaborator (non-manager) is 403 on available-users, add member, and remove member
+        MockHttpSession collabSession = fx.login(fx.collaborator.email(), fx.collaborator.password());
+        mockMvc.perform(get("/departments/{id}/available-users", fx.departmentId).session(collabSession))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(post("/departments/{id}/members", fx.departmentId)
+                        .with(csrf()).session(collabSession)
+                        .contentType("application/json")
+                        .content("{\"userId\":" + outsider.id() + ",\"level\":\"CONTRIBUTOR\"}"))
+                .andExpect(status().isForbidden());
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/departments/{id}/members/{userId}", fx.departmentId, outsider.id())
+                        .with(csrf()).session(collabSession))
+                .andExpect(status().isForbidden());
+
+        // Manager adds outsider as CONTRIBUTOR
+        mockMvc.perform(post("/departments/{id}/members", fx.departmentId)
+                        .with(csrf()).session(fx.managerSession)
+                        .contentType("application/json")
+                        .content("{\"userId\":" + outsider.id() + ",\"level\":\"CONTRIBUTOR\"}"))
+                .andExpect(status().isCreated())
+                .andExpect(jsonPath("$.userId").value(outsider.id()))
+                .andExpect(jsonPath("$.level").value("CONTRIBUTOR"));
+
+        // Verified in audit log
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "department".equals(entry.getEntityType())
+                        && fx.departmentId.equals(entry.getEntityId())
+                        && "member_added".equals(entry.getAction())
+                        && String.valueOf(outsider.id()).equals(String.valueOf(entry.getDetails().get("user_id"))));
+
+        // Duplicate add is 409 Conflict
+        mockMvc.perform(post("/departments/{id}/members", fx.departmentId)
+                        .with(csrf()).session(fx.managerSession)
+                        .contentType("application/json")
+                        .content("{\"userId\":" + outsider.id() + ",\"level\":\"CONTRIBUTOR\"}"))
+                .andExpect(status().isConflict());
+
+        // Now member appears in members list
+        mockMvc.perform(get("/departments/{id}/members", fx.departmentId).session(fx.managerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.userId == " + outsider.id() + ")]").isNotEmpty());
+
+        // Manager removes the newly added member
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/departments/{id}/members/{userId}", fx.departmentId, outsider.id())
+                        .with(csrf()).session(fx.managerSession))
+                .andExpect(status().isNoContent());
+
+        // Verified in audit log
+        assertThat(auditLogRepository.findAll())
+                .anyMatch(entry -> "department".equals(entry.getEntityType())
+                        && fx.departmentId.equals(entry.getEntityId())
+                        && "member_removed".equals(entry.getAction())
+                        && String.valueOf(outsider.id()).equals(String.valueOf(entry.getDetails().get("user_id"))));
+
+        // Member is no longer in members list
+        mockMvc.perform(get("/departments/{id}/members", fx.departmentId).session(fx.managerSession))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.userId == " + outsider.id() + ")]").isEmpty());
+
+        // Removing non-member returns 404
+        mockMvc.perform(org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete(
+                        "/departments/{id}/members/{userId}", fx.departmentId, outsider.id())
+                        .with(csrf()).session(fx.managerSession))
+                .andExpect(status().isNotFound());
+    }
 }

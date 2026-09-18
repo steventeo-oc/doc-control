@@ -205,16 +205,16 @@ export default function Layout() {
     return () => window.removeEventListener('task-counts-updated', refreshTaskCounts);
   }, [refreshTaskCounts, location.pathname, location.search]);
 
-  const departmentItems: SectionItem[] = (isAdmin
-    ? adminDepartments
-    : user?.departments ?? []
-  )
-    .slice()
-    .sort((a, b) => a.code.localeCompare(b.code))
-    .map((d) => ({
-      label: d.code + (d.active ? '' : ' (inactive)'),
-      to: `/departments/${d.id}`,
-    }));
+  const departmentItems: SectionItem[] = [
+    { label: 'Overview', to: '/departments' },
+    ...(isAdmin ? adminDepartments : user?.departments ?? [])
+      .slice()
+      .sort((a, b) => a.code.localeCompare(b.code))
+      .map((d) => ({
+        label: d.code + (d.active ? '' : ' (inactive)'),
+        to: `/departments/${d.id}`,
+      })),
+  ];
 
   const sections: Record<string, { label: string; items: SectionItem[] }> = {
     documents: {

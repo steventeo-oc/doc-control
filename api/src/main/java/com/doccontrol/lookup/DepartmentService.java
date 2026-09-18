@@ -35,19 +35,22 @@ public class DepartmentService {
     private final DocumentSequenceCounterRepository documentSequenceCounterRepository;
     private final DepartmentAccessService departmentAccessService;
     private final AuditService auditService;
+    private final com.doccontrol.identity.UserRepository userRepository;
 
     public DepartmentService(DepartmentRepository departmentRepository,
                              DocumentRepository documentRepository,
                              UserDepartmentRepository userDepartmentRepository,
                              DocumentSequenceCounterRepository documentSequenceCounterRepository,
                              DepartmentAccessService departmentAccessService,
-                             AuditService auditService) {
+                             AuditService auditService,
+                             com.doccontrol.identity.UserRepository userRepository) {
         this.departmentRepository = departmentRepository;
         this.documentRepository = documentRepository;
         this.userDepartmentRepository = userDepartmentRepository;
         this.documentSequenceCounterRepository = documentSequenceCounterRepository;
         this.departmentAccessService = departmentAccessService;
         this.auditService = auditService;
+        this.userRepository = userRepository;
     }
 
     @Transactional
@@ -94,6 +97,11 @@ public class DepartmentService {
         return DepartmentDto.from(department);
     }
 
+    @Transactional(readOnly = true)
+    public DepartmentDto get(Integer id) {
+        return DepartmentDto.from(requireDepartment(id));
+    }
+
     /** Counts powering the deactivate confirmation (plan-back F1). */
     @Transactional(readOnly = true)
     public DepartmentUsageDto usage(Integer id) {
@@ -106,8 +114,7 @@ public class DepartmentService {
     /**
      * The department's members with their levels — the Manager self-service
      * surface (department levels plan-back F5). Only a Manager of the
-     * department (or an admin) may see and manage them; adding and removing
-     * members stays admin-only on the Users page.
+     * department (or an admin) may see and manage them.
      */
     @Transactional(readOnly = true)
     public List<DepartmentMemberDto> members(Integer id) {
@@ -117,6 +124,80 @@ public class DepartmentService {
                 .map(DepartmentMemberDto::from)
                 .sorted(Comparator.comparing(DepartmentMemberDto::name))
                 .toList();
+    }
+
+    /**
+     * Active users who are not currently members of this department — candidate
+     * list for Manager self-service member onboarding.
+     */
+    @Transactional(readOnly = true)
+    public List<DepartmentCandidateUserDto> availableUsers(Integer id) {
+        requireDepartment(id);
+        requireMemberManager(id);
+        List<Integer> existingUserIds = userDepartmentRepository.findAllByDepartmentId(id).stream()
+                .map(membership -> membership.getUser().getId())
+                .toList();
+        return userRepository.findAllByActiveTrueOrderByNameAsc().stream()
+                .filter(u -> !existingUserIds.contains(u.getId()))
+                .map(DepartmentCandidateUserDto::from)
+                .toList();
+    }
+
+    /**
+     * Adds an existing active user to the department with an explicit level.
+     */
+    @Transactional
+    public DepartmentMemberDto addMember(Integer id, AddDepartmentMemberRequest request) {
+        Department department = requireDepartment(id);
+        requireMemberManager(id);
+
+        com.doccontrol.identity.User user = userRepository.findById(request.userId())
+                .orElseThrow(() -> new NotFoundException("User " + request.userId() + " not found."));
+        if (!user.isActive()) {
+            throw new ConflictException("User " + user.getEmail() + " is inactive and cannot be added.");
+        }
+
+        UserDepartmentId membershipId = new UserDepartmentId(user.getId(), department.getId());
+        if (userDepartmentRepository.existsById(membershipId)) {
+            throw new ConflictException("User " + user.getEmail() + " is already a member of department '" + department.getCode() + "'.");
+        }
+
+        UserDepartment membership = new UserDepartment();
+        membership.setId(membershipId);
+        membership.setUser(user);
+        membership.setDepartment(department);
+        membership.setLevel(request.level());
+        userDepartmentRepository.save(membership);
+
+        auditService.record("department", id, "member_added", Map.of(
+                "user_id", user.getId(),
+                "user_email", user.getEmail(),
+                "level", request.level().toString()), department);
+
+        return DepartmentMemberDto.from(membership);
+    }
+
+    /**
+     * Removes a member from the department.
+     */
+    @Transactional
+    public void removeMember(Integer id, Integer userId) {
+        Department department = requireDepartment(id);
+        requireMemberManager(id);
+
+        UserDepartment membership = userDepartmentRepository
+                .findById(new UserDepartmentId(userId, id))
+                .orElseThrow(() -> new NotFoundException("User " + userId
+                        + " is not a member of department '" + department.getCode() + "'."));
+
+        com.doccontrol.identity.User user = membership.getUser();
+        com.doccontrol.identity.MembershipLevel level = membership.getLevel();
+        userDepartmentRepository.delete(membership);
+
+        auditService.record("department", id, "member_removed", Map.of(
+                "user_id", userId,
+                "user_email", user.getEmail(),
+                "level", level.toString()), department);
     }
 
     /**

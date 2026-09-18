@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, DelegatedTask, Department, DepartmentMember, DocumentDetail, DocumentNumberPreview, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, TaskCounts, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, DelegatedTask, Department, DepartmentCandidateUser, DepartmentMember, DocumentDetail, DocumentNumberPreview, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, TaskCounts, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
@@ -59,8 +59,15 @@ export const lookupApi = {
   updateDepartment: (id: number, patch: { label?: string; active?: boolean }) =>
     api.patch<Department>(`/departments/${id}`, patch),
   deleteDepartment: (id: number) => api.delete(`/departments/${id}`),
+  getDepartment: (id: number) => api.get<Department>(`/departments/${id}`),
   departmentMembers: (id: number) =>
     api.get<DepartmentMember[]>(`/departments/${id}/members`),
+  departmentAvailableUsers: (id: number) =>
+    api.get<DepartmentCandidateUser[]>(`/departments/${id}/available-users`),
+  addDepartmentMember: (id: number, data: { userId: number; level: MembershipLevel }) =>
+    api.post<DepartmentMember>(`/departments/${id}/members`, data),
+  removeDepartmentMember: (id: number, userId: number) =>
+    api.delete(`/departments/${id}/members/${userId}`),
   updateDepartmentMember: (id: number, userId: number, level: MembershipLevel) =>
     api.patch<DepartmentMember>(`/departments/${id}/members/${userId}`, { level }),
 };

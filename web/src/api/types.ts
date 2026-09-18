@@ -290,6 +290,12 @@ export interface DepartmentMember {
   level: MembershipLevel;
 }
 
+export interface DepartmentCandidateUser {
+  id: number;
+  name: string;
+  email: string;
+}
+
 export interface UserSummary {
   id: number;
   name: string;

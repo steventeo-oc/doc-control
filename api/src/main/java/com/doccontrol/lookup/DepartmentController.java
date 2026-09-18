@@ -50,6 +50,11 @@ public class DepartmentController {
                 .toList();
     }
 
+    @GetMapping("/{id}")
+    public DepartmentDto get(@PathVariable Integer id) {
+        return departmentService.get(id);
+    }
+
     @GetMapping("/{id}/usage")
     public DepartmentUsageDto usage(@PathVariable Integer id) {
         return departmentService.usage(id);
@@ -59,6 +64,29 @@ public class DepartmentController {
     @GetMapping("/{id}/members")
     public List<DepartmentMemberDto> members(@PathVariable Integer id) {
         return departmentService.members(id);
+    }
+
+    @GetMapping("/{id}/available-users")
+    public List<DepartmentCandidateUserDto> availableUsers(@PathVariable Integer id) {
+        return departmentService.availableUsers(id);
+    }
+
+    @PostMapping("/{id}/members")
+    public ResponseEntity<DepartmentMemberDto> addMember(
+            @PathVariable Integer id,
+            @Valid @RequestBody AddDepartmentMemberRequest request) {
+        DepartmentMemberDto created = departmentService.addMember(id, request);
+        return ResponseEntity
+                .created(URI.create("/departments/" + id + "/members/" + created.userId()))
+                .body(created);
+    }
+
+    @DeleteMapping("/{id}/members/{userId}")
+    public ResponseEntity<Void> removeMember(
+            @PathVariable Integer id,
+            @PathVariable Integer userId) {
+        departmentService.removeMember(id, userId);
+        return ResponseEntity.noContent().build();
     }
 
     @PatchMapping("/{id}/members/{userId}")

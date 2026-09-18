@@ -1,197 +1,500 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import { Link } from 'react-router-dom';
+import { Building2, Pencil, Plus, Search, Trash2 } from 'lucide-react';
 import { lookupApi } from '../api/resources';
 import type { Department } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import { PageHeader } from '../components/PageHeader';
+import { EmptyState } from '../components/EmptyState';
+import { Button } from '../components/ui/button';
+import { Input } from '../components/ui/input';
+import { Label } from '../components/ui/label';
+import { Badge } from '../components/ui/badge';
+import { Card } from '../components/ui/card';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '../components/ui/table';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '../components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '../components/ui/alert-dialog';
 
-/**
- * The Departments section (nav restructure plan-back section 1): the
- * sidebar carries the user's own departments; the content lists them with
- * links to the detail page. Admins see every department, inactive marked.
- *
- * The admin CRUD (create, deactivate/reactivate with the usage-count
- * confirmation, delete with the server's blocking sentence) was lost when
- * the old LookupsPage's departments table was deleted in the nav
- * restructure — restored here from that page's interactions, plus an
- * inline rename the old page never had. Backend endpoints were untouched
- * throughout (LookupAdminTests covers them).
- */
 export default function DepartmentsPage() {
   const { user, isAdmin } = useAuth();
   const [all, setAll] = useState<Department[] | null>(null);
+  const [search, setSearch] = useState('');
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
+
+  // Dialog states
+  const [createOpen, setCreateOpen] = useState(false);
+  const [newCode, setNewCode] = useState('');
+  const [newLabel, setNewLabel] = useState('');
+  const [creating, setCreating] = useState(false);
+
   const [renaming, setRenaming] = useState<Department | null>(null);
+  const [renameLabel, setRenameLabel] = useState('');
+  const [savingRename, setSavingRename] = useState(false);
+
+  const [deactivatePrompt, setDeactivatePrompt] = useState<{
+    department: Department;
+    documents: number;
+    users: number;
+  } | null>(null);
+  const [deactivating, setDeactivating] = useState(false);
+
+  const [deletePrompt, setDeletePrompt] = useState<Department | null>(null);
+  const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
     if (isAdmin) {
-      lookupApi.departments(true).then(setAll).catch((err: Error) => setError(err.message));
+      lookupApi
+        .departments(true)
+        .then(setAll)
+        .catch((err: Error) => setError(err.message));
     }
   }, [isAdmin]);
 
   useEffect(load, [load]);
 
-  function run(action: () => Promise<unknown>, message: string) {
+  const departments: Department[] = useMemo(() => {
+    const list = isAdmin
+      ? all ?? []
+      : user?.departments.slice().sort((a, b) => a.code.localeCompare(b.code)) ?? [];
+    if (!search.trim()) return list;
+    const q = search.trim().toLowerCase();
+    return list.filter(
+      (d) => d.code.toLowerCase().includes(q) || d.label.toLowerCase().includes(q)
+    );
+  }, [isAdmin, all, user, search]);
+
+  function handleCreate(e: FormEvent) {
+    e.preventDefault();
+    const code = newCode.trim().toUpperCase();
+    const label = newLabel.trim();
+    if (!code || !label) return;
+
+    setCreating(true);
     setError(null);
-    action()
+    lookupApi
+      .createDepartment(code, label)
       .then(() => {
-        setNotice(message);
+        setNotice(`Department ${code} created.`);
+        setCreateOpen(false);
+        setNewCode('');
+        setNewLabel('');
+        load();
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setCreating(false));
+  }
+
+  function openRename(d: Department) {
+    setRenaming(d);
+    setRenameLabel(d.label);
+  }
+
+  function handleRenameSubmit(e: FormEvent) {
+    e.preventDefault();
+    if (!renaming || !renameLabel.trim()) return;
+
+    setSavingRename(true);
+    setError(null);
+    lookupApi
+      .updateDepartment(renaming.id, { label: renameLabel.trim() })
+      .then(() => {
+        setNotice(`Department ${renaming.code} renamed.`);
         setRenaming(null);
         load();
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setSavingRename(false));
+  }
+
+  function handleToggleClick(department: Department) {
+    setError(null);
+    if (!department.active) {
+      // Direct reactivate
+      lookupApi
+        .updateDepartment(department.id, { active: true })
+        .then(() => {
+          setNotice(`Department ${department.code} activated.`);
+          load();
+        })
+        .catch((err: Error) => setError(err.message));
+      return;
+    }
+
+    // Fetch usage before prompting deactivation
+    lookupApi
+      .usageDepartment(department.id)
+      .then((usage) => {
+        setDeactivatePrompt({
+          department,
+          documents: usage.documents,
+          users: usage.users,
+        });
       })
       .catch((err: Error) => setError(err.message));
   }
 
-  function toggleDepartment(department: Department) {
-    if (!department.active) {
-      run(
-        () => lookupApi.updateDepartment(department.id, { active: true }),
-        `Department ${department.code} activated.`,
-      );
-      return;
-    }
-    lookupApi.usageDepartment(department.id).then(({ documents, users }) => {
-      const docPart = documents > 0
-        ? `${documents} existing document(s) keep using it and stay searchable.`
-        : 'No documents reference it.';
-      const userPart = users > 0
-        ? `${users} user(s) belong to it — they keep access to existing documents but cannot file new ones here.`
-        : 'No users belong to it.';
-      if (window.confirm(`Deactivate department '${department.code}'? ${docPart} ${userPart}`)) {
-        run(
-          () => lookupApi.updateDepartment(department.id, { active: false }),
-          `Department ${department.code} deactivated.`,
-        );
-      }
-    }).catch((err: Error) => setError(err.message));
+  function confirmDeactivate() {
+    if (!deactivatePrompt) return;
+    const { department } = deactivatePrompt;
+    setDeactivating(true);
+    setError(null);
+    lookupApi
+      .updateDepartment(department.id, { active: false })
+      .then(() => {
+        setNotice(`Department ${department.code} deactivated.`);
+        setDeactivatePrompt(null);
+        load();
+      })
+      .catch((err: Error) => setError(err.message))
+      .finally(() => setDeactivating(false));
   }
 
-  function handleRename(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    if (!renaming) return;
-    const label = String(new FormData(event.currentTarget).get('label') ?? '').trim();
-    if (!label) return;
-    run(
-      () => lookupApi.updateDepartment(renaming.id, { label }),
-      `Department ${renaming.code} renamed.`,
-    );
+  function confirmDelete() {
+    if (!deletePrompt) return;
+    const department = deletePrompt;
+    setDeleting(true);
+    setError(null);
+    lookupApi
+      .deleteDepartment(department.id)
+      .then(() => {
+        setNotice(`Department ${department.code} deleted.`);
+        setDeletePrompt(null);
+        load();
+      })
+      .catch((err: Error) => {
+        setError(err.message);
+        setDeletePrompt(null);
+      })
+      .finally(() => setDeleting(false));
   }
-
-  function handleCreate(event: FormEvent<HTMLFormElement>) {
-    event.preventDefault();
-    const form = event.currentTarget;
-    const data = new FormData(form);
-    run(
-      () =>
-        lookupApi.createDepartment(
-          String(data.get('code') ?? '').trim(),
-          String(data.get('label') ?? '').trim(),
-        ),
-      'Department created.',
-    );
-    form.reset();
-  }
-
-  const departments: Department[] = isAdmin
-    ? all ?? []
-    : user?.departments.slice().sort((a, b) => a.code.localeCompare(b.code)) ?? [];
 
   return (
-    <>
-      <h1>Departments</h1>
-      {error && <div className="error-banner">{error}</div>}
-      {notice && <div className="success-banner">{notice}</div>}
-      {departments.length === 0 && !isAdmin && (
-        <p className="muted">You are not a member of any department.</p>
+    <div className="space-y-4">
+      <PageHeader
+        title="Departments"
+        actions={
+          isAdmin && (
+            <Button
+              size="sm"
+              className="gap-1.5 rounded-xl shadow-xs"
+              onClick={() => setCreateOpen(true)}
+            >
+              <Plus className="size-4" />
+              <span>Add Department</span>
+            </Button>
+          )
+        }
+      />
+
+      {error && (
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+          {error}
+        </div>
       )}
-      <div className="card">
-        <table className="data">
-          <thead>
-            <tr>
-              <th>Code</th>
-              <th>Label</th>
-              <th>Active</th>
-              {isAdmin && <th />}
-            </tr>
-          </thead>
-          <tbody>
-            {departments.map((d) => (
-              <tr key={d.id}>
-                <td>
-                  <Link to={`/departments/${d.id}`}>{d.code}</Link>
-                  {!d.active && ' (inactive)'}
-                </td>
-                <td>
-                  {renaming?.id === d.id ? (
-                    <form className="inline" onSubmit={handleRename}>
-                      <input
-                        name="label"
-                        defaultValue={d.label}
-                        required
-                        maxLength={255}
-                        aria-label={`New label for ${d.code}`}
-                      />
-                      <button className="primary" type="submit">
-                        Save
-                      </button>
-                      <button type="button" onClick={() => setRenaming(null)}>
-                        Cancel
-                      </button>
-                    </form>
-                  ) : (
-                    d.label
-                  )}
-                </td>
-                <td>{d.active ? 'yes' : 'no'}</td>
-                {isAdmin && (
-                  <td>
-                    {renaming?.id === d.id ? null : (
-                      <>
-                        <button type="button" onClick={() => setRenaming(d)}>
-                          Rename
-                        </button>{' '}
-                        <button type="button" onClick={() => toggleDepartment(d)}>
-                          {d.active ? 'Deactivate' : 'Activate'}
-                        </button>{' '}
-                        <button
-                          type="button"
-                          onClick={() =>
-                            run(() => lookupApi.deleteDepartment(d.id), `Department ${d.code} deleted.`)
-                          }
-                        >
-                          Delete
-                        </button>
-                      </>
-                    )}
-                  </td>
-                )}
-              </tr>
-            ))}
-            {departments.length === 0 && (
-              <tr>
-                <td colSpan={isAdmin ? 4 : 3} className="muted">
-                  No departments.
-                </td>
-              </tr>
-            )}
-          </tbody>
-        </table>
-        {isAdmin && (
-          <form className="inline" onSubmit={handleCreate}>
-            <label>
-              Code
-              <input name="code" required maxLength={32} placeholder="e.g. ENG" />
-            </label>
-            <label>
-              Label
-              <input name="label" required maxLength={255} placeholder="e.g. Engineering" />
-            </label>
-            <button className="primary" type="submit">
-              Add department
-            </button>
-          </form>
-        )}
+      {notice && (
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+          {notice}
+        </div>
+      )}
+
+      {/* Filter and Search Bar */}
+      <div className="flex items-center gap-3">
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-2.5 top-2.5 size-4 text-muted-foreground" />
+          <Input
+            placeholder="Search departments…"
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-8 text-xs rounded-xl border-border/50"
+          />
+        </div>
+        <div className="text-xs text-muted-foreground">
+          {departments.length} department{departments.length === 1 ? '' : 's'}
+        </div>
       </div>
-    </>
+
+      <Card className="rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+        <Table>
+          <TableHeader>
+            <TableRow className="border-border/40 hover:bg-transparent">
+              <TableHead className="w-28 text-xs font-semibold">Code</TableHead>
+              <TableHead className="text-xs font-semibold">Label</TableHead>
+              <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
+              {isAdmin && <TableHead className="w-48 text-right text-xs font-semibold">Actions</TableHead>}
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {departments.map((d) => (
+              <TableRow key={d.id} className="border-border/30 hover:bg-muted/40 transition-colors">
+                <TableCell className="font-mono text-xs font-medium">
+                  <Link
+                    to={`/departments/${d.id}`}
+                    className="text-primary hover:underline font-semibold"
+                  >
+                    {d.code}
+                  </Link>
+                </TableCell>
+                <TableCell className="text-xs font-medium text-foreground">
+                  {d.label}
+                </TableCell>
+                <TableCell>
+                  {d.active ? (
+                    <Badge
+                      variant="outline"
+                      className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-medium"
+                    >
+                      Active
+                    </Badge>
+                  ) : (
+                    <Badge
+                      variant="outline"
+                      className="border-border/40 bg-muted/50 text-muted-foreground text-[11px] font-medium"
+                    >
+                      Inactive
+                    </Badge>
+                  )}
+                </TableCell>
+                {isAdmin && (
+                  <TableCell className="text-right">
+                    <div className="flex items-center justify-end gap-1">
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => openRename(d)}
+                      >
+                        <Pencil className="size-3 mr-1" />
+                        Rename
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        onClick={() => handleToggleClick(d)}
+                      >
+                        {d.active ? 'Deactivate' : 'Activate'}
+                      </Button>
+                      <Button
+                        variant="ghost"
+                        size="sm"
+                        className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        onClick={() => setDeletePrompt(d)}
+                      >
+                        <Trash2 className="size-3 mr-1" />
+                        Delete
+                      </Button>
+                    </div>
+                  </TableCell>
+                )}
+              </TableRow>
+            ))}
+
+            {departments.length === 0 && (
+              <TableRow>
+                <TableCell colSpan={isAdmin ? 4 : 3} className="py-8 text-center">
+                  <EmptyState
+                    icon={Building2}
+                    message={
+                      search
+                        ? `No departments match "${search}".`
+                        : isAdmin
+                        ? 'No departments exist yet. Click "+ Add Department" to create one.'
+                        : 'You are not assigned to any departments.'
+                    }
+                  />
+                </TableCell>
+              </TableRow>
+            )}
+          </TableBody>
+        </Table>
+      </Card>
+
+      {/* Add Department Dialog */}
+      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Add Department</DialogTitle>
+            <DialogDescription className="text-xs">
+              Create a new department lookup row. The department code will be used in document prefixes and cannot be changed later.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleCreate} className="space-y-3 mt-2">
+            <div className="space-y-1">
+              <Label htmlFor="dept-code" className="text-xs font-semibold">
+                Department Code
+              </Label>
+              <Input
+                id="dept-code"
+                placeholder="e.g. ENG, QA, HR"
+                maxLength={32}
+                required
+                value={newCode}
+                onChange={(e) => setNewCode(e.target.value.toUpperCase())}
+                className="font-mono text-xs rounded-xl"
+              />
+            </div>
+            <div className="space-y-1">
+              <Label htmlFor="dept-label" className="text-xs font-semibold">
+                Department Label
+              </Label>
+              <Input
+                id="dept-label"
+                placeholder="e.g. Engineering, Quality Assurance"
+                maxLength={255}
+                required
+                value={newLabel}
+                onChange={(e) => setNewLabel(e.target.value)}
+                className="text-xs rounded-xl"
+              />
+            </div>
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setCreateOpen(false)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={creating || !newCode.trim() || !newLabel.trim()}>
+                {creating ? 'Creating…' : 'Create Department'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Rename Dialog */}
+      <Dialog open={Boolean(renaming)} onOpenChange={(open) => !open && setRenaming(null)}>
+        <DialogContent className="sm:max-w-md rounded-2xl">
+          <DialogHeader>
+            <DialogTitle>Rename Department</DialogTitle>
+            <DialogDescription className="text-xs">
+              Update the descriptive label for department{' '}
+              <strong className="font-mono text-foreground">{renaming?.code}</strong>.
+            </DialogDescription>
+          </DialogHeader>
+          <form onSubmit={handleRenameSubmit} className="space-y-3 mt-2">
+            <div className="space-y-1">
+              <Label htmlFor="rename-label" className="text-xs font-semibold">
+                Department Label
+              </Label>
+              <Input
+                id="rename-label"
+                maxLength={255}
+                required
+                value={renameLabel}
+                onChange={(e) => setRenameLabel(e.target.value)}
+                className="text-xs rounded-xl"
+              />
+            </div>
+            <DialogFooter className="mt-4">
+              <Button
+                type="button"
+                variant="outline"
+                size="sm"
+                onClick={() => setRenaming(null)}
+              >
+                Cancel
+              </Button>
+              <Button type="submit" size="sm" disabled={savingRename || !renameLabel.trim()}>
+                {savingRename ? 'Saving…' : 'Save Changes'}
+              </Button>
+            </DialogFooter>
+          </form>
+        </DialogContent>
+      </Dialog>
+
+      {/* Deactivate Alert Dialog */}
+      <AlertDialog
+        open={Boolean(deactivatePrompt)}
+        onOpenChange={(open) => !open && setDeactivatePrompt(null)}
+      >
+        <AlertDialogContent className="sm:max-w-md rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Deactivate Department {deactivatePrompt?.department.code}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="space-y-2 text-xs text-muted-foreground">
+              <p>
+                {deactivatePrompt && deactivatePrompt.documents > 0
+                  ? `• ${deactivatePrompt.documents} existing document(s) will keep referencing this department and remain searchable.`
+                  : '• No documents reference this department.'}
+              </p>
+              <p>
+                {deactivatePrompt && deactivatePrompt.users > 0
+                  ? `• ${deactivatePrompt.users} user(s) currently belong to it. They will keep access to existing documents but cannot file new documents here.`
+                  : '• No users currently belong to this department.'}
+              </p>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deactivating}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDeactivate}
+              disabled={deactivating}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deactivating ? 'Deactivating…' : 'Deactivate'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Delete Alert Dialog */}
+      <AlertDialog
+        open={Boolean(deletePrompt)}
+        onOpenChange={(open) => !open && setDeletePrompt(null)}
+      >
+        <AlertDialogContent className="sm:max-w-md rounded-2xl">
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Delete Department {deletePrompt?.code}?
+            </AlertDialogTitle>
+            <AlertDialogDescription className="text-xs text-muted-foreground">
+              This action cannot be undone. It will permanently remove department{' '}
+              <strong className="text-foreground">{deletePrompt?.label}</strong>, all user memberships, and its sequence counters.
+              <br />
+              <br />
+              <em>Note: If any documents reference this department, deletion will be blocked by the server and you must deactivate it instead.</em>
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={deleting}>Cancel</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={confirmDelete}
+              disabled={deleting}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deleting ? 'Deleting…' : 'Delete Department'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+    </div>
   );
 }

@@ -1153,23 +1153,33 @@ export default function DashboardPage() {
         {/* Column 0: Left Column (default xl:col-span-5) */}
         <div
           className={cn(
-            'lg:col-span-1 xl:col-span-5 space-y-6 transition-all rounded-2xl min-h-[140px]',
+            'lg:col-span-1 xl:col-span-5 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
             dragOverCol === 0 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
-          onDragOver={(e) => {
+          onDragEnter={(e) => {
             if (isCustomizing) {
               e.preventDefault();
               setDragOverCol(0);
             }
           }}
-          onDragLeave={() => setDragOverCol(null)}
+          onDragOver={(e) => {
+            if (isCustomizing) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setDragOverCol(null);
+          }}
           onDrop={(e) => {
             if (!isCustomizing) return;
             e.preventDefault();
-            const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+            const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
             if (wId) moveWidget(wId, 0);
             setDragOverCol(null);
+            setDragOverWidget(null);
           }}
         >
           {layout.columns[0].length === 0 && isCustomizing && (
@@ -1189,25 +1199,43 @@ export default function DashboardPage() {
               onHide={hideWidget}
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', widgetId);
-                setDraggedWidget(widgetId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => {
+                  setDraggedWidget(widgetId);
+                }, 0);
               }}
               onDragEnd={() => {
                 setDraggedWidget(null);
                 setDragOverCol(null);
                 setDragOverWidget(null);
               }}
+              onDragEnter={(e) => {
+                if (isCustomizing) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (draggedWidget && draggedWidget !== widgetId) {
+                    setDragOverWidget(widgetId);
+                  }
+                }
+              }}
               onDragOver={(e) => {
                 if (isCustomizing) {
                   e.preventDefault();
                   e.stopPropagation();
-                  setDragOverWidget(widgetId);
+                  e.dataTransfer.dropEffect = 'move';
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverWidget === widgetId) {
+                  setDragOverWidget(null);
                 }
               }}
               onDrop={(e) => {
                 if (!isCustomizing) return;
                 e.preventDefault();
                 e.stopPropagation();
-                const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+                const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
                 if (wId && wId !== widgetId) {
                   moveWidget(wId, 0, idx);
                 }
@@ -1225,23 +1253,33 @@ export default function DashboardPage() {
         {/* Column 1: Middle Column (default xl:col-span-4) */}
         <div
           className={cn(
-            'lg:col-span-1 xl:col-span-4 space-y-6 transition-all rounded-2xl min-h-[140px]',
+            'lg:col-span-1 xl:col-span-4 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
             dragOverCol === 1 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
-          onDragOver={(e) => {
+          onDragEnter={(e) => {
             if (isCustomizing) {
               e.preventDefault();
               setDragOverCol(1);
             }
           }}
-          onDragLeave={() => setDragOverCol(null)}
+          onDragOver={(e) => {
+            if (isCustomizing) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setDragOverCol(null);
+          }}
           onDrop={(e) => {
             if (!isCustomizing) return;
             e.preventDefault();
-            const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+            const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
             if (wId) moveWidget(wId, 1);
             setDragOverCol(null);
+            setDragOverWidget(null);
           }}
         >
           {layout.columns[1].length === 0 && isCustomizing && (
@@ -1261,25 +1299,43 @@ export default function DashboardPage() {
               onHide={hideWidget}
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', widgetId);
-                setDraggedWidget(widgetId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => {
+                  setDraggedWidget(widgetId);
+                }, 0);
               }}
               onDragEnd={() => {
                 setDraggedWidget(null);
                 setDragOverCol(null);
                 setDragOverWidget(null);
               }}
+              onDragEnter={(e) => {
+                if (isCustomizing) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (draggedWidget && draggedWidget !== widgetId) {
+                    setDragOverWidget(widgetId);
+                  }
+                }
+              }}
               onDragOver={(e) => {
                 if (isCustomizing) {
                   e.preventDefault();
                   e.stopPropagation();
-                  setDragOverWidget(widgetId);
+                  e.dataTransfer.dropEffect = 'move';
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverWidget === widgetId) {
+                  setDragOverWidget(null);
                 }
               }}
               onDrop={(e) => {
                 if (!isCustomizing) return;
                 e.preventDefault();
                 e.stopPropagation();
-                const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+                const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
                 if (wId && wId !== widgetId) {
                   moveWidget(wId, 1, idx);
                 }
@@ -1297,23 +1353,33 @@ export default function DashboardPage() {
         {/* Column 2: Right Column (default xl:col-span-3) */}
         <div
           className={cn(
-            'lg:col-span-2 xl:col-span-3 space-y-6 transition-all rounded-2xl min-h-[140px]',
+            'lg:col-span-2 xl:col-span-3 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
             dragOverCol === 2 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
-          onDragOver={(e) => {
+          onDragEnter={(e) => {
             if (isCustomizing) {
               e.preventDefault();
               setDragOverCol(2);
             }
           }}
-          onDragLeave={() => setDragOverCol(null)}
+          onDragOver={(e) => {
+            if (isCustomizing) {
+              e.preventDefault();
+              e.dataTransfer.dropEffect = 'move';
+            }
+          }}
+          onDragLeave={(e) => {
+            if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+            setDragOverCol(null);
+          }}
           onDrop={(e) => {
             if (!isCustomizing) return;
             e.preventDefault();
-            const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+            const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
             if (wId) moveWidget(wId, 2);
             setDragOverCol(null);
+            setDragOverWidget(null);
           }}
         >
           {layout.columns[2].length === 0 && isCustomizing && (
@@ -1333,25 +1399,43 @@ export default function DashboardPage() {
               onHide={hideWidget}
               onDragStart={(e) => {
                 e.dataTransfer.setData('text/plain', widgetId);
-                setDraggedWidget(widgetId);
+                e.dataTransfer.effectAllowed = 'move';
+                setTimeout(() => {
+                  setDraggedWidget(widgetId);
+                }, 0);
               }}
               onDragEnd={() => {
                 setDraggedWidget(null);
                 setDragOverCol(null);
                 setDragOverWidget(null);
               }}
+              onDragEnter={(e) => {
+                if (isCustomizing) {
+                  e.preventDefault();
+                  e.stopPropagation();
+                  if (draggedWidget && draggedWidget !== widgetId) {
+                    setDragOverWidget(widgetId);
+                  }
+                }
+              }}
               onDragOver={(e) => {
                 if (isCustomizing) {
                   e.preventDefault();
                   e.stopPropagation();
-                  setDragOverWidget(widgetId);
+                  e.dataTransfer.dropEffect = 'move';
+                }
+              }}
+              onDragLeave={(e) => {
+                if (e.currentTarget.contains(e.relatedTarget as Node)) return;
+                if (dragOverWidget === widgetId) {
+                  setDragOverWidget(null);
                 }
               }}
               onDrop={(e) => {
                 if (!isCustomizing) return;
                 e.preventDefault();
                 e.stopPropagation();
-                const wId = e.dataTransfer.getData('text/plain') as WidgetId;
+                const wId = (e.dataTransfer.getData('text/plain') as WidgetId) || draggedWidget;
                 if (wId && wId !== widgetId) {
                   moveWidget(wId, 2, idx);
                 }
@@ -1386,7 +1470,9 @@ function DraggableCardWrapper(props: {
   onHide: (widgetId: WidgetId) => void;
   onDragStart: (e: React.DragEvent) => void;
   onDragEnd: (e: React.DragEvent) => void;
+  onDragEnter: (e: React.DragEvent) => void;
   onDragOver: (e: React.DragEvent) => void;
+  onDragLeave: (e: React.DragEvent) => void;
   onDrop: (e: React.DragEvent) => void;
   children: React.ReactNode;
 }) {
@@ -1402,7 +1488,9 @@ function DraggableCardWrapper(props: {
     onHide,
     onDragStart,
     onDragEnd,
+    onDragEnter,
     onDragOver,
+    onDragLeave,
     onDrop,
     children,
   } = props;
@@ -1412,14 +1500,16 @@ function DraggableCardWrapper(props: {
       draggable={isCustomizing}
       onDragStart={onDragStart}
       onDragEnd={onDragEnd}
+      onDragEnter={onDragEnter}
       onDragOver={onDragOver}
+      onDragLeave={onDragLeave}
       onDrop={onDrop}
       className={cn(
-        'group/card relative transition-all',
+        'group/card relative',
         isCustomizing &&
-          'rounded-2xl p-1.5 ring-1 ring-border/70 bg-card/60 shadow-xs hover:ring-primary/40 cursor-grab active:cursor-grabbing',
-        isDragging && 'opacity-40 scale-98 ring-2 ring-primary/40',
-        isDragOver && 'scale-[1.01] ring-2 ring-primary bg-primary/5',
+          'rounded-2xl p-1.5 ring-1 ring-border/70 bg-card/60 shadow-xs hover:ring-primary/40 select-none cursor-grab active:cursor-grabbing',
+        isDragging && 'opacity-40 ring-2 ring-primary/40',
+        isDragOver && 'ring-2 ring-primary bg-primary/5',
       )}
     >
       {isCustomizing && (

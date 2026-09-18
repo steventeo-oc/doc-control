@@ -48,6 +48,7 @@ import { useAuth } from '../auth/AuthContext';
 import AcknowledgmentPanel from '../components/AcknowledgmentPanel';
 import { EmptyState } from '../components/EmptyState';
 import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
+import { Badge } from '../components/ui/badge';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -616,6 +617,11 @@ export default function DocumentDetailPage() {
         <div className="mt-1 flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{doc.documentNumber}</h1>
           <StatusBadge status={doc.status as StatusBadgeKind}>{doc.status}</StatusBadge>
+          {doc.tierNumber && (
+            <Badge variant="outline" className="font-semibold text-xs" title={doc.tierLabel ?? undefined}>
+              Tier {doc.tierNumber}{doc.tierLabel ? `: ${doc.tierLabel}` : ''}
+            </Badge>
+          )}
           {activeWorkflow ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-amber-500/15 px-2 py-0.5 text-xs font-semibold text-amber-800 dark:text-amber-300 border border-amber-500/30">
               <Lock className="size-3" />
@@ -766,6 +772,21 @@ export default function DocumentDetailPage() {
                 <div className="py-1">
                   <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Name</dt>
                   <dd className="mt-0.5 text-sm font-medium">{doc.name}</dd>
+                </div>
+                <div className="py-1">
+                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Tier</dt>
+                  <dd className="mt-0.5 text-sm flex items-center gap-2">
+                    {doc.tierNumber ? (
+                      <>
+                        <Badge variant="outline" className="font-semibold text-xs">
+                          Tier {doc.tierNumber}
+                        </Badge>
+                        <span className="text-muted-foreground">{doc.tierLabel}</span>
+                      </>
+                    ) : (
+                      '—'
+                    )}
+                  </dd>
                 </div>
                 <div className="py-1">
                   <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Type</dt>

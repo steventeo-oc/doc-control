@@ -30,6 +30,7 @@ public class DocumentController {
     @GetMapping("/documents")
     public DocumentsPageDto list(
             @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer tier,
             @RequestParam(required = false) String department,
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) String q,
@@ -41,7 +42,7 @@ public class DocumentController {
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
-        return documentService.list(type, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
+        return documentService.list(type, tier, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
                 page, pageSize);
     }
 

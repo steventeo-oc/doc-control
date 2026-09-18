@@ -11,6 +11,8 @@ public record DocumentDto(
         String status,
         Integer documentTypeId,
         String documentTypeCode,
+        Integer tierNumber,
+        String tierLabel,
         Integer departmentId,
         String departmentCode,
         Integer sequenceNumber,
@@ -31,6 +33,11 @@ public record DocumentDto(
     }
 
     public static DocumentDto from(Document document, boolean isFavorite) {
+        Integer tierNumber = document.getDocumentType() != null && document.getDocumentType().getTier() != null
+                ? document.getDocumentType().getTier().getTierNumber() : null;
+        String tierLabel = document.getDocumentType() != null && document.getDocumentType().getTier() != null
+                ? document.getDocumentType().getTier().getLabel() : null;
+
         return new DocumentDto(
                 document.getId(),
                 document.getDocumentNumber(),
@@ -38,6 +45,8 @@ public record DocumentDto(
                 document.getStatus() == null ? null : document.getStatus().getValue(),
                 document.getDocumentType().getId(),
                 document.getDocumentType().getCode(),
+                tierNumber,
+                tierLabel,
                 document.getDepartment().getId(),
                 document.getDepartment().getCode(),
                 document.getSequenceNumber(),

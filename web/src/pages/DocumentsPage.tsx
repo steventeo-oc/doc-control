@@ -2,13 +2,14 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, FileX, Loader2, Star, X } from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
-import type { Department, DocumentNumberPreview, DocumentSummary, DocumentType, DocumentsPage as PageResult } from '../api/types';
+import type { Department, DocumentNumberPreview, DocumentSummary, DocumentTier, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
 import { cn } from '../lib/utils';
 import { useAuth } from '../auth/AuthContext';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
+import { Badge } from '../components/ui/badge';
 import { Button } from '../components/ui/button';
 import {
   Sheet,
@@ -46,10 +47,11 @@ export default function DocumentsPage() {
     : 'all';
   const [page, setPage] = useState<PageResult | null>(null);
   const [types, setTypes] = useState<DocumentType[]>([]);
+  const [tiers, setTiers] = useState<DocumentTier[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState({ type: '', department: '', status: '', q: '' });
+  const [filters, setFilters] = useState({ type: '', tier: '', department: '', status: '', q: '' });
   const [searchInput, setSearchInput] = useState('');
   const [pageNumber, setPageNumber] = useState(0);
   const [pageSize, setPageSize] = useState(10);
@@ -79,6 +81,7 @@ export default function DocumentsPage() {
     documentApi
       .list({
         type: filters.type || undefined,
+        tier: filters.tier ? Number(filters.tier) : undefined,
         department: filters.department || undefined,
         status: filters.status || undefined,
         q: filters.q || undefined,
@@ -106,6 +109,7 @@ export default function DocumentsPage() {
   }, [searchParams, view]);
   useEffect(() => {
     lookupApi.types(true).then(setTypes).catch(() => undefined);
+    lookupApi.tiers(true).then(setTiers).catch(() => undefined);
     lookupApi.departments(true).then(setDepartments).catch(() => undefined);
   }, []);
 
@@ -256,11 +260,11 @@ export default function DocumentsPage() {
   }
 
   const hasActiveFilters = Boolean(
-    filters.type || filters.department || filters.status || searchInput,
+    filters.type || filters.tier || filters.department || filters.status || searchInput,
   );
 
   function handleClearFilters() {
-    setFilters({ type: '', department: '', status: '', q: '' });
+    setFilters({ type: '', tier: '', department: '', status: '', q: '' });
     setSearchInput('');
     setPageNumber(0);
   }
@@ -316,6 +320,28 @@ export default function DocumentsPage() {
 
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
+        <div className="flex flex-col gap-1.5">
+          <Label htmlFor="filter-tier">Tier</Label>
+          <Select
+            value={filters.tier || 'all'}
+            onValueChange={(value) => {
+              setFilters({ ...filters, tier: value === 'all' ? '' : value });
+              setPageNumber(0);
+            }}
+          >
+            <SelectTrigger id="filter-tier" className="w-40">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All tiers</SelectItem>
+              {tiers.map((t) => (
+                <SelectItem key={t.id} value={String(t.tierNumber)}>
+                  Tier {t.tierNumber} ({t.label})
+                </SelectItem>
+              ))}
+            </SelectContent>
+          </Select>
+        </div>
         <div className="flex flex-col gap-1.5">
           <Label htmlFor="filter-type">Type</Label>
           <Select
@@ -595,6 +621,7 @@ export default function DocumentsPage() {
                 </div>
               </TableHead>
               <TableHead>Progress</TableHead>
+              <TableHead>Tier</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Dept</TableHead>
               <TableHead>Owner</TableHead>
@@ -669,6 +696,15 @@ export default function DocumentsPage() {
                     </span>
                   )}
                   {!doc.revisionStatus && (
+                    <span className="text-muted-foreground/40 text-xs">—</span>
+                  )}
+                </TableCell>
+                <TableCell>
+                  {doc.tierNumber ? (
+                    <Badge variant="outline" className="font-semibold text-xs whitespace-nowrap" title={doc.tierLabel ?? undefined}>
+                      Tier {doc.tierNumber}
+                    </Badge>
+                  ) : (
                     <span className="text-muted-foreground/40 text-xs">—</span>
                   )}
                 </TableCell>

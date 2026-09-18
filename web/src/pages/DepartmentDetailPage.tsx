@@ -23,6 +23,7 @@ import type {
   Department,
   DocumentNumberPreview,
   DocumentSummary,
+  DocumentTier,
   DocumentType,
   DocumentsPage as PageResult,
 } from '../api/types';
@@ -80,6 +81,8 @@ export default function DepartmentDetailPage() {
   const [docSearch, setDocSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [tierFilter, setTierFilter] = useState('ALL');
+  const [tiers, setTiers] = useState<DocumentTier[]>([]);
   const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated'>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
@@ -128,9 +131,10 @@ export default function DepartmentDetailPage() {
     loadDepartment();
   }, [loadDepartment]);
 
-  // Load Document Types for in-place creation
+  // Load Document Types and Tiers
   useEffect(() => {
     lookupApi.types(true).then(setTypes).catch(() => undefined);
+    lookupApi.tiers(true).then(setTiers).catch(() => undefined);
   }, []);
 
   // Calculate Next Document Number Preview
@@ -164,6 +168,7 @@ export default function DepartmentDetailPage() {
     documentApi
       .list({
         department: department.code,
+        tier: tierFilter !== 'ALL' ? Number(tierFilter) : undefined,
         type: typeFilter !== 'ALL' ? typeFilter : undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         q: docSearch.trim() || undefined,
@@ -174,7 +179,7 @@ export default function DepartmentDetailPage() {
       .then(setDocs)
       .catch(() => setDocs(null))
       .finally(() => setLoadingDocs(false));
-  }, [department, docSearch, statusFilter, typeFilter, sortField, sortOrder, page]);
+  }, [department, docSearch, statusFilter, typeFilter, tierFilter, sortField, sortOrder, page]);
 
   useEffect(() => {
     loadDocuments();
@@ -211,13 +216,14 @@ export default function DepartmentDetailPage() {
 
   // Clear Filters Handler
   const hasActiveFilters = Boolean(
-    docSearch.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL'
+    docSearch.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL' || tierFilter !== 'ALL'
   );
 
   function handleClearFilters() {
     setDocSearch('');
     setStatusFilter('ALL');
     setTypeFilter('ALL');
+    setTierFilter('ALL');
     setPage(0);
   }
 
@@ -261,6 +267,11 @@ export default function DepartmentDetailPage() {
 
   function handleTypeChange(val: string) {
     setTypeFilter(val);
+    setPage(0);
+  }
+
+  function handleTierChange(val: string) {
+    setTierFilter(val);
     setPage(0);
   }
 
@@ -539,6 +550,21 @@ export default function DepartmentDetailPage() {
                   className="pl-8 text-xs h-8 rounded-lg border-border/40"
                 />
               </div>
+              <Select value={tierFilter} onValueChange={handleTierChange}>
+                <SelectTrigger className="h-8 w-28 text-xs rounded-lg border-border/40">
+                  <SelectValue placeholder="Tier" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/40 shadow-xl">
+                  <SelectItem value="ALL" className="text-xs">
+                    All Tiers
+                  </SelectItem>
+                  {tiers.map((t) => (
+                    <SelectItem key={t.id} value={String(t.tierNumber)} className="text-xs">
+                      Tier {t.tierNumber} ({t.label})
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
               <Select value={typeFilter} onValueChange={handleTypeChange}>
                 <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
                   <SelectValue placeholder="Type" />
@@ -629,9 +655,10 @@ export default function DepartmentDetailPage() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="w-32 text-xs font-semibold">Progress</TableHead>
-                  <TableHead className="w-24 text-xs font-semibold">Type</TableHead>
-                  <TableHead className="w-32 text-xs font-semibold">Owner</TableHead>
+                  <TableHead className="w-28 text-xs font-semibold">Progress</TableHead>
+                  <TableHead className="w-20 text-xs font-semibold">Tier</TableHead>
+                  <TableHead className="w-20 text-xs font-semibold">Type</TableHead>
+                  <TableHead className="w-28 text-xs font-semibold">Owner</TableHead>
                   <TableHead
                     className="w-32 text-right text-xs font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('updated')}
@@ -704,6 +731,15 @@ export default function DepartmentDetailPage() {
                       )}
                       {!doc.revisionStatus && (
                         <span className="text-muted-foreground/40 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell>
+                      {doc.tierNumber ? (
+                        <Badge variant="outline" className="text-[11px] font-semibold whitespace-nowrap" title={doc.tierLabel ?? undefined}>
+                          Tier {doc.tierNumber}
+                        </Badge>
+                      ) : (
+                        <span className="text-xs text-muted-foreground">—</span>
                       )}
                     </TableCell>
                     <TableCell className="text-xs text-muted-foreground font-mono">

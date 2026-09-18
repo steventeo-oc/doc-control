@@ -10,6 +10,8 @@ public record DocumentSummaryDto(
         String name,
         String status,
         String documentTypeCode,
+        Integer tierNumber,
+        String tierLabel,
         String departmentCode,
         Integer ownerUserId,
         String ownerName,
@@ -34,12 +36,19 @@ public record DocumentSummaryDto(
             boolean isFavorite,
             Integer revisionVersionNumber,
             String revisionStatus) {
+        Integer tierNumber = document.getDocumentType() != null && document.getDocumentType().getTier() != null
+                ? document.getDocumentType().getTier().getTierNumber() : null;
+        String tierLabel = document.getDocumentType() != null && document.getDocumentType().getTier() != null
+                ? document.getDocumentType().getTier().getLabel() : null;
+
         return new DocumentSummaryDto(
                 document.getId(),
                 document.getDocumentNumber(),
                 document.getName(),
                 document.getStatus() == null ? null : document.getStatus().getValue(),
                 document.getDocumentType().getCode(),
+                tierNumber,
+                tierLabel,
                 document.getDepartment().getCode(),
                 document.getOwner().getId(),
                 document.getOwner().getName(),

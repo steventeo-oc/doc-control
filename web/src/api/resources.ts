@@ -3,6 +3,7 @@ import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, 
 
 export interface DocumentFilters {
   type?: string;
+  tier?: number;
   department?: string;
   status?: string;
   q?: string;
@@ -85,6 +86,7 @@ export const documentApi = {
   list: (filters: DocumentFilters) => {
     const params = new URLSearchParams();
     if (filters.type) params.set('type', filters.type);
+    if (filters.tier) params.set('tier', String(filters.tier));
     if (filters.department) params.set('department', filters.department);
     if (filters.status) params.set('status', filters.status);
     if (filters.q) params.set('q', filters.q);

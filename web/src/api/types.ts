@@ -30,6 +30,8 @@ export interface DocumentSummary {
   name: string;
   status: string;
   documentTypeCode: string;
+  tierNumber?: number | null;
+  tierLabel?: string | null;
   departmentCode: string;
   ownerUserId: number;
   ownerName: string;
@@ -57,6 +59,8 @@ export interface DocumentDetail {
   status: string;
   documentTypeId: number;
   documentTypeCode: string;
+  tierNumber?: number | null;
+  tierLabel?: string | null;
   departmentId: number;
   departmentCode: string;
   sequenceNumber: number;

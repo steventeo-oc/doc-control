@@ -254,10 +254,20 @@ public class DocumentService {
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
                                  String q, Boolean reviewOverdue, Boolean trashed, Boolean archived, String owner,
                                  Boolean favorite, String sort, int page, int pageSize) {
+        return list(typeCode, null, departmentCode, status, q, reviewOverdue, trashed, archived, owner, favorite, sort, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentsPageDto list(String typeCode, Integer tier, String departmentCode, DocumentStatus status,
+                                 String q, Boolean reviewOverdue, Boolean trashed, Boolean archived, String owner,
+                                 Boolean favorite, String sort, int page, int pageSize) {
         Sort sortSpec = parseSort(sort);
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100), sortSpec);
 
         List<Specification<Document>> parts = new ArrayList<>();
+        if (tier != null) {
+            parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("tier").get("tierNumber"), tier));
+        }
         if (Boolean.TRUE.equals(archived)) {
             parts.add((root, query, cb) -> cb.equal(root.get("status"), DocumentStatus.OBSOLETE));
             parts.add(notDeleted());

@@ -1,4 +1,4 @@
-import { FormEvent, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -13,8 +13,8 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
-import { lookupApi, userApi } from '../api/resources';
-import type { Department, UserSummary } from '../api/types';
+import { lookupApi, userApi, workflowApi } from '../api/resources';
+import type { Department, TaskCounts, UserSummary } from '../api/types';
 import { ApiError } from '../api/client';
 import { cn } from '../lib/utils';
 import { Button } from './ui/button';
@@ -64,7 +64,7 @@ import {
  * additive for narrow widths. The drawer closes itself whenever a link
  * inside it is followed.
  */
-type SectionItem = { label: string; to: string };
+type SectionItem = { label: string; to: string; badge?: number | string | null };
 
 /**
  * The section switcher's single source of truth — the desktop rail and the
@@ -93,7 +93,7 @@ function RailLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; lab
   return (
     <NavLink
       to={to}
-      className="flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] leading-tight text-slate-300 transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
+      className="flex w-full flex-col items-center gap-1 rounded-lg px-1 py-2 text-[11px] leading-tight text-slate-300 select-none transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
     >
       <Icon className="size-5" aria-hidden="true" />
       <span className="text-center">{label}</span>
@@ -191,6 +191,20 @@ export default function Layout() {
     }
   }, [isAdmin]);
 
+  const [taskCounts, setTaskCounts] = useState<TaskCounts | null>(null);
+
+  const refreshTaskCounts = useCallback(() => {
+    if (user) {
+      workflowApi.taskCounts().then(setTaskCounts).catch(() => undefined);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    refreshTaskCounts();
+    window.addEventListener('task-counts-updated', refreshTaskCounts);
+    return () => window.removeEventListener('task-counts-updated', refreshTaskCounts);
+  }, [refreshTaskCounts, location.pathname, location.search]);
+
   const departmentItems: SectionItem[] = (isAdmin
     ? adminDepartments
     : user?.departments ?? []
@@ -208,15 +222,17 @@ export default function Layout() {
       items: [
         { label: 'All Documents', to: '/documents?view=all' },
         { label: 'My Documents', to: '/documents?view=mine' },
-        { label: 'Trash', to: '/documents?view=trash' },
+        { label: 'Favorites', to: '/documents?view=favorites' },
+        { label: 'Archived', to: '/documents?view=archived' },
       ],
     },
     tasks: {
       label: 'Tasks',
       items: [
-        { label: 'My Approvals', to: '/tasks?view=approvals' },
-        { label: 'Pending My Acknowledgment', to: '/tasks?view=acknowledgments' },
-        { label: 'Started by Me', to: '/tasks?view=started' },
+        { label: 'My Approvals', to: '/tasks?view=approvals', badge: taskCounts?.approvals },
+        { label: 'Pending My Acknowledgment', to: '/tasks?view=acknowledgments', badge: taskCounts?.acknowledgments },
+        { label: 'Started by Me', to: '/tasks?view=started', badge: taskCounts?.started },
+        { label: 'Delegated by Me', to: '/tasks?view=delegated', badge: taskCounts?.delegated },
       ],
     },
     departments: { label: 'Departments', items: departmentItems },
@@ -324,7 +340,7 @@ export default function Layout() {
                   key={to}
                   to={to}
                   onClick={() => setDrawerOpen(false)}
-                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
+                  className="flex items-center gap-3 rounded-lg px-3 py-2 text-sm text-slate-300 select-none transition-colors hover:bg-white/10 hover:text-white [&.active]:bg-white/15 [&.active]:text-white"
                 >
                   <Icon className="size-4" aria-hidden="true" />
                   {label}
@@ -334,29 +350,36 @@ export default function Layout() {
             {sidebarItems.length > 0 && (
               <>
                 <div className="mx-3 border-t border-white/10" />
-                <p className="px-6 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400">
+                <p className="px-6 pt-4 pb-1 text-[11px] font-semibold uppercase tracking-wider text-slate-400 select-none">
                   {activeSection.label}
                 </p>
                 <nav
                   className="flex flex-col gap-0.5 px-3 pb-4"
                   aria-label={`${activeSection.label} pages`}
                 >
-                  {sidebarItems.map((item) => (
-                    <NavLink
-                      key={item.to}
-                      to={item.to}
-                      onClick={() => setDrawerOpen(false)}
-                      className={() =>
-                        cn(
-                          'rounded-lg px-3 py-2 text-sm text-slate-300 no-underline transition-colors hover:bg-white/10 hover:text-white',
-                          location.pathname + location.search === item.to &&
-                            'bg-white/15 font-medium text-white hover:bg-white/15',
-                        )
-                      }
-                    >
-                      {item.label}
-                    </NavLink>
-                  ))}
+                  {sidebarItems.map((item) => {
+                    const isActive = location.pathname + location.search === item.to;
+                    return (
+                      <NavLink
+                        key={item.to}
+                        to={item.to}
+                        onClick={() => setDrawerOpen(false)}
+                        className={() =>
+                          cn(
+                            'flex items-center justify-between gap-2 rounded-lg px-3 py-2 text-sm text-slate-300 no-underline select-none transition-colors hover:bg-white/10 hover:text-white',
+                            isActive && 'bg-white/15 font-medium text-white hover:bg-white/15',
+                          )
+                        }
+                      >
+                        <span>{item.label}</span>
+                        {typeof item.badge === 'number' && item.badge > 0 && (
+                          <span className="px-1.5 py-0.5 text-xs rounded-full font-semibold bg-white/20 text-white">
+                            {item.badge}
+                          </span>
+                        )}
+                      </NavLink>
+                    );
+                  })}
                 </nav>
               </>
             )}
@@ -375,8 +398,8 @@ export default function Layout() {
         />
       </header>
 
-      {/* Desktop rail (md+): unchanged from the previous round. */}
-      <aside className="hidden w-20 shrink-0 flex-col items-center gap-2 bg-slate-900 py-4 text-white md:flex">
+      {/* Desktop rail (md+): sticky viewport height so account menu stays anchored */}
+      <aside className="hidden w-20 shrink-0 flex-col items-center gap-2 bg-slate-900 py-4 text-white md:flex sticky top-0 h-screen z-20">
         {/* Brand mark: icon only — the rail is too narrow for the wordmark. */}
         <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-white/10">
           <ClipboardCheck className="size-6" aria-hidden="true" />
@@ -398,42 +421,66 @@ export default function Layout() {
 
       <div
         className={cn(
-          'flex min-w-0 flex-1 items-start gap-6',
-          section === 'dashboard' && 'min-[861px]:items-stretch',
+          'flex min-w-0 flex-1 flex-col justify-between',
+          section === 'dashboard' && 'min-[861px]:h-screen min-[861px]:min-h-0',
         )}
       >
-        {sidebarItems.length > 0 && (
-          <aside className="hidden min-w-[220px] flex-col gap-0.5 border-r border-border p-4 md:flex">
-            {sidebarItems.map((item) => (
-              <NavLink
-                key={item.to}
-                to={item.to}
-                className={() =>
-                  cn(
-                    'rounded-md px-3 py-1.5 text-sm text-foreground no-underline hover:bg-accent',
-                    location.pathname + location.search === item.to &&
-                      'bg-primary/10 font-medium text-primary hover:bg-primary/10',
-                  )
-                }
-              >
-                {item.label}
-              </NavLink>
-            ))}
-          </aside>
-        )}
-        {/* The dashboard uses the full viewport width (round-two polish);
-            the section pages keep the 1100px reading width anchored next to
-            the sub-nav sidebar with consistent spacing. */}
-        <main
+        <div
           className={cn(
-            'flex-1 p-6',
-            section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1100px]',
-            section === 'dashboard' &&
-              'min-[861px]:flex min-[861px]:flex-col min-[861px]:overflow-hidden',
+            'flex min-w-0 flex-1 items-start gap-6',
+            section === 'dashboard' && 'min-[861px]:items-stretch min-[861px]:min-h-0',
           )}
         >
-          <Outlet />
-        </main>
+          {sidebarItems.length > 0 && (
+            <aside className="hidden min-w-[220px] shrink-0 flex-col gap-0.5 border-r border-border p-4 md:flex self-stretch sticky top-0 max-h-[calc(100vh-49px)] overflow-y-auto z-10">
+              {sidebarItems.map((item) => {
+                const isActive = location.pathname + location.search === item.to;
+                return (
+                  <NavLink
+                    key={item.to}
+                    to={item.to}
+                    className={() =>
+                      cn(
+                        'flex items-center justify-between gap-2 rounded-md px-3 py-1.5 text-sm text-foreground no-underline select-none hover:bg-accent',
+                        isActive && 'bg-primary/10 font-medium text-primary hover:bg-primary/10',
+                      )
+                    }
+                  >
+                    <span>{item.label}</span>
+                    {typeof item.badge === 'number' && item.badge > 0 && (
+                      <span
+                        className={cn(
+                          'px-1.5 py-0.5 text-xs rounded-full font-semibold',
+                          isActive
+                            ? 'bg-primary text-primary-foreground'
+                            : 'bg-muted-foreground/15 text-foreground'
+                        )}
+                      >
+                        {item.badge}
+                      </span>
+                    )}
+                  </NavLink>
+                );
+              })}
+            </aside>
+          )}
+          {/* The dashboard uses the full viewport width (round-two polish);
+              the section pages keep the 1100px reading width anchored next to
+              the sub-nav sidebar with consistent spacing. */}
+          <main
+            className={cn(
+              'flex-1 p-6',
+              section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1100px]',
+              section === 'dashboard' &&
+                'min-[861px]:flex min-[861px]:flex-col min-[861px]:min-h-0 min-[861px]:overflow-hidden',
+            )}
+          >
+            <Outlet />
+          </main>
+        </div>
+        <footer className="shrink-0 border-t border-border/40 px-6 py-4 text-center text-xs text-muted-foreground">
+          © {new Date().getFullYear()} Overclock Pte. Ltd. All rights reserved.
+        </footer>
       </div>
 
       <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>

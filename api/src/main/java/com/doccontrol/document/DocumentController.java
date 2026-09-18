@@ -35,12 +35,26 @@ public class DocumentController {
             @RequestParam(required = false) String q,
             @RequestParam(required = false) Boolean review_overdue,
             @RequestParam(required = false) Boolean trashed,
+            @RequestParam(required = false) Boolean archived,
             @RequestParam(required = false) String owner,
+            @RequestParam(required = false) Boolean favorite,
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
-        return documentService.list(type, department, status, q, review_overdue, trashed, owner, sort,
+        return documentService.list(type, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
                 page, pageSize);
+    }
+
+    @PostMapping("/documents/{id}/favorite")
+    public ResponseEntity<Void> favorite(@PathVariable Integer id) {
+        documentService.favorite(id);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/documents/{id}/favorite")
+    public ResponseEntity<Void> unfavorite(@PathVariable Integer id) {
+        documentService.unfavorite(id);
+        return ResponseEntity.noContent().build();
     }
 
     /**
@@ -68,6 +82,13 @@ public class DocumentController {
                 .body(created);
     }
 
+    @GetMapping("/documents/next-number")
+    public DocumentNumberPreviewDto previewNextNumber(
+            @RequestParam("document_type_id") Integer documentTypeId,
+            @RequestParam(value = "department_id", required = false) Integer departmentId) {
+        return documentService.previewNextNumber(documentTypeId, departmentId);
+    }
+
     @GetMapping("/documents/{id}")
     public DocumentDto get(@PathVariable Integer id) {
         return documentService.get(id);
@@ -87,5 +108,30 @@ public class DocumentController {
     @PostMapping("/documents/{id}/restore")
     public DocumentDto restore(@PathVariable Integer id) {
         return documentService.restore(id);
+    }
+
+    @GetMapping("/documents/{id}/activity")
+    public java.util.List<DocumentActivityDto> activity(@PathVariable Integer id) {
+        return documentService.documentActivity(id);
+    }
+
+    public record DocumentReasonRequest(String reason) {}
+
+    @PostMapping("/documents/{id}/obsolete")
+    public ResponseEntity<Void> markObsolete(@PathVariable Integer id, @RequestBody(required = false) DocumentReasonRequest body) {
+        documentService.markObsolete(id, body != null ? body.reason() : null);
+        return ResponseEntity.ok().build();
+    }
+
+    @PostMapping("/documents/{id}/reactivate")
+    public ResponseEntity<Void> reactivate(@PathVariable Integer id, @RequestBody(required = false) DocumentReasonRequest body) {
+        documentService.reactivate(id, body != null ? body.reason() : null);
+        return ResponseEntity.ok().build();
+    }
+
+    @DeleteMapping("/documents/{id}/draft")
+    public ResponseEntity<Void> discardDraftDocument(@PathVariable Integer id) {
+        documentService.discardDraftDocument(id);
+        return ResponseEntity.noContent().build();
     }
 }

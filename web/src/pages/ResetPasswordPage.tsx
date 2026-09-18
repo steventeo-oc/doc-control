@@ -55,65 +55,70 @@ export default function ResetPasswordPage() {
   }
 
   return (
-    <div className="flex min-h-screen items-center justify-center bg-background p-6">
-      <Card className="w-full max-w-sm rounded-2xl border-0 shadow-md">
-        <CardHeader>
-          <CardTitle className="text-xl">Choose a new password</CardTitle>
-        </CardHeader>
-        <CardContent>
-          {succeeded ? (
-            <div className="flex flex-col gap-4">
-              <p className="text-sm text-foreground">Your password has been changed.</p>
-              <Link className="text-sm text-primary hover:underline" to="/login">
-                Continue to sign in →
-              </Link>
-            </div>
-          ) : (
-            <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
-              {error && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
-                  {error}
-                  {tokenInvalid && (
-                    <>
-                      {' '}
-                      <Link className="underline" to="/forgot-password">
-                        Request a new one
-                      </Link>
-                    </>
-                  )}
+    <div className="flex min-h-screen flex-col bg-background">
+      <div className="flex flex-1 items-center justify-center p-6">
+        <Card className="w-full max-w-sm rounded-2xl border-0 shadow-md">
+          <CardHeader>
+            <CardTitle className="text-xl">Choose a new password</CardTitle>
+          </CardHeader>
+          <CardContent>
+            {succeeded ? (
+              <div className="flex flex-col gap-4">
+                <p className="text-sm text-foreground">Your password has been changed.</p>
+                <Link className="text-sm text-primary hover:underline" to="/login">
+                  Continue to sign in →
+                </Link>
+              </div>
+            ) : (
+              <form className="flex flex-col gap-4" onSubmit={handleSubmit}>
+                {error && (
+                  <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                    {error}
+                    {tokenInvalid && (
+                      <>
+                        {' '}
+                        <Link className="underline" to="/forgot-password">
+                          Request a new one
+                        </Link>
+                      </>
+                    )}
+                  </div>
+                )}
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reset-new-password">New password</Label>
+                  <Input
+                    id="reset-new-password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                  />
                 </div>
-              )}
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reset-new-password">New password</Label>
-                <Input
-                  id="reset-new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
-              </div>
-              <div className="flex flex-col gap-1.5">
-                <Label htmlFor="reset-confirm-password">Confirm new password</Label>
-                <Input
-                  id="reset-confirm-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  value={confirmPassword}
-                  onChange={(e) => setConfirmPassword(e.target.value)}
-                />
-              </div>
-              <Button type="submit" disabled={submitting} className="mt-2">
-                {submitting ? 'Changing…' : 'Change password'}
-              </Button>
-            </form>
-          )}
-        </CardContent>
-      </Card>
+                <div className="flex flex-col gap-1.5">
+                  <Label htmlFor="reset-confirm-password">Confirm new password</Label>
+                  <Input
+                    id="reset-confirm-password"
+                    type="password"
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                  />
+                </div>
+                <Button type="submit" disabled={submitting} className="mt-2">
+                  {submitting ? 'Changing…' : 'Change password'}
+                </Button>
+              </form>
+            )}
+          </CardContent>
+        </Card>
+      </div>
+      <footer className="border-t border-border/40 px-6 py-4 text-center text-xs text-muted-foreground">
+        © {new Date().getFullYear()} Overclock Pte. Ltd. All rights reserved.
+      </footer>
     </div>
   );
 }

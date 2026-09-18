@@ -44,4 +44,16 @@ public class DocumentSequenceService {
         String documentNumber = String.format("%s-%s-%04d", type.getCode(), department.getCode(), next);
         return new AllocatedNumber(next, documentNumber);
     }
+
+    /**
+     * Peeks at the next sequence number for a (type, department) pair without
+     * taking a row lock or advancing the counter.
+     */
+    @Transactional(readOnly = true)
+    public int peekNextSequence(Integer documentTypeId, Integer departmentId) {
+        return counterRepository.findByDocumentTypeIdAndDepartmentId(documentTypeId, departmentId)
+                .map(DocumentSequenceCounter::getNextSequenceNumber)
+                .orElse(1);
+    }
 }
+

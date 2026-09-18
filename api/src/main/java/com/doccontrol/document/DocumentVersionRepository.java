@@ -5,6 +5,7 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.time.LocalDate;
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -16,6 +17,13 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
     List<DocumentVersion> findAllByDocumentIdOrderByVersionNumberAsc(Integer documentId);
 
     List<DocumentVersion> findAllByDocumentIdAndStatus(Integer documentId, DocumentVersionStatus status);
+
+    /** Draft versions across a batch of documents. */
+    @Query("SELECT v FROM DocumentVersion v " +
+            "JOIN FETCH v.document d " +
+            "WHERE d.id IN :documentIds " +
+            "AND v.status = com.doccontrol.document.DocumentVersionStatus.DRAFT")
+    List<DocumentVersion> findDraftsByDocumentIdIn(@Param("documentIds") Collection<Integer> documentIds);
 
     /** Pending effectivity flips: approved versions whose effective date has arrived. */
     List<DocumentVersion> findAllByStatusAndEffectiveAtLessThanEqualAndDocument_DeletedAtIsNull(

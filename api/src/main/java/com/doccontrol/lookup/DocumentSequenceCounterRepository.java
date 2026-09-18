@@ -6,8 +6,12 @@ import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
 import java.util.List;
+import java.util.Optional;
 
 public interface DocumentSequenceCounterRepository extends JpaRepository<DocumentSequenceCounter, Integer> {
+
+    @Query("SELECT c FROM DocumentSequenceCounter c WHERE c.documentType.id = :typeId AND c.department.id = :deptId")
+    Optional<DocumentSequenceCounter> findByDocumentTypeIdAndDepartmentId(@Param("typeId") Integer typeId, @Param("deptId") Integer deptId);
 
     /**
      * Atomically allocate-or-create the counter row for a (type, department)

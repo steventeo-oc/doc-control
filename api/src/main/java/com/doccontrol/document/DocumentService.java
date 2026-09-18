@@ -31,10 +31,13 @@ import org.springframework.transaction.annotation.Transactional;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Optional;
 import java.util.Set;
+import java.util.stream.Collectors;
 
 @Service
 public class DocumentService {
@@ -65,6 +68,9 @@ public class DocumentService {
     private final ReviewProperties reviewProperties;
     private final NotificationSender notificationSender;
     private final NotificationLogRepository notificationLogRepository;
+    private final com.doccontrol.audit.AuditLogRepository auditLogRepository;
+    private final UserDocumentFavoriteRepository userDocumentFavoriteRepository;
+    private final com.doccontrol.workflow.WorkflowInstanceRepository workflowInstanceRepository;
 
     public DocumentService(DocumentRepository documentRepository,
                            DocumentVersionRepository documentVersionRepository,
@@ -78,7 +84,10 @@ public class DocumentService {
                            com.doccontrol.workflow.ReviewerAccess reviewerAccess,
                            ReviewProperties reviewProperties,
                            NotificationSender notificationSender,
-                           NotificationLogRepository notificationLogRepository) {
+                           NotificationLogRepository notificationLogRepository,
+                           com.doccontrol.audit.AuditLogRepository auditLogRepository,
+                           UserDocumentFavoriteRepository userDocumentFavoriteRepository,
+                           com.doccontrol.workflow.WorkflowInstanceRepository workflowInstanceRepository) {
         this.documentRepository = documentRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.documentTypeRepository = documentTypeRepository;
@@ -92,6 +101,9 @@ public class DocumentService {
         this.reviewProperties = reviewProperties;
         this.notificationSender = notificationSender;
         this.notificationLogRepository = notificationLogRepository;
+        this.auditLogRepository = auditLogRepository;
+        this.userDocumentFavoriteRepository = userDocumentFavoriteRepository;
+        this.workflowInstanceRepository = workflowInstanceRepository;
     }
 
     private List<String> reviewerRoleNames() {
@@ -128,6 +140,50 @@ public class DocumentService {
                 "department", department.getCode()), document.getDepartment());
 
         return DocumentDto.from(document);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentNumberPreviewDto previewNextNumber(Integer typeId, Integer departmentId) {
+        DocumentType type = requireActiveType(typeId);
+
+        if (departmentId == null) {
+            Optional<Document> latestForType = documentRepository
+                    .findFirstByDocumentTypeIdOrderBySequenceNumberDesc(type.getId());
+            return new DocumentNumberPreviewDto(
+                    type.getId(),
+                    type.getCode(),
+                    null,
+                    null,
+                    null,
+                    String.format("%s-[Dept]-????", type.getCode()),
+                    latestForType.map(Document::getSequenceNumber).orElse(null),
+                    latestForType.map(Document::getDocumentNumber).orElse(null)
+            );
+        }
+
+        Department department = requireActiveDepartment(departmentId);
+        int counterNext = documentSequenceService.peekNextSequence(type.getId(), department.getId());
+        Optional<Document> latestForTypeAndDept = documentRepository
+                .findFirstByDocumentTypeIdAndDepartmentIdOrderBySequenceNumberDesc(type.getId(), department.getId());
+
+        int nextSeq = Math.max(counterNext, latestForTypeAndDept.map(d -> d.getSequenceNumber() + 1).orElse(counterNext));
+        String nextDocNumber = String.format("%s-%s-%04d", type.getCode(), department.getCode(), nextSeq);
+
+        Integer latestSeq = latestForTypeAndDept.map(Document::getSequenceNumber)
+                .orElse(counterNext > 1 ? counterNext - 1 : null);
+        String latestDocNumber = latestForTypeAndDept.map(Document::getDocumentNumber)
+                .orElse(latestSeq != null ? String.format("%s-%s-%04d", type.getCode(), department.getCode(), latestSeq) : null);
+
+        return new DocumentNumberPreviewDto(
+                type.getId(),
+                type.getCode(),
+                department.getId(),
+                department.getCode(),
+                nextSeq,
+                nextDocNumber,
+                latestSeq,
+                latestDocNumber
+        );
     }
 
     /** The visible-document gate shared with the version endpoints. */
@@ -168,30 +224,44 @@ public class DocumentService {
     @Transactional(readOnly = true)
     public DocumentDto get(Integer id) {
         Document document = findVisible(id);
-        return DocumentDto.from(document);
+        boolean isFav = userDocumentFavoriteRepository.existsByUserIdAndDocumentId(
+                currentUserProvider.getCurrentUserId(), document.getId());
+        return DocumentDto.from(document, isFav);
     }
 
     @Transactional(readOnly = true)
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
                                  String q, Boolean reviewOverdue, Boolean trashed, String owner,
                                  int page, int pageSize) {
-        return list(typeCode, departmentCode, status, q, reviewOverdue, trashed, owner, null, page, pageSize);
+        return list(typeCode, departmentCode, status, q, reviewOverdue, trashed, owner, null, null, page, pageSize);
     }
 
     @Transactional(readOnly = true)
     public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
                                  String q, Boolean reviewOverdue, Boolean trashed, String owner,
                                  String sort, int page, int pageSize) {
+        return list(typeCode, departmentCode, status, q, reviewOverdue, trashed, null, owner, null, sort, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
+                                 String q, Boolean reviewOverdue, Boolean trashed, String owner,
+                                 Boolean favorite, String sort, int page, int pageSize) {
+        return list(typeCode, departmentCode, status, q, reviewOverdue, trashed, null, owner, favorite, sort, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public DocumentsPageDto list(String typeCode, String departmentCode, DocumentStatus status,
+                                 String q, Boolean reviewOverdue, Boolean trashed, Boolean archived, String owner,
+                                 Boolean favorite, String sort, int page, int pageSize) {
         Sort sortSpec = parseSort(sort);
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100), sortSpec);
 
         List<Specification<Document>> parts = new ArrayList<>();
-        if (Boolean.TRUE.equals(trashed)) {
-            // Trash view (nav restructure plan-back F2): soft-deleted
-            // documents the caller can manage — Manager: the department's;
-            // Collaborator/Contributor: their own; admin: all. The same
-            // rule as delete/restore (canManageDocument), so every row is
-            // restorable by its caller.
+        if (Boolean.TRUE.equals(archived)) {
+            parts.add((root, query, cb) -> cb.equal(root.get("status"), DocumentStatus.OBSOLETE));
+            parts.add(notDeleted());
+        } else if (Boolean.TRUE.equals(trashed)) {
             parts.add((root, query, cb) -> root.get("deletedAt").isNotNull());
             if (!currentUserProvider.isAdmin()) {
                 Integer me = currentUserProvider.getCurrentUserId();
@@ -205,10 +275,21 @@ public class DocumentService {
             }
         } else {
             parts.add(notDeleted());
+            if (status == null) {
+                // Exclude obsolete documents from active list by default
+                parts.add((root, query, cb) -> cb.notEqual(root.get("status"), DocumentStatus.OBSOLETE));
+            }
         }
         if ("me".equals(owner)) {
             parts.add((root, query, cb) ->
                     cb.equal(root.get("owner").get("id"), currentUserProvider.getCurrentUserId()));
+        }
+        if (Boolean.TRUE.equals(favorite)) {
+            Integer me = currentUserProvider.getCurrentUserId();
+            List<Integer> favIds = userDocumentFavoriteRepository.findDocumentIdsByUserId(me);
+            parts.add((root, query, cb) -> favIds.isEmpty()
+                    ? cb.disjunction()
+                    : root.get("id").in(favIds));
         }
         if (typeCode != null && !typeCode.isBlank()) {
             parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("code"), typeCode));
@@ -226,8 +307,6 @@ public class DocumentService {
                     cb.like(cb.lower(root.get("documentNumber")), "%" + needle + "%")));
         }
         if (reviewOverdue != null) {
-            // same derivation as Document.isReviewOverdue, in-query: the
-            // in-effect content's review is past due
             LocalDate today = LocalDate.now();
             parts.add((root, query, cb) -> {
                 Predicate overdue = cb.and(
@@ -237,9 +316,6 @@ public class DocumentService {
                 return reviewOverdue ? overdue : cb.not(overdue);
             });
         }
-        // Permission filtering happens here, in the query — not hidden in the
-        // frontend (CLAUDE.md convention 4). Assigned reviewers also see the
-        // drafts they are reviewing (provisional visibility rule).
         if (!currentUserProvider.isAdmin()) {
             Integer userId = currentUserProvider.getCurrentUserId();
             Set<Integer> reviewing = reviewerAccess.reviewerVisibleDocumentIds(
@@ -258,16 +334,83 @@ public class DocumentService {
             });
         }
 
+        Integer me = currentUserProvider.getCurrentUserId();
+        Set<Integer> userFavIds = new HashSet<>(userDocumentFavoriteRepository.findDocumentIdsByUserId(me));
         Specification<Document> spec = Specification.allOf(parts);
-        Page<DocumentSummaryDto> result = documentRepository.findAll(spec, pageable)
-                .map(DocumentSummaryDto::from);
+        Page<Document> docPage = documentRepository.findAll(spec, pageable);
+
+        List<Integer> docIds = docPage.getContent().stream().map(Document::getId).toList();
+
+        Map<Integer, com.doccontrol.workflow.WorkflowInstance> activeWfByDocId = docIds.isEmpty() ? Map.of() :
+                workflowInstanceRepository.findInProgressByDocumentIdIn(docIds).stream()
+                        .collect(Collectors.toMap(
+                                wi -> wi.getDocumentVersion().getDocument().getId(),
+                                wi -> wi,
+                                (a, b) -> a));
+
+        Map<Integer, DocumentVersion> draftVerByDocId = docIds.isEmpty() ? Map.of() :
+                documentVersionRepository.findDraftsByDocumentIdIn(docIds).stream()
+                        .collect(Collectors.toMap(
+                                v -> v.getDocument().getId(),
+                                v -> v,
+                                (a, b) -> a));
+
+        Page<DocumentSummaryDto> result = docPage.map(doc -> {
+            boolean fav = userFavIds.contains(doc.getId());
+            Integer revVerNum = null;
+            String revStatus = null;
+            if (doc.getStatus() == DocumentStatus.RELEASED) {
+                com.doccontrol.workflow.WorkflowInstance activeWf = activeWfByDocId.get(doc.getId());
+                if (activeWf != null) {
+                    revStatus = activeWf.getKind() == com.doccontrol.workflow.WorkflowInstanceKind.REAPPROVAL
+                            ? "RE_APPROVAL"
+                            : "IN_REVIEW";
+                    revVerNum = activeWf.getDocumentVersion() != null
+                            ? activeWf.getDocumentVersion().getVersionNumber()
+                            : null;
+                } else {
+                    DocumentVersion draftVer = draftVerByDocId.get(doc.getId());
+                    if (draftVer != null) {
+                        revStatus = "DRAFT";
+                        revVerNum = draftVer.getVersionNumber();
+                    }
+                }
+            }
+            return DocumentSummaryDto.from(doc, fav, revVerNum, revStatus);
+        });
         return DocumentsPageDto.from(result);
+    }
+
+    @Transactional
+    public void favorite(Integer documentId) {
+        Document document = requireVisible(documentId);
+        Integer userId = currentUserProvider.getCurrentUserId();
+        if (!userDocumentFavoriteRepository.existsByUserIdAndDocumentId(userId, documentId)) {
+            User user = currentUserProvider.getCurrentUser();
+            userDocumentFavoriteRepository.save(new UserDocumentFavorite(user, document));
+            auditService.record("document", documentId, "favorited", Map.of(
+                    "document_number", document.getDocumentNumber(),
+                    "user_id", userId), document.getDepartment());
+        }
+    }
+
+    @Transactional
+    public void unfavorite(Integer documentId) {
+        Document document = requireVisible(documentId);
+        Integer userId = currentUserProvider.getCurrentUserId();
+        userDocumentFavoriteRepository.deleteByUserIdAndDocumentId(userId, documentId);
+        auditService.record("document", documentId, "unfavorited", Map.of(
+                "document_number", document.getDocumentNumber(),
+                "user_id", userId), document.getDepartment());
     }
 
     @Transactional
     public DocumentDto update(Integer id, UpdateDocumentRequest request) {
         Document document = findVisible(id);
         requireCanEdit(document);
+        if (!workflowInstanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("Document is locked: metadata cannot be modified while an approval workflow is in progress.");
+        }
 
         Map<String, Object> before = new LinkedHashMap<>();
         Map<String, Object> after = new LinkedHashMap<>();
@@ -312,6 +455,9 @@ public class DocumentService {
     public void delete(Integer id) {
         Document document = findVisible(id);
         requireCanManageDocument(document);
+        if (!workflowInstanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("Document is locked: cannot be moved to trash while an approval workflow is in progress.");
+        }
 
         if (document.getDeletedAt() == null) {
             document.setDeletedAt(LocalDateTime.now());
@@ -330,6 +476,88 @@ public class DocumentService {
             auditService.record("document", id, "restored", Map.of(), document.getDepartment());
         }
         return DocumentDto.from(document);
+    }
+
+    @Transactional
+    public void markObsolete(Integer id, String reason) {
+        Document document = findVisible(id);
+        requireCanManageDocument(document);
+
+        if (document.getStatus() != DocumentStatus.RELEASED) {
+            throw new ConflictException("Only released documents can be retired and marked as obsolete.");
+        }
+
+        DocumentStatus previousStatus = document.getStatus();
+        document.setStatus(DocumentStatus.OBSOLETE);
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("document_number", document.getDocumentNumber());
+        details.put("previous_status", previousStatus.getValue());
+        details.put("new_status", DocumentStatus.OBSOLETE.getValue());
+        if (reason != null && !reason.isBlank()) {
+            details.put("reason", reason.trim());
+        }
+
+        auditService.record("document", id, "obsoleted", details, document.getDepartment());
+    }
+
+    @Transactional
+    public void reactivate(Integer id, String reason) {
+        Document document = findVisible(id);
+        requireCanManageDocument(document);
+
+        if (document.getStatus() != DocumentStatus.OBSOLETE) {
+            throw new ConflictException("Only obsolete documents can be reactivated.");
+        }
+
+        document.setStatus(DocumentStatus.RELEASED);
+
+        Map<String, Object> details = new LinkedHashMap<>();
+        details.put("document_number", document.getDocumentNumber());
+        details.put("new_status", DocumentStatus.RELEASED.getValue());
+        if (reason != null && !reason.isBlank()) {
+            details.put("reason", reason.trim());
+        }
+
+        auditService.record("document", id, "reactivated", details, document.getDepartment());
+    }
+
+    @Transactional
+    public void discardDraftDocument(Integer id) {
+        Document document = findVisible(id);
+        requireCanManageDocument(document);
+
+        if (document.getStatus() != DocumentStatus.DRAFT) {
+            throw new ConflictException("Only unreleased draft documents can be discarded.");
+        }
+
+        boolean hasReleased = documentVersionRepository.findAllByDocumentIdOrderByVersionNumberAsc(id)
+                .stream().anyMatch(v -> v.getStatus() == DocumentVersionStatus.CURRENT || v.getStatus() == DocumentVersionStatus.SUPERSEDED);
+        if (hasReleased) {
+            throw new ConflictException("Cannot discard a document that has released version history.");
+        }
+
+        document.setDeletedAt(LocalDateTime.now());
+        auditService.record("document", id, "draft_discarded", Map.of(
+                "document_number", document.getDocumentNumber(),
+                "name", document.getName()), document.getDepartment());
+    }
+
+    @Transactional(readOnly = true)
+    public List<DocumentActivityDto> documentActivity(Integer id) {
+        Document document = findVisible(id);
+        List<com.doccontrol.audit.AuditLog> logs = auditLogRepository.findByDocumentId(document.getId());
+        return logs.stream().map(log -> new DocumentActivityDto(
+                log.getId(),
+                log.getPerformedAt(),
+                log.getPerformedBy() != null ? log.getPerformedBy().getId() : null,
+                log.getPerformedBy() != null ? log.getPerformedBy().getName() : "System",
+                log.getPerformedBy() != null ? log.getPerformedBy().getEmail() : null,
+                log.getEntityType(),
+                log.getEntityId(),
+                log.getAction(),
+                log.getDetails()
+        )).toList();
     }
 
     /**

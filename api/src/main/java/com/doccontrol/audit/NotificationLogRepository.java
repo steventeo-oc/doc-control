@@ -24,4 +24,6 @@ public interface NotificationLogRepository extends JpaRepository<NotificationLog
     /** Version-anchored reminder dedup: once per version per recipient per business date. */
     boolean existsByKindAndDocumentVersionIdAndRecipientIdAndNotificationDate(
             String kind, Integer documentVersionId, Integer recipientId, LocalDate notificationDate);
+
+    void deleteAllByDocumentVersionId(Integer documentVersionId);
 }

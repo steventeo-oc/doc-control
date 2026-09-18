@@ -35,6 +35,9 @@ export interface DocumentSummary {
   reviewOverdue: boolean;
   createdAt: string;
   updatedAt: string;
+  isFavorite?: boolean;
+  revisionVersionNumber?: number | null;
+  revisionStatus?: 'DRAFT' | 'IN_REVIEW' | 'RE_APPROVAL' | null;
 }
 
 export interface DocumentsPage {
@@ -65,6 +68,18 @@ export interface DocumentDetail {
   createdAt: string;
   updatedAt: string;
   deletedAt: string | null;
+  isFavorite?: boolean;
+}
+
+export interface DocumentNumberPreview {
+  typeId: number;
+  typeCode: string;
+  departmentId: number | null;
+  departmentCode: string | null;
+  nextSequenceNumber: number | null;
+  nextDocumentNumber: string;
+  currentLatestSequenceNumber: number | null;
+  currentLatestDocumentNumber: string | null;
 }
 
 export interface DocumentVersion {
@@ -97,10 +112,39 @@ export interface WorkflowTask {
   reapproval: boolean;
   dueDate: string | null;
   documentNumber: string;
+  documentName?: string;
   documentId: number;
+  versionId?: number;
   versionNumber: number;
+  changeNotes?: string | null;
   /** Code of the document's department (null only for orphaned tasks). */
   departmentCode: string | null;
+  delegatedBy?: string | null;
+  delegationMessage?: string | null;
+  delegatedAt?: string | null;
+}
+
+export interface DelegatedTask {
+  taskId: string;
+  documentId: number | null;
+  documentNumber: string | null;
+  documentName?: string | null;
+  versionNumber: number | null;
+  delegatedToUserId: number | null;
+  delegatedToName: string;
+  delegatedToEmail: string | null;
+  delegationMessage?: string | null;
+  delegatedAt: string | null;
+  dueDate: string | null;
+  status: 'pending' | 'completed';
+  canRecall: boolean;
+}
+
+export interface TaskCounts {
+  approvals: number;
+  acknowledgments: number;
+  started: number;
+  delegated: number;
 }
 
 export interface WorkflowInstance {
@@ -117,6 +161,26 @@ export interface WorkflowInstance {
   tasks: WorkflowTask[];
 }
 
+export interface WorkflowReviewerState {
+  userId?: number | null;
+  name: string | null;
+  email?: string | null;
+  state: 'approved' | 'pending';
+  role: string | null;
+  actionAt?: string | null;
+  comment?: string | null;
+  effectiveDate?: string | null;
+  delegated?: boolean;
+  delegatedByUserId?: number | null;
+  delegatedByName?: string | null;
+  delegatedByEmail?: string | null;
+  delegatedToName?: string | null;
+  delegatedToEmail?: string | null;
+  delegationMessage?: string | null;
+  delegatedAt?: string | null;
+  dueDate?: string | null;
+}
+
 /** One approval the caller started ("Started by Me" pane): reviewers is
  * populated only while in progress — approved entries from the engine's
  * finished-task history, pending from active tasks (claimed tasks name
@@ -125,12 +189,16 @@ export interface StartedInstance {
   id: number;
   documentId: number;
   documentNumber: string;
+  documentName?: string;
   versionNumber: number;
   status: string | null;
   reapproval: boolean;
   startedAt: string;
   completedAt: string | null;
-  reviewers: { name: string | null; state: 'approved' | 'pending'; role: string | null }[];
+  reviewers: WorkflowReviewerState[];
+  feedbackAction?: string | null;
+  feedbackActor?: string | null;
+  feedbackComment?: string | null;
 }
 
 export interface AcknowledgmentRecord {
@@ -180,6 +248,7 @@ export interface DepartmentMembership {
 
 export interface PendingAcknowledgment {
   documentId: number;
+  versionId?: number;
   documentNumber: string;
   name: string;
   departmentCode: string;
@@ -250,6 +319,5 @@ export const DOCUMENT_STATUSES = [
   'in_review',
   'approved',
   'released',
-  'superseded',
   'obsolete',
 ] as const;

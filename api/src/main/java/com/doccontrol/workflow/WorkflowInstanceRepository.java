@@ -4,6 +4,7 @@ import org.springframework.data.jpa.repository.JpaRepository;
 import org.springframework.data.jpa.repository.Query;
 import org.springframework.data.repository.query.Param;
 
+import java.util.Collection;
 import java.util.List;
 import java.util.Optional;
 
@@ -20,6 +21,32 @@ public interface WorkflowInstanceRepository extends JpaRepository<WorkflowInstan
             "AND wi.status = com.doccontrol.workflow.WorkflowInstanceStatus.IN_PROGRESS")
     List<WorkflowInstance> findInProgressByDocumentId(@Param("documentId") Integer documentId);
 
-    /** Instances the caller started, newest first (the "Started by Me" pane). */
-    List<WorkflowInstance> findByStartedByIdOrderByStartedAtDesc(Integer startedById);
+    /** In-progress instances across a batch of documents. */
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+            "JOIN FETCH wi.documentVersion dv " +
+            "JOIN FETCH dv.document d " +
+            "WHERE d.id IN :documentIds " +
+            "AND wi.status = com.doccontrol.workflow.WorkflowInstanceStatus.IN_PROGRESS")
+    List<WorkflowInstance> findInProgressByDocumentIdIn(@Param("documentIds") Collection<Integer> documentIds);
+
+    /** All instances for a document, newest first. */
+    @Query("SELECT wi FROM WorkflowInstance wi WHERE wi.documentVersion.document.id = :documentId ORDER BY wi.id DESC")
+    List<WorkflowInstance> findAllByDocumentIdOrderByIdDesc(@Param("documentId") Integer documentId);
+
+    /** Instances the caller started, newest first (the "Started by Me" pane), eager-loaded. */
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+            "JOIN FETCH wi.documentVersion dv " +
+            "JOIN FETCH dv.document d " +
+            "WHERE wi.startedBy.id = :startedById ORDER BY wi.startedAt DESC")
+    List<WorkflowInstance> findByStartedByIdOrderByStartedAtDesc(@Param("startedById") Integer startedById);
+
+    /** Batch lookup by processInstanceIds with eager-loaded document and version. */
+    @Query("SELECT wi FROM WorkflowInstance wi " +
+            "JOIN FETCH wi.documentVersion dv " +
+            "JOIN FETCH dv.document d " +
+            "JOIN FETCH d.department dept " +
+            "WHERE wi.processInstanceId IN :processInstanceIds")
+    List<WorkflowInstance> findByProcessInstanceIdIn(@Param("processInstanceIds") Collection<String> processInstanceIds);
+
+    void deleteAllByDocumentVersionId(Integer documentVersionId);
 }

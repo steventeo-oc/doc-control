@@ -198,6 +198,7 @@ public class AcknowledgmentService {
                     boolean overdue = closesAt != null && LocalDate.now().isAfter(closesAt);
                     return new PendingAcknowledgmentDto(
                             document.getId(),
+                            version.getId(),
                             document.getDocumentNumber(),
                             document.getName(),
                             document.getDepartment().getCode(),

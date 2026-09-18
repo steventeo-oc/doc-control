@@ -66,7 +66,7 @@ class DocumentListFilterTests {
         assertThat(managerTrash).anyMatch(n -> n.contains("Manager Trashed"));
 
         // the admin sees all trashed
-        assertThat(fx.listNumbers(true, fx.admin)).hasSize(2);
+        assertThat(fx.listNumbers(true, fx.admin).stream().filter(n -> n.contains("TRS")).toList()).hasSize(2);
 
         // restore round-trip via the existing endpoint
         mockMvc.perform(post("/documents/{id}/restore", collabDoc).with(csrf()).session(fx.collaborator))
@@ -143,8 +143,8 @@ class DocumentListFilterTests {
         for (var node : objectMapper.readTree(ascResult.getResponse().getContentAsString()).path("content")) {
             ascNames.add(node.path("name").asText());
         }
-        int alphaIdx = ascNames.indexOf("Alpha Doc");
-        int zuluIdx = ascNames.indexOf("Zulu Doc");
+        int alphaIdx = ascNames.indexOf(fx.prefix + " Alpha Doc");
+        int zuluIdx = ascNames.indexOf(fx.prefix + " Zulu Doc");
         assertThat(alphaIdx).isLessThan(zuluIdx);
 
         MvcResult descResult = mockMvc.perform(get("/documents")
@@ -157,8 +157,8 @@ class DocumentListFilterTests {
         for (var node : objectMapper.readTree(descResult.getResponse().getContentAsString()).path("content")) {
             descNames.add(node.path("name").asText());
         }
-        alphaIdx = descNames.indexOf("Alpha Doc");
-        zuluIdx = descNames.indexOf("Zulu Doc");
+        alphaIdx = descNames.indexOf(fx.prefix + " Alpha Doc");
+        zuluIdx = descNames.indexOf(fx.prefix + " Zulu Doc");
         assertThat(zuluIdx).isLessThan(alphaIdx);
     }
 

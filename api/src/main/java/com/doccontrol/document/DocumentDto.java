@@ -23,9 +23,14 @@ public record DocumentDto(
         LocalDate pendingEffectiveDate,
         LocalDateTime createdAt,
         LocalDateTime updatedAt,
-        LocalDateTime deletedAt) {
+        LocalDateTime deletedAt,
+        Boolean isFavorite) {
 
     public static DocumentDto from(Document document) {
+        return from(document, false);
+    }
+
+    public static DocumentDto from(Document document, boolean isFavorite) {
         return new DocumentDto(
                 document.getId(),
                 document.getDocumentNumber(),
@@ -45,7 +50,8 @@ public record DocumentDto(
                 pendingEffectiveDateOf(document),
                 document.getCreatedAt(),
                 document.getUpdatedAt(),
-                document.getDeletedAt());
+                document.getDeletedAt(),
+                isFavorite);
     }
 
     /**

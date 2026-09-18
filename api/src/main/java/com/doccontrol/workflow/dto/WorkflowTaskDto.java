@@ -14,7 +14,13 @@ public record WorkflowTaskDto(
         boolean reapproval,
         LocalDateTime dueDate,
         String documentNumber,
+        String documentName,
         Integer documentId,
+        Integer versionId,
         Integer versionNumber,
-        String departmentCode) {
+        String changeNotes,
+        String departmentCode,
+        String delegatedBy,
+        String delegationMessage,
+        LocalDateTime delegatedAt) {
 }

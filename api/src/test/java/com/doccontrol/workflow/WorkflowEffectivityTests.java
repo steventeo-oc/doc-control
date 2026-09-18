@@ -229,6 +229,47 @@ class WorkflowEffectivityTests {
         assertThat(detail.nextReviewDue()).isEqualTo(LocalDate.now().minusDays(1));
     }
 
+    @Test
+    void revisionStatusReflectedInDocumentsList() throws Exception {
+        Department dept = tempDepartment("E5");
+        createUser("effowner5@doccontrol.test", dept, "User");
+        createUser("effrev5@doccontrol.test", dept, "User");
+        MockHttpSession owner = loginAs("effowner5@doccontrol.test");
+
+        Integer docId = createDocumentWithFile(owner, dept.getId(), "Revision Badge Doc");
+        Integer v1Id = firstVersionId(docId, owner);
+        Integer firstInstance = startApproval(owner, docId, v1Id, reviewer("effrev5@doccontrol.test"));
+        completeTask("effrev5@doccontrol.test", taskIdOf(firstInstance), true, null);
+
+        // Before revision: released doc has no revision
+        MvcResult res1 = mockMvc.perform(get("/documents").param("q", "Revision Badge Doc").session(owner))
+                .andExpect(status().isOk())
+                .andReturn();
+        var item1 = objectMapper.readTree(res1.getResponse().getContentAsString()).path("content").get(0);
+        assertThat(item1.path("status").asText()).isEqualTo("released");
+        assertThat(item1.path("revisionStatus").isNull()).isTrue();
+
+        // After uploading v2: revisionStatus is DRAFT
+        Integer v2Id = uploadVersion(owner, docId);
+        MvcResult res2 = mockMvc.perform(get("/documents").param("q", "Revision Badge Doc").session(owner))
+                .andExpect(status().isOk())
+                .andReturn();
+        var item2 = objectMapper.readTree(res2.getResponse().getContentAsString()).path("content").get(0);
+        assertThat(item2.path("status").asText()).isEqualTo("released");
+        assertThat(item2.path("revisionStatus").asText()).isEqualTo("DRAFT");
+        assertThat(item2.path("revisionVersionNumber").asInt()).isEqualTo(2);
+
+        // After starting approval for v2: revisionStatus is IN_REVIEW
+        Integer secondInstance = startApproval(owner, docId, v2Id, reviewer("effrev5@doccontrol.test"));
+        MvcResult res3 = mockMvc.perform(get("/documents").param("q", "Revision Badge Doc").session(owner))
+                .andExpect(status().isOk())
+                .andReturn();
+        var item3 = objectMapper.readTree(res3.getResponse().getContentAsString()).path("content").get(0);
+        assertThat(item3.path("status").asText()).isEqualTo("released");
+        assertThat(item3.path("revisionStatus").asText()).isEqualTo("IN_REVIEW");
+        assertThat(item3.path("revisionVersionNumber").asInt()).isEqualTo(2);
+    }
+
     private DocumentDto getDocument(Integer id, MockHttpSession session) throws Exception {
         MvcResult result = mockMvc.perform(get("/documents/{id}", id).session(session))
                 .andExpect(status().isOk())

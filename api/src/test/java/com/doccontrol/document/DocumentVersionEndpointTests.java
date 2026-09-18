@@ -109,6 +109,9 @@ class DocumentVersionEndpointTests {
     @Autowired
     DocumentRepository documentRepository;
 
+    @Autowired
+    DocumentVersionRepository documentVersionRepository;
+
     @Test
     void uploadTwoVersionsListAndDownloadRoundtrip() throws Exception {
         Department dept = tempDepartment("V");
@@ -128,17 +131,28 @@ class DocumentVersionEndpointTests {
                 .andReturn();
         Integer v1Id = objectMapper.readValue(v1.getResponse().getContentAsString(), DocumentVersionDto.class).id();
 
+        // attempting to upload second draft while v1 is still draft is blocked
+        mockMvc.perform(multipart("/documents/{id}/versions", docId)
+                        .file(new MockMultipartFile("file", "procedure.txt", "text/plain", "hello v2".getBytes()))
+                        .param("change_notes", "second revision")
+                        .session(session).with(csrf()))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail", containsString("Document is locked: draft v1 is already in progress")));
+
+        // release v1 so a new revision can be created
+        Document doc = documentRepository.findById(docId).orElseThrow();
+        DocumentVersion v1Entity = documentVersionRepository.findById(v1Id).orElseThrow();
+        v1Entity.setStatus(DocumentVersionStatus.CURRENT);
+        doc.setCurrentVersion(v1Entity);
+        doc.setStatus(DocumentStatus.RELEASED);
+        entityManager.flush();
+
         mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "procedure.txt", "text/plain", "hello v2".getBytes()))
                         .param("change_notes", "second revision")
                         .session(session).with(csrf()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.versionNumber").value(2));
-
-        // uploads never move the public version pointer — it stays null
-        // until an explicit release
-        mockMvc.perform(get("/documents/{id}", docId).session(session))
-                .andExpect(jsonPath("$.currentVersionId").value(Matchers.nullValue()));
 
         mockMvc.perform(get("/documents/{id}/versions", docId).session(session))
                 .andExpect(status().isOk())
@@ -155,6 +169,15 @@ class DocumentVersionEndpointTests {
                 .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("procedure.txt")))
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(downloaded)).isEqualTo("hello v1");
+
+        // inline download serves inline Content-Disposition for browser preview
+        mockMvc.perform(get("/documents/{id}/versions/{versionId}/download", docId, v1Id)
+                        .param("original", "true")
+                        .param("inline", "true")
+                        .session(session))
+                .andExpect(status().isOk())
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("inline;")))
+                .andExpect(header().string(HttpHeaders.CONTENT_DISPOSITION, containsString("procedure.txt")));
 
         assertThat(auditLogRepository.findAll())
                 .anyMatch(entry -> "document_version".equals(entry.getEntityType())

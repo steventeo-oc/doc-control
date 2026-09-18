@@ -9,9 +9,11 @@ import org.springframework.http.ContentDisposition;
 import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
+import org.springframework.web.bind.annotation.DeleteMapping;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
+import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.multipart.MultipartFile;
@@ -64,7 +66,9 @@ public class DocumentVersionController {
     public ResponseEntity<Resource> download(@PathVariable Integer id,
                                              @PathVariable Integer versionId,
                                              @RequestParam(value = "original", required = false,
-                                                     defaultValue = "false") boolean original) {
+                                                     defaultValue = "false") boolean original,
+                                             @RequestParam(value = "inline", required = false,
+                                                     defaultValue = "false") boolean inline) {
         DocumentVersionService.VersionDownload download =
                 versionService.openForDownload(id, versionId, original);
         // original=true never goes near the stamping pipeline — the escape
@@ -74,7 +78,8 @@ public class DocumentVersionController {
                 : watermarkService.stampForDownload(download.versionStatus(), download.file());
         if (stamped != null) {
             HttpHeaders headers = new HttpHeaders();
-            headers.setContentDisposition(ContentDisposition.attachment()
+            ContentDisposition.Builder disposition = inline ? ContentDisposition.inline() : ContentDisposition.attachment();
+            headers.setContentDisposition(disposition
                     .filename(stamped.fileName(), StandardCharsets.UTF_8)
                     .build());
             return ResponseEntity.ok()
@@ -85,7 +90,8 @@ public class DocumentVersionController {
         }
         DownloadedFile file = download.file();
         HttpHeaders headers = new HttpHeaders();
-        headers.setContentDisposition(ContentDisposition.attachment()
+        ContentDisposition.Builder disposition = inline ? ContentDisposition.inline() : ContentDisposition.attachment();
+        headers.setContentDisposition(disposition
                 .filename(file.fileName(), StandardCharsets.UTF_8)
                 .build());
         return ResponseEntity.ok()
@@ -94,5 +100,22 @@ public class DocumentVersionController {
                 .contentType(MediaType.parseMediaType(
                         file.contentType() == null ? "application/octet-stream" : file.contentType()))
                 .body(new InputStreamResource(file.content()));
+    }
+
+    public record RestoreVersionRequest(String reason) {}
+
+    @PostMapping("/documents/{id}/versions/{versionId}/restore")
+    public DocumentVersionDto restore(@PathVariable Integer id,
+                                      @PathVariable Integer versionId,
+                                      @RequestBody(required = false) RestoreVersionRequest request) {
+        String reason = request != null ? request.reason() : null;
+        return versionService.restoreAsDraft(id, versionId, reason);
+    }
+
+    @DeleteMapping("/documents/{id}/versions/{versionId}")
+    public ResponseEntity<Void> discardDraft(@PathVariable Integer id,
+                                             @PathVariable Integer versionId) {
+        versionService.discardDraft(id, versionId);
+        return ResponseEntity.noContent().build();
     }
 }

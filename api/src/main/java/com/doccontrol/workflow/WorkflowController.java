@@ -1,8 +1,11 @@
 package com.doccontrol.workflow;
 
+import com.doccontrol.workflow.dto.DelegatedTaskDto;
 import com.doccontrol.workflow.dto.ReviewerCandidateDto;
 import com.doccontrol.workflow.dto.StartApprovalRequest;
 import com.doccontrol.workflow.dto.StartedInstanceDto;
+import com.doccontrol.workflow.dto.TaskCountsDto;
+import com.doccontrol.workflow.dto.WorkflowFeedbackDto;
 import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowTaskDto;
 import jakarta.validation.Valid;
@@ -67,6 +70,21 @@ public class WorkflowController {
                 .orElse(ResponseEntity.noContent().build());
     }
 
+    /** Cancel an in-flight approval workflow on this document. */
+    @PostMapping("/documents/{documentId}/workflow/cancel")
+    public ResponseEntity<Void> cancelWorkflow(@PathVariable Integer documentId) {
+        workflowService.cancelWorkflow(documentId);
+        return ResponseEntity.ok().build();
+    }
+
+    /** Latest feedback (rejection or cancellation) for this document, if any. */
+    @GetMapping("/documents/{documentId}/workflow/latest-feedback")
+    public ResponseEntity<WorkflowFeedbackDto> latestFeedback(@PathVariable Integer documentId) {
+        return workflowService.latestFeedback(documentId)
+                .map(ResponseEntity::ok)
+                .orElse(ResponseEntity.noContent().build());
+    }
+
     @GetMapping("/workflow-instances/{id}")
     public WorkflowInstanceDto instance(@PathVariable Integer id) {
         return workflowService.get(id);
@@ -94,13 +112,28 @@ public class WorkflowController {
                 request.effectiveDate());
     }
 
-    public record DelegateTaskRequest(@NotNull Integer toUserId) {
+    public record DelegateTaskRequest(@NotNull Integer toUserId, String message) {
     }
 
     @PostMapping("/workflow-tasks/{taskId}/delegate")
     public WorkflowInstanceDto delegate(@PathVariable String taskId,
                                         @Valid @RequestBody DelegateTaskRequest request) {
-        return workflowService.delegate(taskId, request.toUserId());
+        return workflowService.delegate(taskId, request.toUserId(), request.message());
+    }
+
+    @PostMapping("/workflow-tasks/{taskId}/recall")
+    public WorkflowInstanceDto recall(@PathVariable String taskId) {
+        return workflowService.recall(taskId);
+    }
+
+    @GetMapping("/my/delegated-tasks")
+    public List<DelegatedTaskDto> myDelegatedTasks() {
+        return workflowService.myDelegatedTasks();
+    }
+
+    @GetMapping("/my/task-counts")
+    public TaskCountsDto myTaskCounts() {
+        return workflowService.myTaskCounts();
     }
 
     @GetMapping("/my/tasks")

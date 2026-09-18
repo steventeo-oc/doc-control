@@ -54,6 +54,8 @@ public class SecurityConfig {
         csrfTokenRepository.setCookiePath("/");
         http
             .cors(cors -> cors.configurationSource(corsConfigurationSource))
+            .headers(headers -> headers
+                .frameOptions(frame -> frame.sameOrigin()))
             .csrf(csrf -> csrf
                 .csrfTokenRepository(csrfTokenRepository)
                 .csrfTokenRequestHandler(new SpaCsrfTokenRequestHandler()))

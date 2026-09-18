@@ -8,6 +8,7 @@ import org.springframework.data.repository.query.Param;
 import java.time.LocalDate;
 import java.util.Collection;
 import java.util.List;
+import java.util.Optional;
 
 public interface DocumentRepository extends JpaRepository<Document, Integer>, JpaSpecificationExecutor<Document> {
 
@@ -49,4 +50,9 @@ public interface DocumentRepository extends JpaRepository<Document, Integer>, Jp
             """)
     List<Document> findPendingAcknowledgments(@Param("userId") Integer userId,
                                               @Param("departmentIds") Collection<Integer> departmentIds);
+
+    Optional<Document> findFirstByDocumentTypeIdAndDepartmentIdOrderBySequenceNumberDesc(Integer documentTypeId, Integer departmentId);
+
+    Optional<Document> findFirstByDocumentTypeIdOrderBySequenceNumberDesc(Integer documentTypeId);
 }
+

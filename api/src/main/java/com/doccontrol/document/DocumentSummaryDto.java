@@ -16,9 +16,24 @@ public record DocumentSummaryDto(
         LocalDate nextReviewDue,
         boolean reviewOverdue,
         LocalDateTime createdAt,
-        LocalDateTime updatedAt) {
+        LocalDateTime updatedAt,
+        Boolean isFavorite,
+        Integer revisionVersionNumber,
+        String revisionStatus) {
 
     public static DocumentSummaryDto from(Document document) {
+        return from(document, false, null, null);
+    }
+
+    public static DocumentSummaryDto from(Document document, boolean isFavorite) {
+        return from(document, isFavorite, null, null);
+    }
+
+    public static DocumentSummaryDto from(
+            Document document,
+            boolean isFavorite,
+            Integer revisionVersionNumber,
+            String revisionStatus) {
         return new DocumentSummaryDto(
                 document.getId(),
                 document.getDocumentNumber(),
@@ -31,6 +46,9 @@ public record DocumentSummaryDto(
                 document.getNextReviewDue(),
                 document.isReviewOverdue(),
                 document.getCreatedAt(),
-                document.getUpdatedAt());
+                document.getUpdatedAt(),
+                isFavorite,
+                revisionVersionNumber,
+                revisionStatus);
     }
 }

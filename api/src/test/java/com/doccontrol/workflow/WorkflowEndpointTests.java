@@ -40,8 +40,11 @@ import java.util.Map;
 
 import static com.doccontrol.CsrfTestSupport.csrf;
 import static org.assertj.core.api.Assertions.assertThat;
+import static org.hamcrest.Matchers.containsString;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.delete;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.get;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.multipart;
+import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.patch;
 import static org.springframework.test.web.servlet.request.MockMvcRequestBuilders.post;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.jsonPath;
 import static org.springframework.test.web.servlet.result.MockMvcResultMatchers.status;
@@ -132,7 +135,19 @@ class WorkflowEndpointTests {
         mockMvc.perform(get("/documents").session(r1))
                 .andExpect(jsonPath("$.content[?(@.id == " + docId + ")]").exists());
         mockMvc.perform(get("/my/tasks").session(r1))
-                .andExpect(jsonPath("$[?(@.assigneeUserId == '" + r1Id + "')]").exists());
+                .andExpect(jsonPath("$[?(@.assigneeUserId == '" + r1Id + "')]").exists())
+                .andExpect(jsonPath("$[0].versionId").value(v1Id));
+
+        // Document is locked: editing metadata or deleting while workflow is in progress is rejected
+        mockMvc.perform(patch("/documents/{id}", docId).with(csrf()).session(owner)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("name", "New Locked Name"))))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail", containsString("metadata cannot be modified while an approval workflow is in progress")));
+
+        mockMvc.perform(delete("/documents/{id}", docId).with(csrf()).session(owner))
+                .andExpect(status().isConflict())
+                .andExpect(jsonPath("$.detail", containsString("cannot be moved to trash while an approval workflow is in progress")));
 
         // first approval: still in progress, document still draft
         mockMvc.perform(post("/workflow-tasks/{taskId}/complete", taskIdFor(instance.id(), r1, r1Id))
@@ -234,6 +249,71 @@ class WorkflowEndpointTests {
                         .content(objectMapper.writeValueAsString(Map.of("approved", true))))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.status").value("completed"));
+    }
+
+    @Test
+    void delegationTrackingMessageAndRecall() throws Exception {
+        Department dept = tempDepartment("WD");
+        createUser("wdowner@doccontrol.test", dept, "User");
+        createUser("wdr1@doccontrol.test", dept, "User");
+        createUser("wdr2@doccontrol.test", dept, "User");
+        Integer r1Id = userId("wdr1@doccontrol.test");
+        Integer r2Id = userId("wdr2@doccontrol.test");
+        MockHttpSession owner = loginAs("wdowner@doccontrol.test");
+        MockHttpSession r1 = loginAs("wdr1@doccontrol.test");
+        MockHttpSession r2 = loginAs("wdr2@doccontrol.test");
+
+        Integer docId = createDocumentWithFile(owner, dept.getId(), "Delegation Tracking Doc");
+        Integer v1Id = firstVersionId(docId, owner);
+        Integer instanceId = startApproval(owner, docId, v1Id, List.of(Map.of("type", "USER", "userId", r1Id)));
+
+        String taskId = firstTaskId(instanceId, owner);
+
+        // r1 delegates to r2 with a message
+        mockMvc.perform(post("/workflow-tasks/{taskId}/delegate", taskId).with(csrf()).session(r1)
+                        .contentType("application/json")
+                        .content(objectMapper.writeValueAsString(Map.of("toUserId", r2Id, "message", "Please review section 4"))))
+                .andExpect(status().isOk());
+
+        // r2 sees the task in myTasks with delegatedBy and delegationMessage
+        mockMvc.perform(get("/my/tasks").session(r2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + taskId + "')].delegationMessage").value("Please review section 4"))
+                .andExpect(jsonPath("$[?(@.id == '" + taskId + "')].delegatedBy").exists());
+
+        // r1 sees the task in /my/delegated-tasks as pending with canRecall = true
+        mockMvc.perform(get("/my/delegated-tasks").session(r1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.taskId == '" + taskId + "')].status").value("pending"))
+                .andExpect(jsonPath("$[?(@.taskId == '" + taskId + "')].canRecall").value(true))
+                .andExpect(jsonPath("$[?(@.taskId == '" + taskId + "')].delegationMessage").value("Please review section 4"));
+
+        // activeWorkflow on document shows delegated reviewer with details
+        mockMvc.perform(get("/documents/{id}/workflow", docId).session(owner))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.reviewers[0].delegated").value(true))
+                .andExpect(jsonPath("$.reviewers[0].delegatedByName").value("wdr1@doccontrol.test"))
+                .andExpect(jsonPath("$.reviewers[0].delegatedToName").value("wdr2@doccontrol.test"))
+                .andExpect(jsonPath("$.reviewers[0].delegationMessage").value("Please review section 4"));
+
+        // r1 task counts show 1 delegated
+        mockMvc.perform(get("/my/task-counts").session(r1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$.delegated").value(1));
+
+        // r1 recalls the task
+        mockMvc.perform(post("/workflow-tasks/{taskId}/recall", taskId).with(csrf()).session(r1))
+                .andExpect(status().isOk());
+
+        // r1 now has the task back in myTasks
+        mockMvc.perform(get("/my/tasks").session(r1))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + taskId + "')]").exists());
+
+        // r2 no longer has the task
+        mockMvc.perform(get("/my/tasks").session(r2))
+                .andExpect(status().isOk())
+                .andExpect(jsonPath("$[?(@.id == '" + taskId + "')]").doesNotExist());
     }
 
     @Test

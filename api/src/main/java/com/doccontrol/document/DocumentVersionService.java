@@ -1,11 +1,13 @@
 package com.doccontrol.document;
 
 import com.doccontrol.audit.AuditService;
+import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
 import com.doccontrol.security.CurrentUserProvider;
 import com.doccontrol.storage.FileStorageService;
 import com.doccontrol.storage.FileStorageService.StoredUpload;
+import com.doccontrol.workflow.WorkflowInstanceRepository;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 
@@ -22,20 +24,29 @@ public class DocumentVersionService {
 
     private final DocumentVersionRepository versionRepository;
     private final DocumentService documentService;
+    private final DocumentRepository documentRepository;
     private final FileStorageService fileStorageService;
     private final AuditService auditService;
     private final CurrentUserProvider currentUserProvider;
+    private final WorkflowInstanceRepository workflowInstanceRepository;
+    private final com.doccontrol.audit.NotificationLogRepository notificationLogRepository;
 
     public DocumentVersionService(DocumentVersionRepository versionRepository,
                                   DocumentService documentService,
+                                  DocumentRepository documentRepository,
                                   FileStorageService fileStorageService,
                                   AuditService auditService,
-                                  com.doccontrol.security.CurrentUserProvider currentUserProvider) {
+                                  com.doccontrol.security.CurrentUserProvider currentUserProvider,
+                                  WorkflowInstanceRepository workflowInstanceRepository,
+                                  com.doccontrol.audit.NotificationLogRepository notificationLogRepository) {
         this.versionRepository = versionRepository;
         this.documentService = documentService;
+        this.documentRepository = documentRepository;
         this.fileStorageService = fileStorageService;
         this.auditService = auditService;
         this.currentUserProvider = currentUserProvider;
+        this.workflowInstanceRepository = workflowInstanceRepository;
+        this.notificationLogRepository = notificationLogRepository;
     }
 
     @Transactional
@@ -44,6 +55,15 @@ public class DocumentVersionService {
                                      String changeReference) {
         Document document = documentService.requireVisible(documentId);
         documentService.requireCanEdit(document);
+        if (!workflowInstanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("Cannot upload a new version while an approval workflow is in progress for this document.");
+        }
+
+        List<DocumentVersion> existingDrafts = versionRepository.findAllByDocumentIdAndStatus(document.getId(), DocumentVersionStatus.DRAFT);
+        if (!existingDrafts.isEmpty()) {
+            DocumentVersion draft = existingDrafts.get(0);
+            throw new ConflictException("Document is locked: draft v" + draft.getVersionNumber() + " is already in progress. Approve or discard it before uploading another version.");
+        }
 
         int versionNumber = versionRepository.findMaxVersionNumber(documentId) + 1;
 
@@ -150,13 +170,98 @@ public class DocumentVersionService {
             throw new NotFoundException("Version " + versionId + " not found.");
         }
         // Non-owner/non-admin viewers only know about the version the public
-        // sees — anything else 404s (existence not leaked), matching the
-        // document-level visibility pattern.
+        // sees — unless this version is currently being reviewed in an active approval workflow!
         if (!documentService.canEdit(document)
                 && document.getCurrentVersion() != null
-                && !versionId.equals(document.getCurrentVersion().getId())) {
+                && !versionId.equals(document.getCurrentVersion().getId())
+                && !workflowInstanceRepository.existsByDocumentVersionIdAndStatus(
+                        versionId, com.doccontrol.workflow.WorkflowInstanceStatus.IN_PROGRESS)) {
             throw new NotFoundException("Version " + versionId + " not found.");
         }
         return version;
+    }
+
+    @Transactional
+    public DocumentVersionDto restoreAsDraft(Integer documentId, Integer sourceVersionId, String reason) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanEdit(document);
+        if (!workflowInstanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("Cannot restore a version while an approval workflow is in progress for this document.");
+        }
+
+        boolean hasDraft = versionRepository.findAllByDocumentIdAndStatus(documentId, DocumentVersionStatus.DRAFT).size() > 0;
+        if (hasDraft) {
+            throw new ConflictException("A draft version already exists. Please discard or release the existing draft before restoring another version.");
+        }
+
+        DocumentVersion source = versionRepository.findById(sourceVersionId)
+                .orElseThrow(() -> new NotFoundException("Version " + sourceVersionId + " not found."));
+        if (!source.getDocument().getId().equals(documentId)) {
+            throw new ConflictException("The specified version does not belong to this document.");
+        }
+        if (document.getCurrentVersion() != null && source.getId().equals(document.getCurrentVersion().getId())) {
+            throw new ConflictException("Cannot restore the currently active version. Reversion is only applicable to prior, superseded versions.");
+        }
+
+        FileStorageService.DownloadedFile downloaded = fileStorageService.open(source.getFileReference());
+        int newVersionNumber = versionRepository.findMaxVersionNumber(documentId) + 1;
+        String fileName = source.getFileReference().substring(source.getFileReference().lastIndexOf('/') + 1);
+
+        String newFileReference = fileStorageService.store(new FileStorageService.StoredUpload(
+                documentId, newVersionNumber, fileName, downloaded.contentType(), downloaded.size(), downloaded.content()));
+
+        String changeNotes = "Reverted to version " + source.getVersionNumber() +
+                (reason != null && !reason.isBlank() ? ": " + reason.trim() : "");
+
+        DocumentVersion version = new DocumentVersion();
+        version.setDocument(document);
+        version.setVersionNumber(newVersionNumber);
+        version.setFileReference(newFileReference);
+        version.setStatus(DocumentVersionStatus.DRAFT);
+        version.setChangeNotes(changeNotes);
+        version.setChangeReference("Revert v" + source.getVersionNumber());
+        version.setUploadedBy(currentUserProvider.getCurrentUser());
+        versionRepository.save(version);
+
+        auditService.record("document_version", version.getId(), "restored_from_version", java.util.Map.of(
+                "document_id", documentId,
+                "document_number", document.getDocumentNumber(),
+                "source_version_number", source.getVersionNumber(),
+                "version_number", newVersionNumber,
+                "change_notes", changeNotes), document.getDepartment());
+
+        return DocumentVersionDto.from(version);
+    }
+
+    @Transactional
+    public void discardDraft(Integer documentId, Integer versionId) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanEdit(document);
+        if (!workflowInstanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
+            throw new ConflictException("Cannot discard a draft version while an approval workflow is in progress.");
+        }
+
+        DocumentVersion version = versionRepository.findById(versionId)
+                .orElseThrow(() -> new NotFoundException("Version " + versionId + " not found."));
+        if (!version.getDocument().getId().equals(documentId)) {
+            throw new ConflictException("The specified version does not belong to this document.");
+        }
+        if (version.getStatus() != DocumentVersionStatus.DRAFT) {
+            throw new ConflictException("Only unapproved draft versions can be discarded.");
+        }
+
+        if (document.getCurrentVersion() != null && document.getCurrentVersion().getId().equals(version.getId())) {
+            document.setCurrentVersion(null);
+            documentRepository.save(document);
+        }
+
+        notificationLogRepository.deleteAllByDocumentVersionId(version.getId());
+        workflowInstanceRepository.deleteAllByDocumentVersionId(version.getId());
+        versionRepository.delete(version);
+
+        auditService.record("document_version", version.getId(), "draft_discarded", java.util.Map.of(
+                "document_id", documentId,
+                "document_number", document.getDocumentNumber(),
+                "version_number", version.getVersionNumber()), document.getDepartment());
     }
 }

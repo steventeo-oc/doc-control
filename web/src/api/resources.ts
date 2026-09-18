@@ -1,5 +1,5 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, Department, DepartmentMember, DocumentDetail, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, DelegatedTask, Department, DepartmentMember, DocumentDetail, DocumentNumberPreview, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, TaskCounts, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
@@ -9,8 +9,12 @@ export interface DocumentFilters {
   sort?: string;
   /** Trash view (nav restructure plan-back F2): list soft-deleted documents. */
   trashed?: boolean;
+  /** Archived view: list retired/obsolete documents. */
+  archived?: boolean;
   /** My Documents view: `owner=me` filters to the caller's own documents. */
   owner?: string;
+  /** Favorites view: `favorite=true` filters to the caller's starred documents. */
+  favorite?: boolean;
   page?: number;
   pageSize?: number;
 }
@@ -70,7 +74,9 @@ export const documentApi = {
     if (filters.q) params.set('q', filters.q);
     if (filters.sort) params.set('sort', filters.sort);
     if (filters.trashed) params.set('trashed', 'true');
+    if (filters.archived) params.set('archived', 'true');
     if (filters.owner) params.set('owner', filters.owner);
+    if (filters.favorite) params.set('favorite', 'true');
     params.set('page', String(filters.page ?? 0));
     params.set('page_size', String(filters.pageSize ?? 20));
     return api.get<DocumentsPage>(`/documents?${params.toString()}`);
@@ -88,6 +94,14 @@ export const documentApi = {
     api.patch<DocumentDetail>(`/documents/${id}`, patch),
   softDelete: (id: number) => api.delete(`/documents/${id}`),
   restore: (id: number) => api.post<DocumentDetail>(`/documents/${id}/restore`),
+  markObsolete: (id: number, reason?: string) =>
+    api.post<void>(`/documents/${id}/obsolete`, { reason }),
+  reactivate: (id: number, reason?: string) =>
+    api.post<void>(`/documents/${id}/reactivate`, { reason }),
+  discardDraftDocument: (id: number) =>
+    api.delete(`/documents/${id}/draft`),
+  favorite: (id: number) => api.post<void>(`/documents/${id}/favorite`, {}),
+  unfavorite: (id: number) => api.delete(`/documents/${id}/favorite`),
   versions: (id: number) => api.get<DocumentVersion[]>(`/documents/${id}/versions`),
   uploadVersion: (id: number, file: File, changeNotes: string | null, changeReference: string | null) => {
     const form = new FormData();
@@ -96,12 +110,44 @@ export const documentApi = {
     if (changeReference) form.set('change_reference', changeReference);
     return api.postForm<DocumentVersion>(`/documents/${id}/versions`, form);
   },
+  restoreVersion: (id: number, versionId: number, reason?: string) =>
+    api.post<DocumentVersion>(`/documents/${id}/versions/${versionId}/restore`, { reason }),
+  discardDraftVersion: (id: number, versionId: number) =>
+    api.delete(`/documents/${id}/versions/${versionId}`),
+  previewNextNumber: (documentTypeId: number, departmentId?: number | null) => {
+    const params = new URLSearchParams();
+    params.set('document_type_id', String(documentTypeId));
+    if (departmentId) params.set('department_id', String(departmentId));
+    return api.get<DocumentNumberPreview>(`/documents/next-number?${params.toString()}`);
+  },
+  activity: (id: number) => api.get<DocumentActivity[]>(`/documents/${id}/activity`),
 };
+
+export interface DocumentActivity {
+  id: number;
+  performedAt: string;
+  actorId: number | null;
+  actorName: string;
+  actorEmail: string | null;
+  entityType: string;
+  entityId: number;
+  action: string;
+  details?: Record<string, any>;
+}
 
 export interface AssigneeInput {
   type: 'USER' | 'ROLE';
   userId?: number;
   roleName?: string;
+}
+
+export interface WorkflowFeedback {
+  instanceId: number;
+  versionNumber: number;
+  action: string;
+  actorName: string;
+  comment: string;
+  timestamp: string;
 }
 
 export const workflowApi = {
@@ -115,6 +161,10 @@ export const workflowApi = {
     api.get<string[]>(`/documents/${documentId}/reviewer-roles`),
   activeWorkflow: (documentId: number) =>
     api.get<StartedInstance | null>(`/documents/${documentId}/workflow`),
+  cancelWorkflow: (documentId: number) =>
+    api.post<void>(`/documents/${documentId}/workflow/cancel`),
+  latestFeedback: (documentId: number) =>
+    api.get<WorkflowFeedback | null>(`/documents/${documentId}/workflow/latest-feedback`),
   startApproval: (documentId: number, versionId: number, assignees: AssigneeInput[]) =>
     api.post<WorkflowInstance>(
       `/documents/${documentId}/versions/${versionId}/workflow/start`,
@@ -128,8 +178,12 @@ export const workflowApi = {
       comment,
       effectiveDate,
     }),
-  delegate: (taskId: string, toUserId: number) =>
-    api.post<WorkflowInstance>(`/workflow-tasks/${taskId}/delegate`, { toUserId }),
+  delegate: (taskId: string, toUserId: number, message?: string | null) =>
+    api.post<WorkflowInstance>(`/workflow-tasks/${taskId}/delegate`, { toUserId, message: message || null }),
+  recall: (taskId: string) =>
+    api.post<WorkflowInstance>(`/workflow-tasks/${taskId}/recall`),
+  delegatedByMe: () => api.get<DelegatedTask[]>('/my/delegated-tasks'),
+  taskCounts: () => api.get<TaskCounts>('/my/task-counts'),
 };
 
 export const acknowledgmentApi = {

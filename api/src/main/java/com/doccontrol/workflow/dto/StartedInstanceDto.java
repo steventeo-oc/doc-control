@@ -17,13 +17,52 @@ public record StartedInstanceDto(
         Integer id,
         Integer documentId,
         String documentNumber,
+        String documentName,
         Integer versionNumber,
         String status,
         boolean reapproval,
         LocalDateTime startedAt,
         LocalDateTime completedAt,
-        List<ReviewerState> reviewers) {
+        List<ReviewerState> reviewers,
+        String feedbackAction,
+        String feedbackActor,
+        String feedbackComment) {
 
-    public record ReviewerState(String name, String state, String role) {
+    public StartedInstanceDto(
+            Integer id,
+            Integer documentId,
+            String documentNumber,
+            String documentName,
+            Integer versionNumber,
+            String status,
+            boolean reapproval,
+            LocalDateTime startedAt,
+            LocalDateTime completedAt,
+            List<ReviewerState> reviewers) {
+        this(id, documentId, documentNumber, documentName, versionNumber, status, reapproval, startedAt, completedAt, reviewers, null, null, null);
+    }
+
+    public record ReviewerState(
+            Integer userId,
+            String name,
+            String email,
+            String state,
+            String role,
+            LocalDateTime actionAt,
+            String comment,
+            java.time.LocalDate effectiveDate,
+            boolean delegated,
+            Integer delegatedByUserId,
+            String delegatedByName,
+            String delegatedByEmail,
+            String delegatedToName,
+            String delegatedToEmail,
+            String delegationMessage,
+            LocalDateTime delegatedAt,
+            LocalDateTime dueDate) {
+
+        public ReviewerState(String name, String state, String role) {
+            this(null, name, null, state, role, null, null, null, false, null, null, null, null, null, null, null, null);
+        }
     }
 }

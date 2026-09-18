@@ -9,6 +9,7 @@ import java.time.LocalDate;
  */
 public record PendingAcknowledgmentDto(
         Integer documentId,
+        Integer versionId,
         String documentNumber,
         String name,
         String departmentCode,

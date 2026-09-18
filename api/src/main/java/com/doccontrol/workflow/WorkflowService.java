@@ -1,5 +1,7 @@
 package com.doccontrol.workflow;
 
+import com.doccontrol.acknowledgment.AcknowledgmentService;
+import com.doccontrol.audit.AuditLog;
 import com.doccontrol.audit.AuditLogRepository;
 import com.doccontrol.audit.AuditService;
 import com.doccontrol.common.web.ConflictException;
@@ -17,9 +19,12 @@ import com.doccontrol.identity.Role;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
+import com.doccontrol.notification.NotificationSender;
 import com.doccontrol.security.CurrentUserProvider;
+import com.doccontrol.workflow.dto.DelegatedTaskDto;
 import com.doccontrol.workflow.dto.StartApprovalRequest;
 import com.doccontrol.workflow.dto.StartedInstanceDto;
+import com.doccontrol.workflow.dto.TaskCountsDto;
 import com.doccontrol.workflow.dto.WorkflowInstanceDto;
 import com.doccontrol.workflow.dto.WorkflowTaskDto;
 import org.flowable.engine.HistoryService;
@@ -37,9 +42,12 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.ArrayList;
 import java.util.Comparator;
+import java.util.HashSet;
 import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
+import java.util.Objects;
+import java.util.Set;
 import java.util.stream.Collectors;
 
 @Service
@@ -59,6 +67,8 @@ public class WorkflowService {
     private final AuditLogRepository auditLogRepository;
     private final CurrentUserProvider currentUserProvider;
     private final DepartmentAccessService departmentAccessService;
+    private final NotificationSender notificationSender;
+    private final AcknowledgmentService acknowledgmentService;
 
     public WorkflowService(RuntimeService runtimeService, TaskService taskService,
                            HistoryService historyService,
@@ -68,7 +78,9 @@ public class WorkflowService {
                            DocumentService documentService, AuditService auditService,
                            AuditLogRepository auditLogRepository,
                            CurrentUserProvider currentUserProvider,
-                           DepartmentAccessService departmentAccessService) {
+                           DepartmentAccessService departmentAccessService,
+                           NotificationSender notificationSender,
+                           AcknowledgmentService acknowledgmentService) {
         this.runtimeService = runtimeService;
         this.taskService = taskService;
         this.historyService = historyService;
@@ -81,6 +93,8 @@ public class WorkflowService {
         this.auditLogRepository = auditLogRepository;
         this.currentUserProvider = currentUserProvider;
         this.departmentAccessService = departmentAccessService;
+        this.notificationSender = notificationSender;
+        this.acknowledgmentService = acknowledgmentService;
     }
 
     @Transactional
@@ -173,35 +187,41 @@ public class WorkflowService {
      * draft-version approval and a re-approval must not race on pointer and
      * status at completion.
      */
-    private void requireNoApprovalInFlight(Document document) {
+    public void requireNoApprovalInFlight(Document document) {
         if (!instanceRepository.findInProgressByDocumentId(document.getId()).isEmpty()) {
             throw new ConflictException("An approval is already in progress for this document.");
         }
     }
 
     /**
-     * Reviewer picklist for the approval-start forms: every active user,
-     * minimal fields. Document-scoped so the gate is the same canEdit rule
-     * as starting an approval itself — this is what lets non-admin owners
-     * assign reviewers by name (the /users list stays admin-only).
+     * Reviewer picklist for the approval-start forms: active users, excluding
+     * consumers in the document's department (who cannot be reviewers).
      */
     @Transactional(readOnly = true)
     public List<com.doccontrol.workflow.dto.ReviewerCandidateDto> reviewerCandidates(Integer documentId) {
         Document document = documentService.requireVisible(documentId);
         documentService.requireCanEdit(document);
+        Integer deptId = document.getDepartment().getId();
         return userRepository.findAllByActiveTrueOrderByNameAsc().stream()
+                .filter(u -> {
+                    // System admins are always eligible reviewers
+                    if (u.getRoles().stream().anyMatch(ur -> "ADMIN".equalsIgnoreCase(ur.getRole().getName()))) {
+                        return true;
+                    }
+                    // Must be a member of this document's department and NOT a CONSUMER
+                    var levelOpt = departmentAccessService.levelOf(u.getId(), deptId);
+                    return levelOpt.isPresent() && levelOpt.get() != com.doccontrol.identity.MembershipLevel.CONSUMER;
+                })
                 .map(com.doccontrol.workflow.dto.ReviewerCandidateDto::from)
                 .toList();
     }
 
-    /** Role picklist for role-based approval assignments — gated like the start endpoints. */
+    /** Role picklist for role-based approval assignments — returns departmental leadership levels. */
     @Transactional(readOnly = true)
     public List<String> reviewerRoles(Integer documentId) {
         Document document = documentService.requireVisible(documentId);
         documentService.requireCanEdit(document);
-        return roleRepository.findAll(org.springframework.data.domain.Sort.by("name")).stream()
-                .map(Role::getName)
-                .toList();
+        return List.of("MANAGER", "COLLABORATOR");
     }
 
     /** Returns details of the currently in-progress approval workflow on this document, if any. */
@@ -213,6 +233,72 @@ public class WorkflowService {
             return java.util.Optional.empty();
         }
         return java.util.Optional.of(toStartedDto(inProgress.get(0)));
+    }
+
+    /** Cancels an active in-flight approval workflow on this document. */
+    @Transactional
+    public void cancelWorkflow(Integer documentId) {
+        Document document = documentService.requireVisible(documentId);
+        documentService.requireCanEdit(document);
+
+        List<WorkflowInstance> inProgress = instanceRepository.findInProgressByDocumentId(document.getId());
+        if (inProgress.isEmpty()) {
+            throw new ConflictException("No approval workflow is currently in progress for this document.");
+        }
+        WorkflowInstance instance = inProgress.get(0);
+
+        if (instance.getProcessInstanceId() != null) {
+            runtimeService.deleteProcessInstance(instance.getProcessInstanceId(),
+                    "Cancelled by " + currentUserProvider.getCurrentUser().getEmail());
+        }
+
+        instance.setStatus(WorkflowInstanceStatus.REJECTED);
+        instance.setCompletedAt(LocalDateTime.now());
+        instanceRepository.save(instance);
+
+        auditService.record("workflow_instance", instance.getId(), "cancelled", Map.of(
+                "document_number", document.getDocumentNumber(),
+                "version_number", instance.getDocumentVersion().getVersionNumber(),
+                "cancelled_by", currentUserProvider.getCurrentUserId(),
+                "cancelled_by_name", currentUserProvider.getCurrentUser().getName(),
+                "kind", instance.getKind().getValue()), document.getDepartment());
+    }
+
+    /** Returns feedback (rejection or cancellation) for the latest workflow run on this document, if any. */
+    @Transactional(readOnly = true)
+    public java.util.Optional<com.doccontrol.workflow.dto.WorkflowFeedbackDto> latestFeedback(Integer documentId) {
+        Document document = documentService.requireVisible(documentId);
+        List<WorkflowInstance> list = instanceRepository.findAllByDocumentIdOrderByIdDesc(document.getId());
+        if (list.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        WorkflowInstance latest = list.get(0);
+        if (latest.getStatus() != WorkflowInstanceStatus.REJECTED) {
+            return java.util.Optional.empty();
+        }
+        java.util.Optional<AuditLog> auditOpt = auditLogRepository.findLatestRejectionOrCancellation(latest.getId());
+        if (auditOpt.isEmpty()) {
+            return java.util.Optional.empty();
+        }
+        AuditLog audit = auditOpt.get();
+        Map<String, Object> details = audit.getDetails();
+        String action = audit.getAction();
+        String actorName = details != null && details.containsKey("cancelled_by_name")
+                ? String.valueOf(details.get("cancelled_by_name"))
+                : details != null && details.containsKey("rejected_by_name")
+                ? String.valueOf(details.get("rejected_by_name"))
+                : audit.getPerformedBy() != null ? audit.getPerformedBy().getName() : "Reviewer";
+        String comment = details != null && details.containsKey("comment")
+                ? String.valueOf(details.get("comment"))
+                : "";
+        return java.util.Optional.of(new com.doccontrol.workflow.dto.WorkflowFeedbackDto(
+                latest.getId(),
+                latest.getDocumentVersion().getVersionNumber(),
+                action,
+                actorName,
+                comment,
+                audit.getPerformedAt()
+        ));
     }
 
     /**
@@ -289,6 +375,20 @@ public class WorkflowService {
 
         if (approved) {
             taskService.complete(taskId);
+
+            Map<String, Object> taskDetails = new java.util.HashMap<>();
+            taskDetails.put("task_id", taskId);
+            taskDetails.put("document_id", document.getId());
+            taskDetails.put("document_number", document.getDocumentNumber());
+            taskDetails.put("version_number", instance.getDocumentVersion().getVersionNumber());
+            if (comment != null && !comment.isBlank()) {
+                taskDetails.put("comment", comment.trim());
+            }
+            if (requestedEffectiveDate != null) {
+                taskDetails.put("effective_date", requestedEffectiveDate.toString());
+            }
+            auditService.record("workflow_instance", instance.getId(), "task_approved", taskDetails, document.getDepartment());
+
             boolean processEnded = runtimeService.createProcessInstanceQuery()
                     .processInstanceId(instance.getProcessInstanceId())
                     .count() == 0;
@@ -319,6 +419,7 @@ public class WorkflowService {
                 instance.setStatus(WorkflowInstanceStatus.COMPLETED);
                 instance.setCompletedAt(LocalDateTime.now());
                 auditService.record("workflow_instance", instance.getId(), "completed", Map.of(
+                        "document_id", document.getId(),
                         "document_number", document.getDocumentNumber(),
                         "version_number", instance.getDocumentVersion().getVersionNumber(),
                         "approved_by", currentUserProvider.getCurrentUserId(),
@@ -326,10 +427,6 @@ public class WorkflowService {
                         "effective_at", deferred
                                 ? requestedEffectiveDate.toString()
                                 : today.toString()), document.getDepartment());
-            } else {
-                auditService.record("workflow_instance", instance.getId(), "task_approved", Map.of(
-                        "task_id", taskId,
-                        "document_number", document.getDocumentNumber()), document.getDepartment());
             }
         } else {
             // 100% required: a single rejection rejects the whole approval.
@@ -344,30 +441,261 @@ public class WorkflowService {
                     "document_number", document.getDocumentNumber(),
                     "version_number", instance.getDocumentVersion().getVersionNumber(),
                     "rejected_by", currentUserProvider.getCurrentUserId(),
+                    "rejected_by_name", currentUserProvider.getCurrentUser().getName(),
+                    "comment", comment == null ? "" : comment,
                     "kind", instance.getKind().getValue()), document.getDepartment());
         }
         return toDto(instance);
     }
 
-    /** Unrestricted delegation (confirmed with QA): reviewer sends the task to anyone. */
+    /** Unrestricted delegation (confirmed with QA): reviewer sends the task to anyone, with optional instructions. */
     @Transactional
-    public WorkflowInstanceDto delegate(String taskId, Integer toUserId) {
+    public WorkflowInstanceDto delegate(String taskId, Integer toUserId, String message) {
         Task task = requireTask(taskId);
         WorkflowInstance instance = requireInstance(task.getProcessInstanceId());
         Document document = documentService.requireVisible(instance.getDocumentVersion().getDocument().getId());
         requireTaskAccess(task, document);
 
+        User me = currentUserProvider.getCurrentUser();
         User target = userRepository.findById(toUserId)
                 .filter(User::isActive)
                 .orElseThrow(() -> new NotFoundException("User " + toUserId + " not found."));
 
         String previousAssignee = task.getAssignee();
+        taskService.setOwner(taskId, String.valueOf(me.getId()));
         taskService.setAssignee(taskId, String.valueOf(target.getId()));
-        auditService.record("workflow_instance", instance.getId(), "task_delegated", Map.of(
-                "task_id", taskId,
-                "from", previousAssignee == null ? "unclaimed" : previousAssignee,
-                "to", target.getId()), document.getDepartment());
+        taskService.setVariableLocal(taskId, "delegatedByUserId", me.getId());
+        taskService.setVariableLocal(taskId, "delegatedByName", me.getName());
+        taskService.setVariableLocal(taskId, "delegatedToUserId", target.getId());
+        taskService.setVariableLocal(taskId, "delegatedToUserName", target.getName());
+        if (message != null && !message.isBlank()) {
+            taskService.setVariableLocal(taskId, "delegationMessage", message.trim());
+        }
+        taskService.setVariableLocal(taskId, "delegatedAt", java.time.Instant.now().toString());
+
+        Map<String, Object> details = new java.util.HashMap<>();
+        details.put("task_id", taskId);
+        details.put("from", previousAssignee == null ? "unclaimed" : previousAssignee);
+        details.put("from_name", me.getName());
+        details.put("from_email", me.getEmail());
+        details.put("to", target.getId());
+        details.put("to_name", target.getName());
+        details.put("to_email", target.getEmail());
+        if (message != null && !message.isBlank()) {
+            details.put("message", message.trim());
+        }
+        details.put("document_id", document.getId());
+        details.put("document_number", document.getDocumentNumber());
+        details.put("version_number", instance.getDocumentVersion().getVersionNumber());
+        auditService.record("workflow_instance", instance.getId(), "task_delegated", details, document.getDepartment());
+
+        // Notify the delegatee
+        String docNum = document.getDocumentNumber();
+        Integer vNum = instance.getDocumentVersion().getVersionNumber();
+        String docTitle = document.getName();
+        String subject = "Approval Task Delegated: " + docNum + " v" + vNum;
+        StringBuilder body = new StringBuilder();
+        body.append(me.getName())
+                .append(" has delegated an approval review task to you for ")
+                .append(docNum).append(" (\"").append(docTitle).append("\") v").append(vNum).append(".\n");
+        if (message != null && !message.isBlank()) {
+            body.append("\nInstructions from ").append(me.getName()).append(":\n\"")
+                    .append(message.trim()).append("\"\n");
+        }
+        body.append("\nPlease log in to review and take action.");
+        notificationSender.send(target, subject, body.toString());
+
         return toDto(instance);
+    }
+
+    @Transactional
+    public WorkflowInstanceDto delegate(String taskId, Integer toUserId) {
+        return delegate(taskId, toUserId, null);
+    }
+
+    /** Reclaim a delegated task back to the original reviewer. */
+    @Transactional
+    public WorkflowInstanceDto recall(String taskId) {
+        Task task = requireTask(taskId);
+        WorkflowInstance instance = requireInstance(task.getProcessInstanceId());
+        Document document = documentService.requireVisible(instance.getDocumentVersion().getDocument().getId());
+        User me = currentUserProvider.getCurrentUser();
+
+        String owner = task.getOwner();
+        if (owner == null || !owner.equals(String.valueOf(me.getId()))) {
+            throw new ForbiddenException("You can only recall tasks that you delegated.");
+        }
+
+        String currentAssigneeId = task.getAssignee();
+        User formerAssignee = null;
+        if (currentAssigneeId != null) {
+            try {
+                formerAssignee = userRepository.findById(Integer.valueOf(currentAssigneeId)).orElse(null);
+            } catch (NumberFormatException ignored) {}
+        }
+
+        taskService.setAssignee(taskId, String.valueOf(me.getId()));
+        taskService.setOwner(taskId, null);
+        taskService.removeVariableLocal(taskId, "delegatedByUserId");
+        taskService.removeVariableLocal(taskId, "delegatedByName");
+        taskService.removeVariableLocal(taskId, "delegationMessage");
+        taskService.setVariableLocal(taskId, "delegationRecalledAt", java.time.Instant.now().toString());
+
+        Map<String, Object> details = new java.util.HashMap<>();
+        details.put("task_id", taskId);
+        details.put("recalled_by", me.getId());
+        details.put("recalled_by_name", me.getName());
+        details.put("recalled_by_email", me.getEmail());
+        if (formerAssignee != null) {
+            details.put("recalled_from", formerAssignee.getId());
+            details.put("recalled_from_name", formerAssignee.getName());
+            details.put("recalled_from_email", formerAssignee.getEmail());
+        }
+        details.put("document_id", document.getId());
+        details.put("document_number", document.getDocumentNumber());
+        details.put("version_number", instance.getDocumentVersion().getVersionNumber());
+        auditService.record("workflow_instance", instance.getId(), "task_delegation_recalled", details, document.getDepartment());
+
+        if (formerAssignee != null) {
+            String docNum = document.getDocumentNumber();
+            Integer vNum = instance.getDocumentVersion().getVersionNumber();
+            notificationSender.send(formerAssignee,
+                    "Task Delegation Recalled: " + docNum + " v" + vNum,
+                    me.getName() + " has recalled the review task for " + docNum + " v" + vNum + " back to themselves.");
+        }
+
+        return toDto(instance);
+    }
+
+    /** Tasks delegated by me to other users (active and completed). */
+    @Transactional(readOnly = true)
+    public List<DelegatedTaskDto> myDelegatedTasks() {
+        User me = currentUserProvider.getCurrentUser();
+        String myId = String.valueOf(me.getId());
+
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .taskOwner(myId)
+                .active()
+                .list();
+
+        List<HistoricTaskInstance> historicTasks = historyService.createHistoricTaskInstanceQuery()
+                .taskOwner(myId)
+                .finished()
+                .orderByHistoricTaskInstanceEndTime().desc()
+                .listPage(0, 50);
+
+        List<DelegatedTaskDto> dtos = new ArrayList<>();
+        Set<String> procIds = new HashSet<>();
+        activeTasks.forEach(t -> { if (t.getProcessInstanceId() != null) procIds.add(t.getProcessInstanceId()); });
+        historicTasks.forEach(t -> { if (t.getProcessInstanceId() != null) procIds.add(t.getProcessInstanceId()); });
+
+        Map<String, WorkflowInstance> instanceMap = procIds.isEmpty() ? Map.of()
+                : instanceRepository.findByProcessInstanceIdIn(procIds).stream()
+                .collect(Collectors.toMap(WorkflowInstance::getProcessInstanceId, i -> i, (a, b) -> a));
+
+        Set<Integer> targetUserIds = new HashSet<>();
+        activeTasks.forEach(t -> {
+            if (t.getAssignee() != null) {
+                try { targetUserIds.add(Integer.valueOf(t.getAssignee())); } catch (Exception ignored) {}
+            }
+        });
+        historicTasks.forEach(t -> {
+            if (t.getAssignee() != null) {
+                try { targetUserIds.add(Integer.valueOf(t.getAssignee())); } catch (Exception ignored) {}
+            }
+        });
+
+        Map<Integer, User> userMap = targetUserIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(targetUserIds).stream()
+                .collect(Collectors.toMap(User::getId, u -> u));
+
+        for (Task task : activeTasks) {
+            WorkflowInstance inst = instanceMap.get(task.getProcessInstanceId());
+            Document doc = inst != null ? inst.getDocumentVersion().getDocument() : null;
+            Integer targetId = null;
+            if (task.getAssignee() != null) {
+                try { targetId = Integer.valueOf(task.getAssignee()); } catch (Exception ignored) {}
+            }
+            User targetUser = targetId != null ? userMap.get(targetId) : null;
+            Map<String, Object> localVars = taskService.getVariablesLocal(task.getId());
+            String message = (String) localVars.get("delegationMessage");
+            String delegatedAtStr = (String) localVars.get("delegatedAt");
+            LocalDateTime delegatedAt = null;
+            if (delegatedAtStr != null) {
+                try {
+                    delegatedAt = LocalDateTime.ofInstant(java.time.Instant.parse(delegatedAtStr), java.time.ZoneId.systemDefault());
+                } catch (Exception ignored) {}
+            }
+            LocalDateTime dueDate = task.getDueDate() == null ? null
+                    : LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault());
+
+            dtos.add(new DelegatedTaskDto(
+                    task.getId(),
+                    doc != null ? doc.getId() : null,
+                    doc != null ? doc.getDocumentNumber() : null,
+                    doc != null ? doc.getName() : null,
+                    inst != null ? inst.getDocumentVersion().getVersionNumber() : null,
+                    targetId,
+                    targetUser != null ? targetUser.getName() : (targetId != null ? "User #" + targetId : "Unassigned"),
+                    targetUser != null ? targetUser.getEmail() : null,
+                    message,
+                    delegatedAt,
+                    dueDate,
+                    "pending",
+                    true
+            ));
+        }
+
+        Set<String> activeIds = activeTasks.stream().map(Task::getId).collect(Collectors.toSet());
+        for (HistoricTaskInstance hTask : historicTasks) {
+            if (activeIds.contains(hTask.getId())) continue;
+            WorkflowInstance inst = instanceMap.get(hTask.getProcessInstanceId());
+            Document doc = inst != null ? inst.getDocumentVersion().getDocument() : null;
+            Integer targetId = null;
+            if (hTask.getAssignee() != null) {
+                try { targetId = Integer.valueOf(hTask.getAssignee()); } catch (Exception ignored) {}
+            }
+            User targetUser = targetId != null ? userMap.get(targetId) : null;
+
+            LocalDateTime completedAt = hTask.getEndTime() == null ? null
+                    : LocalDateTime.ofInstant(hTask.getEndTime().toInstant(), java.time.ZoneId.systemDefault());
+            LocalDateTime dueDate = hTask.getDueDate() == null ? null
+                    : LocalDateTime.ofInstant(hTask.getDueDate().toInstant(), java.time.ZoneId.systemDefault());
+
+            dtos.add(new DelegatedTaskDto(
+                    hTask.getId(),
+                    doc != null ? doc.getId() : null,
+                    doc != null ? doc.getDocumentNumber() : null,
+                    doc != null ? doc.getName() : null,
+                    inst != null ? inst.getDocumentVersion().getVersionNumber() : null,
+                    targetId,
+                    targetUser != null ? targetUser.getName() : (targetId != null ? "User #" + targetId : "Unassigned"),
+                    targetUser != null ? targetUser.getEmail() : null,
+                    null,
+                    completedAt,
+                    dueDate,
+                    "completed",
+                    false
+            ));
+        }
+
+        return dtos;
+    }
+
+    /** Live counts for task views. */
+    @Transactional(readOnly = true)
+    public TaskCountsDto myTaskCounts() {
+        User me = currentUserProvider.getCurrentUser();
+        int approvals = myTasks().size();
+        int acks = acknowledgmentService.pendingForCurrentUser().size();
+        int started = (int) instanceRepository.findByStartedByIdOrderByStartedAtDesc(me.getId()).stream()
+                .filter(i -> i.getStatus() == WorkflowInstanceStatus.IN_PROGRESS)
+                .count();
+        int delegated = (int) taskService.createTaskQuery()
+                .taskOwner(String.valueOf(me.getId()))
+                .active()
+                .count();
+        return new TaskCountsDto(approvals, acks, started, delegated);
     }
 
     /** Tasks assigned to me or pooled to a role I hold, pending only. */
@@ -377,15 +705,56 @@ public class WorkflowService {
         List<String> myRoleNames = roleNames(me);
         String myId = String.valueOf(me.getId());
 
-        List<Task> tasks = new ArrayList<>();
-        tasks.addAll(taskService.createTaskQuery().taskAssignee(myId).active().list());
-        if (!myRoleNames.isEmpty()) {
-            tasks.addAll(taskService.createTaskQuery().taskCandidateGroupIn(myRoleNames).active().list());
+        // Deduplicate tasks by task ID
+        Map<String, Task> taskMap = new LinkedHashMap<>();
+        for (Task task : taskService.createTaskQuery().taskAssignee(myId).active().list()) {
+            taskMap.put(task.getId(), task);
         }
-        return tasks.stream()
+        if (!myRoleNames.isEmpty()) {
+            for (Task task : taskService.createTaskQuery().taskCandidateGroupIn(myRoleNames).active().list()) {
+                taskMap.putIfAbsent(task.getId(), task);
+            }
+        }
+        if (taskMap.isEmpty()) {
+            return List.of();
+        }
+
+        List<Task> tasks = taskMap.values().stream()
                 .sorted(Comparator.comparing(Task::getDueDate,
                         Comparator.nullsLast(Comparator.naturalOrder())))
-                .map(task -> toTaskDto(task, me))
+                .toList();
+
+        // Batch-fetch WorkflowInstances to eliminate N+1 queries
+        Set<String> procIds = tasks.stream()
+                .map(Task::getProcessInstanceId)
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, WorkflowInstance> instanceByProcId = procIds.isEmpty() ? Map.of()
+                : instanceRepository.findByProcessInstanceIdIn(procIds).stream()
+                        .collect(Collectors.toMap(
+                                WorkflowInstance::getProcessInstanceId,
+                                wi -> wi,
+                                (a, b) -> a));
+
+        // Batch-fetch user assignees to eliminate N+1 queries
+        Set<Integer> assigneeIds = tasks.stream()
+                .map(Task::getAssignee)
+                .filter(Objects::nonNull)
+                .map(idStr -> {
+                    try { return Integer.parseInt(idStr); } catch (Exception e) { return null; }
+                })
+                .filter(Objects::nonNull)
+                .collect(Collectors.toSet());
+        Map<String, String> userNameById = assigneeIds.isEmpty() ? Map.of()
+                : userRepository.findAllById(assigneeIds).stream()
+                        .collect(Collectors.toMap(u -> String.valueOf(u.getId()), User::getName));
+
+        return tasks.stream()
+                .map(task -> toTaskDto(
+                        task,
+                        me,
+                        task.getProcessInstanceId() == null ? null : instanceByProcId.get(task.getProcessInstanceId()),
+                        task.getAssignee() == null ? null : userNameById.get(task.getAssignee())))
                 .toList();
     }
 
@@ -429,10 +798,30 @@ public class WorkflowService {
 
     private StartedInstanceDto toStartedDto(WorkflowInstance instance) {
         Document document = instance.getDocumentVersion().getDocument();
+        String feedbackAction = null;
+        String feedbackActor = null;
+        String feedbackComment = null;
+        if (instance.getStatus() == WorkflowInstanceStatus.REJECTED) {
+            var auditOpt = auditLogRepository.findLatestRejectionOrCancellation(instance.getId());
+            if (auditOpt.isPresent()) {
+                var audit = auditOpt.get();
+                var details = audit.getDetails();
+                feedbackAction = audit.getAction();
+                feedbackActor = details != null && details.containsKey("cancelled_by_name")
+                        ? String.valueOf(details.get("cancelled_by_name"))
+                        : details != null && details.containsKey("rejected_by_name")
+                        ? String.valueOf(details.get("rejected_by_name"))
+                        : audit.getPerformedBy() != null ? audit.getPerformedBy().getName() : "Reviewer";
+                feedbackComment = details != null && details.containsKey("comment")
+                        ? String.valueOf(details.get("comment"))
+                        : "";
+            }
+        }
         return new StartedInstanceDto(
                 instance.getId(),
                 document.getId(),
                 document.getDocumentNumber(),
+                document.getName(),
                 instance.getDocumentVersion().getVersionNumber(),
                 instance.getStatus() == null ? null : instance.getStatus().getValue(),
                 instance.getKind() == WorkflowInstanceKind.REAPPROVAL,
@@ -441,7 +830,10 @@ public class WorkflowService {
                 instance.getStatus() == WorkflowInstanceStatus.IN_PROGRESS
                         && instance.getProcessInstanceId() != null
                         ? reviewerStates(instance.getProcessInstanceId())
-                        : List.of());
+                        : List.of(),
+                feedbackAction,
+                feedbackActor,
+                feedbackComment);
     }
 
     /**
@@ -461,38 +853,130 @@ public class WorkflowService {
                 .finished()
                 .orderByHistoricTaskInstanceEndTime().asc()
                 .list();
-        Map<String, String> approverByTaskId = finished.isEmpty() ? Map.of()
-                : auditLogRepository.findTaskApprovedByTaskIds(finished.stream()
-                        .map(HistoricTaskInstance::getId)
-                        .toList())
-                        .stream()
-                        .collect(Collectors.toMap(
-                                row -> String.valueOf(row.getDetails().get("task_id")),
-                                row -> row.getPerformedBy().getName(),
-                                // a task can be completed once; keep the first row per task
-                                (first, second) -> first));
-        List<StartedInstanceDto.ReviewerState> states = new ArrayList<>();
-        for (HistoricTaskInstance finishedTask : finished) {
-            states.add(new StartedInstanceDto.ReviewerState(
-                    approverByTaskId.get(finishedTask.getId()), "approved", null));
-        }
-        for (Task task : taskService.createTaskQuery()
+        List<Task> activeTasks = taskService.createTaskQuery()
                 .processInstanceId(processInstanceId)
                 .active()
-                .list()) {
+                .list();
+
+        List<String> finishedTaskIds = finished.stream().map(HistoricTaskInstance::getId).toList();
+        List<String> allTaskIds = new ArrayList<>(finishedTaskIds);
+        activeTasks.forEach(t -> allTaskIds.add(t.getId()));
+
+        Map<String, AuditLog> approverLogByTaskId = finishedTaskIds.isEmpty() ? Map.of()
+                : auditLogRepository.findTaskApprovedByTaskIds(finishedTaskIds).stream()
+                        .collect(Collectors.toMap(
+                                row -> String.valueOf(row.getDetails().get("task_id")),
+                                row -> row,
+                                (first, second) -> first));
+
+        Map<String, AuditLog> delegationLogByTaskId = allTaskIds.isEmpty() ? Map.of()
+                : auditLogRepository.findTaskDelegationsByTaskIds(allTaskIds).stream()
+                        .collect(Collectors.toMap(
+                                row -> String.valueOf(row.getDetails().get("task_id")),
+                                row -> row,
+                                (first, second) -> second));
+
+        List<StartedInstanceDto.ReviewerState> states = new ArrayList<>();
+        for (HistoricTaskInstance finishedTask : finished) {
+            AuditLog audit = approverLogByTaskId.get(finishedTask.getId());
+            User approver = audit != null ? audit.getPerformedBy() : null;
+            Integer userId = approver != null ? approver.getId() : null;
+            String name = approver != null ? approver.getName() : null;
+            String email = approver != null ? approver.getEmail() : null;
+            LocalDateTime actionAt = audit != null ? audit.getPerformedAt()
+                    : finishedTask.getEndTime() != null
+                            ? LocalDateTime.ofInstant(finishedTask.getEndTime().toInstant(), java.time.ZoneId.systemDefault())
+                            : null;
+            String comment = (audit != null && audit.getDetails() != null && audit.getDetails().get("comment") != null)
+                    ? String.valueOf(audit.getDetails().get("comment"))
+                    : null;
+            LocalDate effectiveDate = null;
+            if (audit != null && audit.getDetails() != null && audit.getDetails().get("effective_date") != null) {
+                try {
+                    String effStr = String.valueOf(audit.getDetails().get("effective_date"));
+                    if (!effStr.isBlank()) {
+                        effectiveDate = LocalDate.parse(effStr);
+                    }
+                } catch (Exception ignored) {}
+            }
+
+            AuditLog delAudit = delegationLogByTaskId.get(finishedTask.getId());
+            boolean delegated = delAudit != null && "task_delegated".equals(delAudit.getAction());
+            Integer delByUserId = null;
+            String delByName = null;
+            String delByEmail = null;
+            String delToName = null;
+            String delToEmail = null;
+            String delMsg = null;
+            LocalDateTime delAt = null;
+            if (delegated && delAudit.getDetails() != null) {
+                var d = delAudit.getDetails();
+                if (d.get("from") != null) {
+                    try { delByUserId = Integer.valueOf(String.valueOf(d.get("from"))); } catch (Exception ignored) {}
+                }
+                delByName = (String) d.get("from_name");
+                delByEmail = (String) d.get("from_email");
+                delToName = (String) d.get("to_name");
+                delToEmail = (String) d.get("to_email");
+                delMsg = (String) d.get("message");
+                delAt = delAudit.getPerformedAt();
+            }
+
+            LocalDateTime dueDate = finishedTask.getDueDate() != null
+                    ? LocalDateTime.ofInstant(finishedTask.getDueDate().toInstant(), java.time.ZoneId.systemDefault())
+                    : null;
+
+            states.add(new StartedInstanceDto.ReviewerState(
+                    userId, name, email, "approved", null, actionAt, comment, effectiveDate,
+                    delegated, delByUserId, delByName, delByEmail, delToName, delToEmail, delMsg, delAt, dueDate));
+        }
+
+        for (Task task : activeTasks) {
+            LocalDateTime dueDate = task.getDueDate() != null
+                    ? LocalDateTime.ofInstant(task.getDueDate().toInstant(), java.time.ZoneId.systemDefault())
+                    : null;
+            LocalDateTime actionAt = task.getCreateTime() != null
+                    ? LocalDateTime.ofInstant(task.getCreateTime().toInstant(), java.time.ZoneId.systemDefault())
+                    : null;
+
             if (task.getAssignee() != null) {
+                User user = userRepository.findById(Integer.valueOf(task.getAssignee())).orElse(null);
+                Integer userId = user != null ? user.getId() : Integer.valueOf(task.getAssignee());
+                String name = user != null ? user.getName() : null;
+                String email = user != null ? user.getEmail() : null;
+
+                String delByName = (String) taskService.getVariableLocal(task.getId(), "delegatedByName");
+                Integer delByUserId = (Integer) taskService.getVariableLocal(task.getId(), "delegatedByUserId");
+                String delMsg = (String) taskService.getVariableLocal(task.getId(), "delegationMessage");
+                String delAtStr = (String) taskService.getVariableLocal(task.getId(), "delegatedAt");
+                LocalDateTime delAt = null;
+                if (delAtStr != null) {
+                    try {
+                        delAt = LocalDateTime.ofInstant(java.time.Instant.parse(delAtStr), java.time.ZoneId.systemDefault());
+                    } catch (Exception ignored) {
+                        try { delAt = LocalDateTime.parse(delAtStr); } catch (Exception ignored2) {}
+                    }
+                }
+
+                boolean delegated = delByName != null;
+                String delByEmail = null;
+                if (delegated && delByUserId != null) {
+                    delByEmail = userRepository.findById(delByUserId).map(User::getEmail).orElse(null);
+                }
+
                 states.add(new StartedInstanceDto.ReviewerState(
-                        userRepository.findById(Integer.valueOf(task.getAssignee()))
-                                .map(User::getName).orElse(null),
-                        "pending", null));
+                        userId, name, email, "pending", null, actionAt, null, null,
+                        delegated, delByUserId, delByName, delByEmail, name, email, delMsg, delAt, dueDate));
             } else {
                 List<String> roles = taskService.getIdentityLinksForTask(task.getId()).stream()
                         .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
                         .map(IdentityLink::getGroupId)
                         .sorted()
                         .toList();
-                states.add(new StartedInstanceDto.ReviewerState(null, "pending",
-                        roles.isEmpty() ? "unassigned" : String.join(", ", roles)));
+                states.add(new StartedInstanceDto.ReviewerState(
+                        null, null, null, "pending",
+                        roles.isEmpty() ? "unassigned" : String.join(", ", roles),
+                        actionAt, null, null, false, null, null, null, null, null, null, null, dueDate));
             }
         }
         return states;
@@ -562,19 +1046,34 @@ public class WorkflowService {
     }
 
     private WorkflowTaskDto toTaskDto(Task task, User viewer) {
+        return toTaskDto(task, viewer, workflowInstanceFor(task), null);
+    }
+
+    private WorkflowTaskDto toTaskDto(Task task, User viewer, WorkflowInstance instance, String cachedAssigneeName) {
         List<String> candidateGroups = taskService.getIdentityLinksForTask(task.getId()).stream()
                     .filter(link -> IdentityLinkType.CANDIDATE.equals(link.getType()))
                 .map(IdentityLink::getGroupId)
                 .sorted()
                 .toList();
-        String assigneeName = null;
-        if (task.getAssignee() != null) {
-            assigneeName = userRepository.findById(Integer.valueOf(task.getAssignee()))
-                    .map(User::getName)
-                    .orElse(null);
+        String assigneeName = cachedAssigneeName;
+        if (assigneeName == null && task.getAssignee() != null) {
+            try {
+                assigneeName = userRepository.findById(Integer.valueOf(task.getAssignee()))
+                        .map(User::getName)
+                        .orElse(null);
+            } catch (Exception ignored) {}
         }
-        WorkflowInstance instance = workflowInstanceFor(task);
         Document document = instance == null ? null : instance.getDocumentVersion().getDocument();
+        Map<String, Object> localVars = taskService.getVariablesLocal(task.getId());
+        String delegatedBy = (String) localVars.get("delegatedByName");
+        String delegationMessage = (String) localVars.get("delegationMessage");
+        String delegatedAtStr = (String) localVars.get("delegatedAt");
+        LocalDateTime delegatedAt = null;
+        if (delegatedAtStr != null) {
+            try {
+                delegatedAt = LocalDateTime.ofInstant(java.time.Instant.parse(delegatedAtStr), java.time.ZoneId.systemDefault());
+            } catch (Exception ignored) {}
+        }
         return new WorkflowTaskDto(
                 task.getId(),
                 task.getName(),
@@ -586,9 +1085,15 @@ public class WorkflowService {
                 task.getDueDate() == null ? null : LocalDateTime.ofInstant(task.getDueDate().toInstant(),
                         java.time.ZoneId.systemDefault()),
                 document == null ? null : document.getDocumentNumber(),
+                document == null ? null : document.getName(),
                 document == null ? null : document.getId(),
+                instance == null ? null : instance.getDocumentVersion().getId(),
                 instance == null ? null : instance.getDocumentVersion().getVersionNumber(),
-                document == null ? null : document.getDepartment().getCode());
+                instance == null ? null : instance.getDocumentVersion().getChangeNotes(),
+                document == null ? null : document.getDepartment().getCode(),
+                delegatedBy,
+                delegationMessage,
+                delegatedAt);
     }
 
     private WorkflowInstance workflowInstanceFor(Task task) {
@@ -597,11 +1102,19 @@ public class WorkflowService {
     }
 
     private List<String> roleNames(User user) {
+        List<String> names = new ArrayList<>();
         if (currentUserProvider.getCurrentUserId().equals(user.getId())) {
-            return currentUserProvider.getCurrentUserRoleNames();
+            names.addAll(currentUserProvider.getCurrentUserRoleNames());
+        } else {
+            names.addAll(user.getRoles().stream()
+                    .map(userRole -> userRole.getRole().getName())
+                    .toList());
         }
-        return user.getRoles().stream()
-                .map(userRole -> userRole.getRole().getName())
-                .toList();
+        if (user.getDepartments() != null) {
+            user.getDepartments().stream()
+                    .map(ud -> ud.getLevel().name())
+                    .forEach(names::add);
+        }
+        return names;
     }
 }

@@ -2,21 +2,16 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { Link } from 'react-router-dom';
 import {
   AlertTriangle,
-  ArrowDown,
-  ArrowLeft,
   ArrowRight,
-  ArrowUp,
   Building2,
   Check,
   CheckCircle2,
   ChevronRight,
   Clock,
   Eye,
-  EyeOff,
   FileCheck2,
   FileText,
   Folder,
-  GripVertical,
   Inbox,
   Loader2,
   Plus,
@@ -50,6 +45,9 @@ import {
   DropdownMenuTrigger,
 } from '../components/ui/dropdown-menu';
 import { cn } from '../lib/utils';
+import { usePointerDrag } from '../hooks/usePointerDrag';
+import { DraggableCard } from '../components/DraggableCard';
+import { DragOverlay } from '../components/DragOverlay';
 
 /** Local-date ISO string n days back (0 = today) — the activity presets. */
 function isoDaysAgo(days: number): string {
@@ -175,18 +173,7 @@ export default function DashboardPage() {
   const col0Ref = useRef<HTMLDivElement>(null);
   const col1Ref = useRef<HTMLDivElement>(null);
   const col2Ref = useRef<HTMLDivElement>(null);
-
-  // Active pointer drag state
-  const [activeDrag, setActiveDrag] = useState<{
-    widgetId: WidgetId;
-    currentX: number;
-    currentY: number;
-    targetCol: number;
-    targetIdx: number;
-  } | null>(null);
-
-  const activeDragRef = useRef(activeDrag);
-  activeDragRef.current = activeDrag;
+  const containerRefs = useMemo(() => [col0Ref, col1Ref, col2Ref], []);
 
   // Load layout on user switch
   useEffect(() => {
@@ -260,114 +247,14 @@ export default function DashboardPage() {
     [layout, saveLayout],
   );
 
-  const handleStartPointerDrag = useCallback(
-    (widgetId: WidgetId, startEvt: React.PointerEvent) => {
-      if (startEvt.button !== 0) return;
-      startEvt.preventDefault();
-
-      const startX = startEvt.clientX;
-      const startY = startEvt.clientY;
-      let hasExceededThreshold = false;
-
-      const getTargetColumn = (clientX: number, clientY: number): number => {
-        const rects = [
-          col0Ref.current?.getBoundingClientRect(),
-          col1Ref.current?.getBoundingClientRect(),
-          col2Ref.current?.getBoundingClientRect(),
-        ];
-
-        // Direct hit
-        for (let c = 0; c < 3; c++) {
-          const r = rects[c];
-          if (r && clientX >= r.left && clientX <= r.right && clientY >= r.top && clientY <= r.bottom) {
-            return c;
-          }
-        }
-
-        // Check if layout is vertically stacked or horizontally arranged
-        const isStacked = rects[0] && rects[1] && Math.abs(rects[0].left - rects[1].left) < 50;
-        if (isStacked) {
-          for (let c = 0; c < 3; c++) {
-            const r = rects[c];
-            if (r && clientY < r.bottom) return c;
-          }
-          return 2;
-        } else {
-          const c0 = rects[0];
-          const c1 = rects[1];
-          const c2 = rects[2];
-          if (c1 && c2 && clientX >= (c1.right + c2.left) / 2) return 2;
-          if (c0 && c1 && clientX >= (c0.right + c1.left) / 2) return 1;
-          return 0;
-        }
-      };
-
-      const getTargetIndex = (targetCol: number, clientY: number): number => {
-        const cardsInCol = document.querySelectorAll(`[data-card-col="${targetCol}"]`);
-        let targetIdx = cardsInCol.length;
-        for (let i = 0; i < cardsInCol.length; i++) {
-          const rect = cardsInCol[i].getBoundingClientRect();
-          if (clientY < rect.top + rect.height / 2) {
-            targetIdx = i;
-            break;
-          }
-        }
-        return targetIdx;
-      };
-
-      const onPointerMove = (e: PointerEvent) => {
-        const dx = e.clientX - startX;
-        const dy = e.clientY - startY;
-        if (!hasExceededThreshold) {
-          if (Math.hypot(dx, dy) >= 4) {
-            hasExceededThreshold = true;
-          } else {
-            return;
-          }
-        }
-
-        const targetCol = getTargetColumn(e.clientX, e.clientY);
-        const targetIdx = getTargetIndex(targetCol, e.clientY);
-
-        setActiveDrag({
-          widgetId,
-          currentX: e.clientX,
-          currentY: e.clientY,
-          targetCol,
-          targetIdx,
-        });
-      };
-
-      const cleanup = () => {
-        window.removeEventListener('pointermove', onPointerMove);
-        window.removeEventListener('pointerup', onPointerUp);
-        window.removeEventListener('pointercancel', cleanup);
-        window.removeEventListener('keydown', onKeyDown);
-      };
-
-      const onPointerUp = () => {
-        cleanup();
-        if (hasExceededThreshold && activeDragRef.current) {
-          const { widgetId: wId, targetCol, targetIdx } = activeDragRef.current;
-          moveWidget(wId, targetCol, targetIdx);
-        }
-        setActiveDrag(null);
-      };
-
-      const onKeyDown = (e: KeyboardEvent) => {
-        if (e.key === 'Escape') {
-          cleanup();
-          setActiveDrag(null);
-        }
-      };
-
-      window.addEventListener('pointermove', onPointerMove);
-      window.addEventListener('pointerup', onPointerUp);
-      window.addEventListener('pointercancel', cleanup);
-      window.addEventListener('keydown', onKeyDown);
+  // System-wide pointer drag engine
+  const { activeDrag, startPointerDrag } = usePointerDrag<WidgetId>({
+    containerRefs,
+    itemSelector: 'data-drag-item',
+    onDrop: (widgetId, targetCol, targetIndex) => {
+      moveWidget(widgetId, targetCol, targetIndex);
     },
-    [moveWidget],
-  );
+  });
 
   const moveWidgetDirection = useCallback(
     (widgetId: WidgetId, direction: 'left' | 'right' | 'up' | 'down') => {
@@ -1293,34 +1180,35 @@ export default function DashboardPage() {
           className={cn(
             'lg:col-span-1 xl:col-span-5 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
-            activeDrag?.targetCol === 0 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
+            activeDrag?.targetContainer === 0 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
         >
           {layout.columns[0].length === 0 && isCustomizing && (
             <div
               className={cn(
                 'flex h-36 items-center justify-center rounded-xl border border-dashed border-border/60 text-xs font-medium text-muted-foreground transition-colors',
-                activeDrag?.targetCol === 0 && 'border-primary text-primary font-semibold bg-primary/5',
+                activeDrag?.targetContainer === 0 && 'border-primary text-primary font-semibold bg-primary/5',
               )}
             >
               Drop card here (Column 1)
             </div>
           )}
           {layout.columns[0].map((widgetId, idx) => (
-            <DraggableCardWrapper
+            <DraggableCard
               key={widgetId}
-              widgetId={widgetId}
-              colIndex={0}
+              id={widgetId}
+              title={WIDGET_TITLES[widgetId]}
+              containerIndex={0}
               itemIndex={idx}
-              totalInCol={layout.columns[0].length}
+              totalInContainer={layout.columns[0].length}
               isCustomizing={isCustomizing}
-              onMoveDirection={moveWidgetDirection}
-              onHide={hideWidget}
-              onStartPointerDrag={handleStartPointerDrag}
-              isDragging={activeDrag?.widgetId === widgetId}
+              onMoveDirection={(id, dir) => moveWidgetDirection(id as WidgetId, dir)}
+              onHide={(id) => hideWidget(id as WidgetId)}
+              onStartPointerDrag={(id, e) => startPointerDrag(id as WidgetId, e)}
+              isDragging={activeDrag?.itemId === widgetId}
             >
               {renderWidget(widgetId)}
-            </DraggableCardWrapper>
+            </DraggableCard>
           ))}
         </div>
 
@@ -1330,34 +1218,35 @@ export default function DashboardPage() {
           className={cn(
             'lg:col-span-1 xl:col-span-4 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
-            activeDrag?.targetCol === 1 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
+            activeDrag?.targetContainer === 1 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
         >
           {layout.columns[1].length === 0 && isCustomizing && (
             <div
               className={cn(
                 'flex h-36 items-center justify-center rounded-xl border border-dashed border-border/60 text-xs font-medium text-muted-foreground transition-colors',
-                activeDrag?.targetCol === 1 && 'border-primary text-primary font-semibold bg-primary/5',
+                activeDrag?.targetContainer === 1 && 'border-primary text-primary font-semibold bg-primary/5',
               )}
             >
               Drop card here (Column 2)
             </div>
           )}
           {layout.columns[1].map((widgetId, idx) => (
-            <DraggableCardWrapper
+            <DraggableCard
               key={widgetId}
-              widgetId={widgetId}
-              colIndex={1}
+              id={widgetId}
+              title={WIDGET_TITLES[widgetId]}
+              containerIndex={1}
               itemIndex={idx}
-              totalInCol={layout.columns[1].length}
+              totalInContainer={layout.columns[1].length}
               isCustomizing={isCustomizing}
-              onMoveDirection={moveWidgetDirection}
-              onHide={hideWidget}
-              onStartPointerDrag={handleStartPointerDrag}
-              isDragging={activeDrag?.widgetId === widgetId}
+              onMoveDirection={(id, dir) => moveWidgetDirection(id as WidgetId, dir)}
+              onHide={(id) => hideWidget(id as WidgetId)}
+              onStartPointerDrag={(id, e) => startPointerDrag(id as WidgetId, e)}
+              isDragging={activeDrag?.itemId === widgetId}
             >
               {renderWidget(widgetId)}
-            </DraggableCardWrapper>
+            </DraggableCard>
           ))}
         </div>
 
@@ -1367,175 +1256,48 @@ export default function DashboardPage() {
           className={cn(
             'lg:col-span-2 xl:col-span-3 space-y-6 transition-colors rounded-2xl min-h-[140px]',
             isCustomizing && 'p-2.5 border-2 border-dashed border-border/60 bg-muted/15',
-            activeDrag?.targetCol === 2 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
+            activeDrag?.targetContainer === 2 && 'border-primary/60 bg-primary/5 ring-2 ring-primary/20',
           )}
         >
           {layout.columns[2].length === 0 && isCustomizing && (
             <div
               className={cn(
                 'flex h-36 items-center justify-center rounded-xl border border-dashed border-border/60 text-xs font-medium text-muted-foreground transition-colors',
-                activeDrag?.targetCol === 2 && 'border-primary text-primary font-semibold bg-primary/5',
+                activeDrag?.targetContainer === 2 && 'border-primary text-primary font-semibold bg-primary/5',
               )}
             >
               Drop card here (Column 3)
             </div>
           )}
           {layout.columns[2].map((widgetId, idx) => (
-            <DraggableCardWrapper
+            <DraggableCard
               key={widgetId}
-              widgetId={widgetId}
-              colIndex={2}
+              id={widgetId}
+              title={WIDGET_TITLES[widgetId]}
+              containerIndex={2}
               itemIndex={idx}
-              totalInCol={layout.columns[2].length}
+              totalInContainer={layout.columns[2].length}
               isCustomizing={isCustomizing}
-              onMoveDirection={moveWidgetDirection}
-              onHide={hideWidget}
-              onStartPointerDrag={handleStartPointerDrag}
-              isDragging={activeDrag?.widgetId === widgetId}
+              onMoveDirection={(id, dir) => moveWidgetDirection(id as WidgetId, dir)}
+              onHide={(id) => hideWidget(id as WidgetId)}
+              onStartPointerDrag={(id, e) => startPointerDrag(id as WidgetId, e)}
+              isDragging={activeDrag?.itemId === widgetId}
             >
               {renderWidget(widgetId)}
-            </DraggableCardWrapper>
+            </DraggableCard>
           ))}
         </div>
       </div>
 
       {/* Floating Pointer Drag Ghost Indicator */}
       {activeDrag && (
-        <div
-          className="fixed pointer-events-none z-50 rounded-xl bg-card/95 border-2 border-primary shadow-2xl px-4 py-2.5 flex items-center gap-2.5 backdrop-blur-md -translate-x-1/2 -translate-y-1/2 select-none"
-          style={{
-            left: activeDrag.currentX,
-            top: activeDrag.currentY,
-          }}
-        >
-          <GripVertical className="size-4 text-primary animate-pulse" />
-          <span className="font-semibold text-xs uppercase tracking-wider text-foreground">
-            {WIDGET_TITLES[activeDrag.widgetId]}
-          </span>
-          <span className="inline-flex items-center rounded-md bg-primary/10 px-1.5 py-0.5 text-[10px] font-bold text-primary">
-            Column {activeDrag.targetCol + 1}
-          </span>
-        </div>
+        <DragOverlay
+          title={WIDGET_TITLES[activeDrag.itemId]}
+          containerLabel={`Column ${activeDrag.targetContainer + 1}`}
+          x={activeDrag.currentX}
+          y={activeDrag.currentY}
+        />
       )}
-    </div>
-  );
-}
-
-/**
- * DraggableCardWrapper provides drag handles, move direction buttons,
- * and visibility toggle toolbars when customizing the dashboard.
- */
-function DraggableCardWrapper(props: {
-  widgetId: WidgetId;
-  colIndex: number;
-  itemIndex: number;
-  totalInCol: number;
-  isCustomizing: boolean;
-  isDragging?: boolean;
-  onMoveDirection: (widgetId: WidgetId, dir: 'left' | 'right' | 'up' | 'down') => void;
-  onHide: (widgetId: WidgetId) => void;
-  onStartPointerDrag: (widgetId: WidgetId, e: React.PointerEvent) => void;
-  children: React.ReactNode;
-}) {
-  const {
-    widgetId,
-    colIndex,
-    itemIndex,
-    totalInCol,
-    isCustomizing,
-    isDragging,
-    onMoveDirection,
-    onHide,
-    onStartPointerDrag,
-    children,
-  } = props;
-
-  return (
-    <div
-      data-card-id={widgetId}
-      data-card-col={colIndex}
-      className={cn(
-        'group/card relative transition-all duration-200',
-        isCustomizing &&
-          'rounded-2xl p-1.5 ring-1 ring-border/70 bg-card/60 shadow-xs hover:ring-primary/40',
-        isDragging && 'opacity-25 ring-2 ring-dashed ring-primary scale-[0.98]',
-      )}
-    >
-      {isCustomizing && (
-        <div className="mb-2 flex items-center justify-between rounded-xl bg-muted/80 px-3 py-1.5 text-xs text-muted-foreground border border-border/40 backdrop-blur-xs select-none">
-          <div
-            className="flex items-center gap-1.5 text-foreground/80 hover:text-foreground cursor-grab active:cursor-grabbing touch-none py-1 px-1 -ml-1 rounded-md hover:bg-accent/60 transition-colors"
-            onPointerDown={(e) => onStartPointerDrag(widgetId, e)}
-            title="Drag to move card into any column"
-          >
-            <GripVertical className="size-4 text-primary" />
-            <span className="font-semibold text-[11px] uppercase tracking-wider text-foreground">
-              {WIDGET_TITLES[widgetId]}
-            </span>
-          </div>
-
-          <div className="flex items-center gap-1" onPointerDown={(e) => e.stopPropagation()}>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={colIndex === 0}
-              onClick={() => onMoveDirection(widgetId, 'left')}
-              className="size-7 p-0 hover:bg-accent"
-              title="Move card to left column"
-            >
-              <ArrowLeft className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={itemIndex === 0}
-              onClick={() => onMoveDirection(widgetId, 'up')}
-              className="size-7 p-0 hover:bg-accent"
-              title="Move card up"
-            >
-              <ArrowUp className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={itemIndex === totalInCol - 1}
-              onClick={() => onMoveDirection(widgetId, 'down')}
-              className="size-7 p-0 hover:bg-accent"
-              title="Move card down"
-            >
-              <ArrowDown className="size-3.5" />
-            </Button>
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              disabled={colIndex === 2}
-              onClick={() => onMoveDirection(widgetId, 'right')}
-              className="size-7 p-0 hover:bg-accent"
-              title="Move card to right column"
-            >
-              <ArrowRight className="size-3.5" />
-            </Button>
-            <div className="mx-1 h-3 w-px bg-border/60" />
-            <Button
-              type="button"
-              size="sm"
-              variant="ghost"
-              onClick={() => onHide(widgetId)}
-              className="size-7 p-0 text-muted-foreground hover:text-destructive hover:bg-destructive/10"
-              title="Hide this card from dashboard"
-            >
-              <EyeOff className="size-3.5" />
-            </Button>
-          </div>
-        </div>
-      )}
-      <div className={cn(isCustomizing && 'pointer-events-none select-none')}>
-        {children}
-      </div>
     </div>
   );
 }

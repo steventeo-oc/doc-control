@@ -128,7 +128,7 @@ export default function DashboardPage() {
       console.error('Failed to load pending acknowledgments', err);
       return [] as PendingAcknowledgment[];
     });
-    const pDocs = documentApi.list({ owner: 'me', page: 0, pageSize: 6 }).catch((err: Error) => {
+    const pDocs = documentApi.list({ owner: 'me', page: 0, pageSize: 8 }).catch((err: Error) => {
       console.error('Failed to load my documents', err);
       return null;
     });
@@ -143,7 +143,7 @@ export default function DashboardPage() {
         scope: 'mine',
         from: isoDaysAgo(6),
         to: isoDaysAgo(0),
-        pageSize: 6,
+        pageSize: 8,
       })
       .catch((err: Error) => {
         console.error('Failed to load recent activity', err);
@@ -212,7 +212,7 @@ export default function DashboardPage() {
   }, [tasks, pendingAcks]);
 
   return (
-    <div className="space-y-6 pb-12">
+    <div className="space-y-6 pb-12 w-full">
       {/* Dashboard Top Header & Quick Actions */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center sm:justify-between border-b border-border/40 pb-5">
         <div>
@@ -262,7 +262,7 @@ export default function DashboardPage() {
       )}
 
       {/* KPI Metrics Executive Banner */}
-      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-4">
+      <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 xl:grid-cols-4 w-full">
         {/* KPI 1: Approvals */}
         <Card className="relative overflow-hidden rounded-2xl border border-border/40 bg-card shadow-xs transition-shadow hover:shadow-sm">
           <CardHeader className="flex flex-row items-center justify-between pb-2">
@@ -392,10 +392,10 @@ export default function DashboardPage() {
         </Card>
       </div>
 
-      {/* Main Content Grid: 2 Columns */}
-      <div className="grid grid-cols-1 items-start gap-6 lg:grid-cols-12">
-        {/* Left Column: Urgent Tasks & My Documents (7 cols) */}
-        <div className="space-y-6 lg:col-span-7">
+      {/* Main Content Grid: 3-Column Command Center */}
+      <div className="grid grid-cols-1 gap-6 lg:grid-cols-2 xl:grid-cols-12 items-start w-full">
+        {/* Column 1: Urgent Action Queue (Action Center) */}
+        <div className="lg:col-span-1 xl:col-span-5 space-y-6">
           {/* Dashlet 1: Urgent Action Queue */}
           <Card className="rounded-2xl border border-border/40 bg-card shadow-xs overflow-hidden">
             <CardHeader className="border-b border-border/30 bg-muted/20 pb-4">
@@ -433,7 +433,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-border/30">
-                  {combinedTasks.slice(0, 6).map((row) => {
+                  {combinedTasks.slice(0, 8).map((row) => {
                     const isApproval = row.kind === 'approval';
                     const docId = isApproval ? row.task.documentId : row.entry.documentId;
                     const docNum = isApproval ? row.task.documentNumber : row.entry.documentNumber;
@@ -541,7 +541,10 @@ export default function DashboardPage() {
               </div>
             </CardContent>
           </Card>
+        </div>
 
+        {/* Column 2: Controlled Documents with Tiers */}
+        <div className="lg:col-span-1 xl:col-span-4 space-y-6">
           {/* Dashlet 2: My Controlled Documents with Tiers */}
           <Card className="rounded-2xl border border-border/40 bg-card shadow-xs overflow-hidden">
             <CardHeader className="border-b border-border/30 bg-muted/20 pb-4">
@@ -584,7 +587,7 @@ export default function DashboardPage() {
                 </div>
               ) : (
                 <div className="divide-y divide-border/30">
-                  {myDocs.content.map((doc: DocumentSummary) => (
+                  {myDocs.content.slice(0, 8).map((doc: DocumentSummary) => (
                     <div
                       key={doc.id}
                       className="flex flex-col gap-2 p-4 transition-colors hover:bg-muted/30 sm:flex-row sm:items-center sm:justify-between"
@@ -682,8 +685,8 @@ export default function DashboardPage() {
           </Card>
         </div>
 
-        {/* Right Column: Departments & Recent Activity (5 cols) */}
-        <div className="space-y-6 lg:col-span-5">
+        {/* Column 3: Operational Scopes & Live Audit Stream */}
+        <div className="lg:col-span-2 xl:col-span-3 space-y-6">
           {/* Dashlet 3: My Departments */}
           <Card className="rounded-2xl border border-border/40 bg-card shadow-xs overflow-hidden">
             <CardHeader className="border-b border-border/30 bg-muted/20 pb-4">

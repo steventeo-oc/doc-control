@@ -547,7 +547,12 @@ export default function Layout() {
               })}
             </aside>
           )}
-          <main className="flex-1 p-6 w-full max-w-[1536px]">
+          <main
+            className={cn(
+              'flex-1 p-6 w-full',
+              section === 'dashboard' ? 'max-w-none' : 'max-w-[1536px]',
+            )}
+          >
             <Outlet />
           </main>
         </div>

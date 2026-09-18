@@ -51,6 +51,7 @@ export default function App() {
         <Route path="activity" element={<ActivityPage />} />
         <Route path="departments" element={<DepartmentsPage />} />
         <Route path="departments/:id" element={<DepartmentDetailPage />} />
+        <Route path="departments/:deptId/documents/:id" element={<DocumentDetailPage />} />
         <Route path="admin/types" element={<AdminTypesPage />} />
         <Route path="admin/tiers" element={<AdminTiersPage />} />
         <Route path="admin/users" element={<UsersPage />} />

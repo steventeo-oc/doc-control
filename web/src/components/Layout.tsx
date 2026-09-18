@@ -268,6 +268,16 @@ export default function Layout() {
     navigate('/login');
   }
 
+  function isSubnavActive(itemTo: string) {
+    if (itemTo.includes('?')) {
+      return location.pathname + location.search === itemTo;
+    }
+    if (itemTo === '/departments') {
+      return location.pathname === '/departments';
+    }
+    return location.pathname === itemTo || location.pathname.startsWith(itemTo + '/');
+  }
+
   // --- Change-password dialog (F2: replaces window.prompt/window.alert) ---
   const [passwordOpen, setPasswordOpen] = useState(false);
   // Separate open state per account-menu instance — see AccountMenu's doc.
@@ -358,7 +368,7 @@ export default function Layout() {
                   aria-label={`${activeSection.label} pages`}
                 >
                   {sidebarItems.map((item) => {
-                    const isActive = location.pathname + location.search === item.to;
+                    const isActive = isSubnavActive(item.to);
                     return (
                       <NavLink
                         key={item.to}
@@ -434,7 +444,7 @@ export default function Layout() {
           {sidebarItems.length > 0 && (
             <aside className="hidden min-w-[220px] shrink-0 flex-col gap-0.5 border-r border-border p-4 md:flex self-stretch sticky top-0 max-h-[calc(100vh-49px)] overflow-y-auto z-10">
               {sidebarItems.map((item) => {
-                const isActive = location.pathname + location.search === item.to;
+                const isActive = isSubnavActive(item.to);
                 return (
                   <NavLink
                     key={item.to}

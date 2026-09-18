@@ -87,18 +87,29 @@ interface ReviewerSlot {
 }
 
 export default function DocumentDetailPage() {
-  const { id } = useParams();
+  const { id, deptId: routeDeptId } = useParams();
   const documentId = Number(id);
   const location = useLocation();
   const navigate = useNavigate();
   const { user, isAdmin } = useAuth();
 
-  const fromView = (location.state as { fromView?: string } | undefined)?.fromView;
-  const backView = fromView === 'mine' || fromView === 'trash' || fromView === 'favorites' || fromView === 'archived' ? fromView : 'all';
-  const backLink = `/documents?view=${backView}`;
-
   const [doc, setDoc] = useState<DocumentDetail | null>(null);
   const [versions, setVersions] = useState<DocumentVersion[]>([]);
+
+  const state = location.state as {
+    fromView?: string;
+    fromDepartmentId?: number;
+    fromDepartmentCode?: string;
+  } | undefined;
+
+  const deptId = routeDeptId || (state?.fromDepartmentId ? String(state.fromDepartmentId) : undefined);
+
+  const fromView = state?.fromView;
+  const backView = fromView === 'mine' || fromView === 'trash' || fromView === 'favorites' || fromView === 'archived' ? fromView : 'all';
+  const backLink = deptId ? `/departments/${deptId}` : `/documents?view=${backView}`;
+  const backLabel = deptId
+    ? (doc ? `Back to ${doc.departmentCode}` : (state?.fromDepartmentCode ? `Back to ${state.fromDepartmentCode}` : 'Back to department'))
+    : 'Back to documents';
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
   const [newName, setNewName] = useState('');
@@ -581,7 +592,7 @@ export default function DocumentDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to documents
+          {backLabel}
         </Link>
       </>
     );
@@ -600,7 +611,7 @@ export default function DocumentDetailPage() {
           className="inline-flex items-center gap-1 text-sm text-muted-foreground hover:text-foreground"
         >
           <ArrowLeft className="size-4" aria-hidden="true" />
-          Back to documents
+          {backLabel}
         </Link>
         <div className="mt-1 flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{doc.documentNumber}</h1>

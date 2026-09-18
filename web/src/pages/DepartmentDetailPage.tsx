@@ -51,6 +51,7 @@ export default function DepartmentDetailPage() {
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docSearch, setDocSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
+  const [typeFilter, setTypeFilter] = useState('ALL');
   const [page, setPage] = useState(0);
   const pageSize = 15;
 
@@ -123,15 +124,16 @@ export default function DepartmentDetailPage() {
     documentApi
       .list({
         department: department.code,
-        q: docSearch.trim() || undefined,
+        type: typeFilter !== 'ALL' ? typeFilter : undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
+        q: docSearch.trim() || undefined,
         page,
         pageSize,
       })
       .then(setDocs)
       .catch(() => setDocs(null))
       .finally(() => setLoadingDocs(false));
-  }, [department, docSearch, statusFilter, page]);
+  }, [department, docSearch, statusFilter, typeFilter, page]);
 
   useEffect(() => {
     loadDocuments();
@@ -145,6 +147,11 @@ export default function DepartmentDetailPage() {
 
   function handleStatusChange(val: string) {
     setStatusFilter(val);
+    setPage(0);
+  }
+
+  function handleTypeChange(val: string) {
+    setTypeFilter(val);
     setPage(0);
   }
 
@@ -173,7 +180,7 @@ export default function DepartmentDetailPage() {
       .create(selectedTypeId, department.id, name, file)
       .then((created) => {
         setCreateOpen(false);
-        navigate(`/documents/${created.id}`);
+        navigate(`/departments/${department.id}/documents/${created.id}`);
       })
       .catch((err: Error) => setCreateError(err.message))
       .finally(() => setCreating(false));
@@ -313,7 +320,7 @@ export default function DepartmentDetailPage() {
           </div>
 
           {/* Search and Filters */}
-          <div className="flex items-center gap-2">
+          <div className="flex flex-wrap items-center gap-2">
             <div className="relative w-48 sm:w-56">
               <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
               <Input
@@ -323,6 +330,22 @@ export default function DepartmentDetailPage() {
                 className="pl-8 text-xs h-8 rounded-lg border-border/40"
               />
             </div>
+            <Select value={typeFilter} onValueChange={handleTypeChange}>
+              <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
+                <SelectValue placeholder="Type" />
+              </SelectTrigger>
+              <SelectContent className="rounded-xl border-border/40 shadow-xl">
+                <SelectItem value="ALL" className="text-xs">
+                  All Types
+                </SelectItem>
+                {types.map((t) => (
+                  <SelectItem key={t.id} value={t.code} className="text-xs">
+                    {t.code}
+                    {!t.active && ' (inactive)'}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
             <Select value={statusFilter} onValueChange={handleStatusChange}>
               <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
                 <SelectValue placeholder="Status" />
@@ -347,10 +370,11 @@ export default function DepartmentDetailPage() {
               <TableRow className="border-border/40 hover:bg-transparent">
                 <TableHead className="w-36 text-xs font-semibold">Number</TableHead>
                 <TableHead className="text-xs font-semibold">Title</TableHead>
-                <TableHead className="w-28 text-xs font-semibold">Type</TableHead>
-                <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
+                <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
+                <TableHead className="w-32 text-xs font-semibold">Progress</TableHead>
+                <TableHead className="w-24 text-xs font-semibold">Type</TableHead>
                 <TableHead className="w-32 text-xs font-semibold">Owner</TableHead>
-                <TableHead className="w-36 text-right text-xs font-semibold">Updated</TableHead>
+                <TableHead className="w-32 text-right text-xs font-semibold">Updated</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -358,7 +382,7 @@ export default function DepartmentDetailPage() {
                 <TableRow key={doc.id} className="border-border/30 hover:bg-muted/40 transition-colors">
                   <TableCell className="font-mono text-xs font-semibold">
                     <Link
-                      to={`/documents/${doc.id}`}
+                      to={`/departments/${department.id}/documents/${doc.id}`}
                       className="text-primary hover:underline"
                     >
                       {doc.documentNumber}
@@ -367,13 +391,33 @@ export default function DepartmentDetailPage() {
                   <TableCell className="text-xs font-medium text-foreground">
                     {doc.name}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {doc.documentTypeCode || '—'}
-                  </TableCell>
                   <TableCell>
                     <StatusBadge status={doc.status as StatusBadgeKind}>
                       {doc.status}
                     </StatusBadge>
+                  </TableCell>
+                  <TableCell>
+                    {doc.revisionStatus === 'IN_REVIEW' && (
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
+                        v{doc.revisionVersionNumber} in review
+                      </span>
+                    )}
+                    {doc.revisionStatus === 'DRAFT' && (
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                        v{doc.revisionVersionNumber} draft
+                      </span>
+                    )}
+                    {doc.revisionStatus === 'RE_APPROVAL' && (
+                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30 whitespace-nowrap">
+                        re-approval
+                      </span>
+                    )}
+                    {!doc.revisionStatus && (
+                      <span className="text-muted-foreground/40 text-xs">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-xs text-muted-foreground font-mono">
+                    {doc.documentTypeCode || '—'}
                   </TableCell>
                   <TableCell className="text-xs text-muted-foreground">
                     {doc.ownerName}
@@ -390,16 +434,16 @@ export default function DepartmentDetailPage() {
 
               {(docs?.content.length ?? 0) === 0 && (
                 <TableRow>
-                  <TableCell colSpan={6} className="py-10 text-center">
+                  <TableCell colSpan={7} className="py-10 text-center">
                     <EmptyState
                       icon={FileText}
                       message={
-                        docSearch || statusFilter !== 'ALL'
+                        docSearch || statusFilter !== 'ALL' || typeFilter !== 'ALL'
                           ? 'No documents match the specified filters.'
                           : 'No documents in this department yet.'
                       }
                       cta={
-                        canCreateHere && !docSearch && statusFilter === 'ALL' ? (
+                        canCreateHere && !docSearch && statusFilter === 'ALL' && typeFilter === 'ALL' ? (
                           <Button
                             size="sm"
                             variant="outline"

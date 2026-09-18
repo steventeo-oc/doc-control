@@ -153,15 +153,19 @@ function AccountMenu(props: {
               'flex items-center gap-2 px-2 py-1.5 text-sm',
         )}
       >
-        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/25 border border-primary/40 text-xs font-semibold text-white shadow-xs">
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-white/15 text-xs font-semibold text-white">
           {initials}
         </div>
         <span>{props.side === 'right' ? 'Account' : (props.user?.name ?? 'Account')}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side={props.side} align="end" className="w-72 p-1.5">
+      <DropdownMenuContent
+        side={props.side}
+        align="end"
+        className="w-72 p-1.5 rounded-2xl border border-border/50 bg-popover shadow-xl shadow-black/8 ring-1 ring-black/[0.04]"
+      >
         <DropdownMenuLabel className="font-normal p-2 pb-2.5">
           <div className="flex items-start gap-2.5">
-            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/10 text-xs font-semibold text-primary">
               {initials}
             </div>
             <div className="flex flex-col gap-0.5 min-w-0 flex-1">
@@ -183,17 +187,17 @@ function AccountMenu(props: {
 
           {/* Department Memberships */}
           {props.user?.departments && props.user.departments.length > 0 && (
-            <div className="mt-2.5 pt-2 border-t border-border/60 flex flex-wrap gap-1">
+            <div className="mt-2.5 pt-2 border-t border-border/40 flex flex-wrap gap-1">
               {props.user.departments.map((d) => (
                 <span
                   key={d.id}
                   className={cn(
-                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border border-transparent',
                     d.level === 'MANAGER'
-                      ? 'bg-success/15 text-success'
+                      ? 'bg-success/10 text-success border-success/20'
                       : d.level === 'COLLABORATOR'
-                      ? 'bg-info/15 text-info'
-                      : 'bg-muted text-muted-foreground',
+                      ? 'bg-info/10 text-info border-info/20'
+                      : 'bg-muted/70 text-muted-foreground border-border/30',
                   )}
                   title={`${d.label} (${d.level})`}
                 >

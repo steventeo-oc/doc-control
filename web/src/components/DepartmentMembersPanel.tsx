@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Check, Loader2, Plus, Search, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { lookupApi } from '../api/resources';
 import type { DepartmentCandidateUser, DepartmentMember, MembershipLevel } from '../api/types';
@@ -53,9 +53,11 @@ const LEVELS: { value: MembershipLevel; label: string; desc: string }[] = [
 export default function DepartmentMembersPanel({
   departmentId,
   departmentCode,
+  onMemberChange,
 }: {
   departmentId: number;
   departmentCode?: string;
+  onMemberChange?: () => void;
 }) {
   const [members, setMembers] = useState<DepartmentMember[] | null>(null);
   const [error, setError] = useState<string | null>(null);
@@ -83,6 +85,17 @@ export default function DepartmentMembersPanel({
   }, [departmentId]);
 
   useEffect(loadMembers, [loadMembers]);
+
+  const [memberSearch, setMemberSearch] = useState('');
+
+  const filteredMembers = useMemo(() => {
+    if (!members) return [];
+    if (!memberSearch.trim()) return members;
+    const q = memberSearch.trim().toLowerCase();
+    return members.filter(
+      (m) => m.name.toLowerCase().includes(q) || m.email.toLowerCase().includes(q)
+    );
+  }, [members, memberSearch]);
 
   // Debounced Search for Available Users
   useEffect(() => {
@@ -138,6 +151,7 @@ export default function DepartmentMembersPanel({
         setNotice(`Added ${newMember.name} as ${newMember.level}.`);
         setAddOpen(false);
         loadMembers();
+        onMemberChange?.();
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setAdding(false));
@@ -153,6 +167,7 @@ export default function DepartmentMembersPanel({
         setNotice(`Removed ${memberToRemove.name} from department.`);
         setMemberToRemove(null);
         loadMembers();
+        onMemberChange?.();
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setRemoving(false));
@@ -172,7 +187,7 @@ export default function DepartmentMembersPanel({
 
   return (
     <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs space-y-4">
-      <div className="flex items-center justify-between gap-4">
+      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
             <span>Members & Roles</span>
@@ -186,15 +201,36 @@ export default function DepartmentMembersPanel({
             Manage departmental members and permission tiers.
           </p>
         </div>
-        <Button
-          size="sm"
-          variant="outline"
-          className="gap-1.5 text-xs rounded-xl shadow-xs"
-          onClick={openAddModal}
-        >
-          <Plus className="size-3.5" />
-          <span>Add Member</span>
-        </Button>
+        <div className="flex items-center gap-2">
+          <div className="relative w-full sm:w-64">
+            <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 size-3.5 text-muted-foreground pointer-events-none" />
+            <Input
+              type="text"
+              placeholder="Search members..."
+              value={memberSearch}
+              onChange={(e) => setMemberSearch(e.target.value)}
+              className="h-8 pl-8 pr-7 text-xs rounded-xl border-border/40 bg-background"
+            />
+            {memberSearch && (
+              <button
+                type="button"
+                onClick={() => setMemberSearch('')}
+                className="absolute right-2 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+              >
+                <X className="size-3.5" />
+              </button>
+            )}
+          </div>
+          <Button
+            size="sm"
+            variant="outline"
+            className="gap-1.5 text-xs rounded-xl shadow-xs whitespace-nowrap"
+            onClick={openAddModal}
+          >
+            <Plus className="size-3.5" />
+            <span>Add Member</span>
+          </Button>
+        </div>
       </div>
 
       {error && (
@@ -223,7 +259,7 @@ export default function DepartmentMembersPanel({
               </TableRow>
             </TableHeader>
             <TableBody>
-              {members.map((member) => (
+              {filteredMembers.map((member) => (
                 <TableRow key={member.userId} className="border-border/30 hover:bg-muted/40 transition-colors">
                   <TableCell className="text-xs font-medium text-foreground">
                     {member.name}
@@ -285,12 +321,16 @@ export default function DepartmentMembersPanel({
                 </TableRow>
               ))}
 
-              {members.length === 0 && (
+              {filteredMembers.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={5} className="py-8 text-center">
                     <EmptyState
                       icon={Users}
-                      message='No members assigned to this department yet. Click "+ Add Member" to add colleagues.'
+                      message={
+                        memberSearch
+                          ? `No members match "${memberSearch}".`
+                          : 'No members assigned to this department yet. Click "+ Add Member" to add colleagues.'
+                      }
                     />
                   </TableCell>
                 </TableRow>

@@ -1,10 +1,34 @@
 import { useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useParams } from 'react-router-dom';
-import { ArrowLeft, Building2, ChevronLeft, ChevronRight, FileText, Loader2, Plus, Search } from 'lucide-react';
+import {
+  Activity,
+  ArrowDown,
+  ArrowLeft,
+  ArrowUp,
+  ArrowUpDown,
+  Building2,
+  ChevronLeft,
+  ChevronRight,
+  FileText,
+  Loader2,
+  Plus,
+  Search,
+  Star,
+  Users,
+  X,
+} from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
-import type { Department, DocumentNumberPreview, DocumentType, DocumentsPage as PageResult } from '../api/types';
+import type {
+  AuditLogPage,
+  Department,
+  DocumentNumberPreview,
+  DocumentSummary,
+  DocumentType,
+  DocumentsPage as PageResult,
+} from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
 import { useAuth } from '../auth/AuthContext';
+import ActivitySentence from '../components/ActivitySentence';
 import DepartmentMembersPanel from '../components/DepartmentMembersPanel';
 import { EmptyState } from '../components/EmptyState';
 import { StatusBadge, type StatusBadgeKind } from '../components/StatusBadge';
@@ -13,6 +37,7 @@ import { Button } from '../components/ui/button';
 import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
+import { cn } from '../lib/utils';
 import {
   Sheet,
   SheetContent,
@@ -46,14 +71,25 @@ export default function DepartmentDetailPage() {
   const [resolved, setResolved] = useState(false);
   const [error, setError] = useState<string | null>(null);
 
+  // Tab state
+  const [activeTab, setActiveTab] = useState<'documents' | 'members' | 'activity'>('documents');
+
   // Documents state
   const [docs, setDocs] = useState<PageResult | null>(null);
   const [loadingDocs, setLoadingDocs] = useState(false);
   const [docSearch, setDocSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
+  const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated'>('updated');
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
   const pageSize = 15;
+
+  // Department activity feed state
+  const [actPage, setActPage] = useState(0);
+  const [activityData, setActivityData] = useState<AuditLogPage | null>(null);
+  const [loadingActivity, setLoadingActivity] = useState(false);
+  const [activityError, setActivityError] = useState<string | null>(null);
 
   // In-place document creation state
   const [createOpen, setCreateOpen] = useState(false);
@@ -69,7 +105,7 @@ export default function DepartmentDetailPage() {
   const canCreateHere = isAdmin || (!!membership && membership.level !== 'CONSUMER');
 
   // Load Department Metadata
-  useEffect(() => {
+  const loadDepartment = useCallback(() => {
     setError(null);
     lookupApi
       .getDepartment(departmentId)
@@ -87,6 +123,10 @@ export default function DepartmentDetailPage() {
         setResolved(true);
       });
   }, [departmentId, membership]);
+
+  useEffect(() => {
+    loadDepartment();
+  }, [loadDepartment]);
 
   // Load Document Types for in-place creation
   useEffect(() => {
@@ -117,7 +157,7 @@ export default function DepartmentDetailPage() {
     };
   }, [selectedTypeId, department]);
 
-  // Load Documents with Filters & Pagination
+  // Load Documents with Filters, Sorting & Pagination
   const loadDocuments = useCallback(() => {
     if (!department) return;
     setLoadingDocs(true);
@@ -127,17 +167,86 @@ export default function DepartmentDetailPage() {
         type: typeFilter !== 'ALL' ? typeFilter : undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         q: docSearch.trim() || undefined,
+        sort: `${sortField},${sortOrder}`,
         page,
         pageSize,
       })
       .then(setDocs)
       .catch(() => setDocs(null))
       .finally(() => setLoadingDocs(false));
-  }, [department, docSearch, statusFilter, typeFilter, page]);
+  }, [department, docSearch, statusFilter, typeFilter, sortField, sortOrder, page]);
 
   useEffect(() => {
     loadDocuments();
   }, [loadDocuments]);
+
+  // Load Activity Log
+  const loadActivity = useCallback(() => {
+    if (!department) return;
+    setLoadingActivity(true);
+    setActivityError(null);
+    lookupApi
+      .departmentActivity(department.id, { page: actPage, pageSize: 15 })
+      .then(setActivityData)
+      .catch((err: Error) => setActivityError(err.message))
+      .finally(() => setLoadingActivity(false));
+  }, [department, actPage]);
+
+  useEffect(() => {
+    if (activeTab === 'activity') {
+      loadActivity();
+    }
+  }, [activeTab, loadActivity]);
+
+  // Sorting Handler
+  function handleSort(field: 'number' | 'name' | 'status' | 'updated') {
+    if (sortField === field) {
+      setSortOrder((prev) => (prev === 'asc' ? 'desc' : 'asc'));
+    } else {
+      setSortField(field);
+      setSortOrder(field === 'updated' ? 'desc' : 'asc');
+    }
+    setPage(0);
+  }
+
+  // Clear Filters Handler
+  const hasActiveFilters = Boolean(
+    docSearch.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL'
+  );
+
+  function handleClearFilters() {
+    setDocSearch('');
+    setStatusFilter('ALL');
+    setTypeFilter('ALL');
+    setPage(0);
+  }
+
+  // Favorite Star Toggle Handler
+  async function handleToggleFavorite(doc: DocumentSummary) {
+    const nextVal = !doc.isFavorite;
+    setDocs((prev) => {
+      if (!prev) return prev;
+      return {
+        ...prev,
+        content: prev.content.map((d) => (d.id === doc.id ? { ...d, isFavorite: nextVal } : d)),
+      };
+    });
+    try {
+      if (nextVal) {
+        await documentApi.favorite(doc.id);
+      } else {
+        await documentApi.unfavorite(doc.id);
+      }
+    } catch {
+      setDocs((prev) => {
+        if (!prev) return prev;
+        return {
+          ...prev,
+          content: prev.content.map((d) => (d.id === doc.id ? { ...d, isFavorite: !nextVal } : d)),
+        };
+      });
+    }
+  }
 
   // Reset page to 0 when search or filter changes
   function handleSearchChange(val: string) {
@@ -277,7 +386,7 @@ export default function DepartmentDetailPage() {
                   Your role: <strong className="text-foreground">{membership.level}</strong> ·{' '}
                 </span>
               )}
-              <span>{docs?.totalElements ?? 0} document(s)</span>
+              <span>{department.documentCount ?? docs?.totalElements ?? 0} document(s)</span>
             </p>
           </div>
 
@@ -294,205 +403,509 @@ export default function DepartmentDetailPage() {
         </div>
       </div>
 
-      {/* Members Panel (for Managers & Admins) */}
-      {canManage && (
+      {/* KPI Metric Stat Cards (Total Documents & Department Members) */}
+      <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <Card className="p-4 rounded-2xl border border-border/40 bg-card shadow-xs flex items-center gap-3.5">
+          <div className="rounded-xl p-2.5 bg-primary/10 text-primary">
+            <FileText className="size-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Total Documents</p>
+            <p className="text-2xl font-bold tracking-tight text-foreground">
+              {department.documentCount ?? docs?.totalElements ?? 0}
+            </p>
+          </div>
+        </Card>
+
+        <Card className="p-4 rounded-2xl border border-border/40 bg-card shadow-xs flex items-center gap-3.5">
+          <div className="rounded-xl p-2.5 bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
+            <Users className="size-5" />
+          </div>
+          <div>
+            <p className="text-xs font-medium text-muted-foreground">Department Members</p>
+            <p className="text-2xl font-bold tracking-tight text-foreground">
+              {department.memberCount ?? 0}
+            </p>
+          </div>
+        </Card>
+      </div>
+
+      {/* Navigation Tabs */}
+      <div className="flex items-center gap-2 border-b border-border/40 pb-3">
+        <button
+          type="button"
+          onClick={() => setActiveTab('documents')}
+          className={cn(
+            'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all',
+            activeTab === 'documents'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          )}
+        >
+          <FileText className="size-3.5" />
+          <span>Documents</span>
+          {docs && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                'rounded-full text-[10px] px-1.5 py-0',
+                activeTab === 'documents' && 'bg-primary-foreground/20 text-primary-foreground'
+              )}
+            >
+              {docs.totalElements}
+            </Badge>
+          )}
+        </button>
+
+        {canManage && (
+          <button
+            type="button"
+            onClick={() => setActiveTab('members')}
+            className={cn(
+              'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all',
+              activeTab === 'members'
+                ? 'bg-primary text-primary-foreground shadow-xs'
+                : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+            )}
+          >
+            <Users className="size-3.5" />
+            <span>Members & Roles</span>
+            {department.memberCount !== null && department.memberCount !== undefined && (
+              <Badge
+                variant="secondary"
+                className={cn(
+                  'rounded-full text-[10px] px-1.5 py-0',
+                  activeTab === 'members' && 'bg-primary-foreground/20 text-primary-foreground'
+                )}
+              >
+                {department.memberCount}
+              </Badge>
+            )}
+          </button>
+        )}
+
+        <button
+          type="button"
+          onClick={() => setActiveTab('activity')}
+          className={cn(
+            'flex items-center gap-2 px-3.5 py-1.5 rounded-xl text-xs font-medium transition-all',
+            activeTab === 'activity'
+              ? 'bg-primary text-primary-foreground shadow-xs'
+              : 'text-muted-foreground hover:text-foreground hover:bg-muted/50'
+          )}
+        >
+          <Activity className="size-3.5" />
+          <span>Activity Feed</span>
+          {activityData && (
+            <Badge
+              variant="secondary"
+              className={cn(
+                'rounded-full text-[10px] px-1.5 py-0',
+                activeTab === 'activity' && 'bg-primary-foreground/20 text-primary-foreground'
+              )}
+            >
+              {activityData.totalElements}
+            </Badge>
+          )}
+        </button>
+      </div>
+
+      {/* Tab 1: Documents Section */}
+      {activeTab === 'documents' && (
+        <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs space-y-4">
+          <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+            <div>
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <span>Department Documents</span>
+                {docs && (
+                  <Badge variant="secondary" className="rounded-full text-[11px] px-2 py-0">
+                    {docs.totalElements}
+                  </Badge>
+                )}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Controlled documents registered under {department.code}.
+              </p>
+            </div>
+
+            {/* Search and Filters */}
+            <div className="flex flex-wrap items-center gap-2">
+              <div className="relative w-48 sm:w-56">
+                <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                <Input
+                  placeholder="Search documents…"
+                  value={docSearch}
+                  onChange={(e) => handleSearchChange(e.target.value)}
+                  className="pl-8 text-xs h-8 rounded-lg border-border/40"
+                />
+              </div>
+              <Select value={typeFilter} onValueChange={handleTypeChange}>
+                <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
+                  <SelectValue placeholder="Type" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/40 shadow-xl">
+                  <SelectItem value="ALL" className="text-xs">
+                    All Types
+                  </SelectItem>
+                  {types.map((t) => (
+                    <SelectItem key={t.id} value={t.code} className="text-xs">
+                      {t.code}
+                      {!t.active && ' (inactive)'}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <Select value={statusFilter} onValueChange={handleStatusChange}>
+                <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent className="rounded-xl border-border/40 shadow-xl">
+                  <SelectItem value="ALL" className="text-xs">
+                    All Statuses
+                  </SelectItem>
+                  {DOCUMENT_STATUSES.map((st) => (
+                    <SelectItem key={st} value={st} className="text-xs">
+                      {st.replace('_', ' ').toUpperCase()}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              {hasActiveFilters && (
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  onClick={handleClearFilters}
+                  className="h-8 gap-1 text-xs text-muted-foreground hover:text-foreground"
+                >
+                  <X className="size-3.5" />
+                  <span>Clear filters</span>
+                </Button>
+              )}
+            </div>
+          </div>
+
+          <div className="rounded-xl border border-border/40 overflow-hidden">
+            <Table>
+              <TableHeader>
+                <TableRow className="border-border/40 hover:bg-transparent">
+                  <TableHead className="w-9 px-2" />
+                  <TableHead
+                    className="w-36 text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    onClick={() => handleSort('number')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Number</span>
+                      {sortField === 'number' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                      ) : (
+                        <ArrowUpDown className="size-3 text-muted-foreground/40" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    onClick={() => handleSort('name')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Title</span>
+                      {sortField === 'name' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                      ) : (
+                        <ArrowUpDown className="size-3 text-muted-foreground/40" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead
+                    className="w-28 text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    onClick={() => handleSort('status')}
+                  >
+                    <div className="flex items-center gap-1">
+                      <span>Status</span>
+                      {sortField === 'status' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                      ) : (
+                        <ArrowUpDown className="size-3 text-muted-foreground/40" />
+                      )}
+                    </div>
+                  </TableHead>
+                  <TableHead className="w-32 text-xs font-semibold">Progress</TableHead>
+                  <TableHead className="w-24 text-xs font-semibold">Type</TableHead>
+                  <TableHead className="w-32 text-xs font-semibold">Owner</TableHead>
+                  <TableHead
+                    className="w-32 text-right text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    onClick={() => handleSort('updated')}
+                  >
+                    <div className="flex items-center justify-end gap-1">
+                      <span>Updated</span>
+                      {sortField === 'updated' ? (
+                        sortOrder === 'asc' ? <ArrowUp className="size-3" /> : <ArrowDown className="size-3" />
+                      ) : (
+                        <ArrowUpDown className="size-3 text-muted-foreground/40" />
+                      )}
+                    </div>
+                  </TableHead>
+                </TableRow>
+              </TableHeader>
+              <TableBody>
+                {(docs?.content ?? []).map((doc) => (
+                  <TableRow key={doc.id} className="border-border/30 hover:bg-muted/40 transition-colors">
+                    <TableCell className="w-9 px-2">
+                      <button
+                        type="button"
+                        onClick={(e) => {
+                          e.preventDefault();
+                          handleToggleFavorite(doc);
+                        }}
+                        className="p-1 rounded hover:bg-muted/80 transition-colors"
+                        title={doc.isFavorite ? 'Remove from favorites' : 'Mark as favorite'}
+                      >
+                        <Star
+                          className={cn(
+                            'size-3.5 transition-colors',
+                            doc.isFavorite
+                              ? 'fill-amber-400 text-amber-400'
+                              : 'text-muted-foreground/30 hover:text-amber-400'
+                          )}
+                        />
+                      </button>
+                    </TableCell>
+                    <TableCell className="font-mono text-xs font-semibold">
+                      <Link
+                        to={`/departments/${department.id}/documents/${doc.id}`}
+                        className="text-primary hover:underline"
+                      >
+                        {doc.documentNumber}
+                      </Link>
+                    </TableCell>
+                    <TableCell className="text-xs font-medium text-foreground">
+                      {doc.name}
+                    </TableCell>
+                    <TableCell>
+                      <StatusBadge status={doc.status as StatusBadgeKind}>
+                        {doc.status}
+                      </StatusBadge>
+                    </TableCell>
+                    <TableCell>
+                      {doc.revisionStatus === 'IN_REVIEW' && (
+                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
+                          v{doc.revisionVersionNumber} in review
+                        </span>
+                      )}
+                      {doc.revisionStatus === 'DRAFT' && (
+                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
+                          v{doc.revisionVersionNumber} draft
+                        </span>
+                      )}
+                      {doc.revisionStatus === 'RE_APPROVAL' && (
+                        <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30 whitespace-nowrap">
+                          re-approval
+                        </span>
+                      )}
+                      {!doc.revisionStatus && (
+                        <span className="text-muted-foreground/40 text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground font-mono">
+                      {doc.documentTypeCode || '—'}
+                    </TableCell>
+                    <TableCell className="text-xs text-muted-foreground">
+                      {doc.ownerName}
+                    </TableCell>
+                    <TableCell className="text-right text-xs text-muted-foreground">
+                      {new Date(doc.updatedAt).toLocaleDateString(undefined, {
+                        year: 'numeric',
+                        month: 'short',
+                        day: 'numeric',
+                      })}
+                    </TableCell>
+                  </TableRow>
+                ))}
+
+                {(docs?.content.length ?? 0) === 0 && (
+                  <TableRow>
+                    <TableCell colSpan={8} className="py-10 text-center">
+                      <EmptyState
+                        icon={FileText}
+                        message={
+                          hasActiveFilters
+                            ? 'No documents match the specified filters.'
+                            : 'No documents in this department yet.'
+                        }
+                        cta={
+                          hasActiveFilters ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 text-xs rounded-xl gap-1"
+                              onClick={handleClearFilters}
+                            >
+                              <X className="size-3.5" />
+                              <span>Clear all filters</span>
+                            </Button>
+                          ) : canCreateHere ? (
+                            <Button
+                              size="sm"
+                              variant="outline"
+                              className="mt-2 text-xs rounded-xl"
+                              onClick={openCreateModal}
+                            >
+                              Create First Document
+                            </Button>
+                          ) : undefined
+                        }
+                      />
+                    </TableCell>
+                  </TableRow>
+                )}
+              </TableBody>
+            </Table>
+          </div>
+
+          {/* Pagination Controls */}
+          {totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-xs text-muted-foreground">
+                Showing page {page + 1} of {totalPages} ({docs?.totalElements} total)
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  disabled={page === 0 || loadingDocs}
+                  onClick={() => setPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="size-3.5" />
+                  <span>Previous</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  disabled={page >= totalPages - 1 || loadingDocs}
+                  onClick={() => setPage((p) => p + 1)}
+                >
+                  <span>Next</span>
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {/* Tab 2: Members Panel (for Managers & Admins) */}
+      {activeTab === 'members' && canManage && (
         <DepartmentMembersPanel
           departmentId={departmentId}
           departmentCode={department.code}
+          onMemberChange={loadDepartment}
         />
       )}
 
-      {/* Documents Section */}
-      <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs space-y-4">
-        <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-3">
-          <div>
-            <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
-              <span>Department Documents</span>
-              {docs && (
-                <Badge variant="secondary" className="rounded-full text-[11px] px-2 py-0">
-                  {docs.totalElements}
-                </Badge>
-              )}
-            </h2>
-            <p className="text-xs text-muted-foreground mt-0.5">
-              Controlled documents registered under {department.code}.
-            </p>
+      {/* Tab 3: Department Activity Feed */}
+      {activeTab === 'activity' && (
+        <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs space-y-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h2 className="text-base font-semibold text-foreground flex items-center gap-2">
+                <span>Department Activity Log</span>
+                {activityData && (
+                  <Badge variant="secondary" className="rounded-full text-[11px] px-2 py-0">
+                    {activityData.totalElements}
+                  </Badge>
+                )}
+              </h2>
+              <p className="text-xs text-muted-foreground mt-0.5">
+                Audit trail of document changes and actions in {department.code}.
+              </p>
+            </div>
           </div>
 
-          {/* Search and Filters */}
-          <div className="flex flex-wrap items-center gap-2">
-            <div className="relative w-48 sm:w-56">
-              <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
-              <Input
-                placeholder="Search documents…"
-                value={docSearch}
-                onChange={(e) => handleSearchChange(e.target.value)}
-                className="pl-8 text-xs h-8 rounded-lg border-border/40"
+          {activityError && (
+            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+              {activityError}
+            </div>
+          )}
+
+          {loadingActivity && !activityData ? (
+            <div className="py-10 text-center text-xs text-muted-foreground">
+              Loading activity log…
+            </div>
+          ) : (activityData?.content.length ?? 0) === 0 ? (
+            <div className="py-10 text-center">
+              <EmptyState
+                icon={Activity}
+                message="No recent activity recorded for this department."
               />
             </div>
-            <Select value={typeFilter} onValueChange={handleTypeChange}>
-              <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
-                <SelectValue placeholder="Type" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/40 shadow-xl">
-                <SelectItem value="ALL" className="text-xs">
-                  All Types
-                </SelectItem>
-                {types.map((t) => (
-                  <SelectItem key={t.id} value={t.code} className="text-xs">
-                    {t.code}
-                    {!t.active && ' (inactive)'}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-            <Select value={statusFilter} onValueChange={handleStatusChange}>
-              <SelectTrigger className="h-8 w-32 text-xs rounded-lg border-border/40">
-                <SelectValue placeholder="Status" />
-              </SelectTrigger>
-              <SelectContent className="rounded-xl border-border/40 shadow-xl">
-                <SelectItem value="ALL" className="text-xs">
-                  All Statuses
-                </SelectItem>
-                {DOCUMENT_STATUSES.map((st) => (
-                  <SelectItem key={st} value={st} className="text-xs">
-                    {st.replace('_', ' ').toUpperCase()}
-                  </SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
-        </div>
-
-        <div className="rounded-xl border border-border/40 overflow-hidden">
-          <Table>
-            <TableHeader>
-              <TableRow className="border-border/40 hover:bg-transparent">
-                <TableHead className="w-36 text-xs font-semibold">Number</TableHead>
-                <TableHead className="text-xs font-semibold">Title</TableHead>
-                <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
-                <TableHead className="w-32 text-xs font-semibold">Progress</TableHead>
-                <TableHead className="w-24 text-xs font-semibold">Type</TableHead>
-                <TableHead className="w-32 text-xs font-semibold">Owner</TableHead>
-                <TableHead className="w-32 text-right text-xs font-semibold">Updated</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {(docs?.content ?? []).map((doc) => (
-                <TableRow key={doc.id} className="border-border/30 hover:bg-muted/40 transition-colors">
-                  <TableCell className="font-mono text-xs font-semibold">
-                    <Link
-                      to={`/departments/${department.id}/documents/${doc.id}`}
-                      className="text-primary hover:underline"
-                    >
-                      {doc.documentNumber}
-                    </Link>
-                  </TableCell>
-                  <TableCell className="text-xs font-medium text-foreground">
-                    {doc.name}
-                  </TableCell>
-                  <TableCell>
-                    <StatusBadge status={doc.status as StatusBadgeKind}>
-                      {doc.status}
-                    </StatusBadge>
-                  </TableCell>
-                  <TableCell>
-                    {doc.revisionStatus === 'IN_REVIEW' && (
-                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
-                        v{doc.revisionVersionNumber} in review
-                      </span>
-                    )}
-                    {doc.revisionStatus === 'DRAFT' && (
-                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                        v{doc.revisionVersionNumber} draft
-                      </span>
-                    )}
-                    {doc.revisionStatus === 'RE_APPROVAL' && (
-                      <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30 whitespace-nowrap">
-                        re-approval
-                      </span>
-                    )}
-                    {!doc.revisionStatus && (
-                      <span className="text-muted-foreground/40 text-xs">—</span>
-                    )}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground font-mono">
-                    {doc.documentTypeCode || '—'}
-                  </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
-                    {doc.ownerName}
-                  </TableCell>
-                  <TableCell className="text-right text-xs text-muted-foreground">
-                    {new Date(doc.updatedAt).toLocaleDateString(undefined, {
-                      year: 'numeric',
-                      month: 'short',
-                      day: 'numeric',
-                    })}
-                  </TableCell>
-                </TableRow>
-              ))}
-
-              {(docs?.content.length ?? 0) === 0 && (
-                <TableRow>
-                  <TableCell colSpan={7} className="py-10 text-center">
-                    <EmptyState
-                      icon={FileText}
-                      message={
-                        docSearch || statusFilter !== 'ALL' || typeFilter !== 'ALL'
-                          ? 'No documents match the specified filters.'
-                          : 'No documents in this department yet.'
-                      }
-                      cta={
-                        canCreateHere && !docSearch && statusFilter === 'ALL' && typeFilter === 'ALL' ? (
-                          <Button
-                            size="sm"
-                            variant="outline"
-                            className="mt-2 text-xs rounded-xl"
-                            onClick={openCreateModal}
-                          >
-                            Create First Document
-                          </Button>
-                        ) : undefined
-                      }
-                    />
-                  </TableCell>
-                </TableRow>
-              )}
-            </TableBody>
-          </Table>
-        </div>
-
-        {/* Pagination Controls */}
-        {totalPages > 1 && (
-          <div className="flex items-center justify-between pt-2">
-            <div className="text-xs text-muted-foreground">
-              Showing page {page + 1} of {totalPages} ({docs?.totalElements} total)
+          ) : (
+            <div className="rounded-xl border border-border/40 overflow-hidden">
+              <Table>
+                <TableHeader>
+                  <TableRow className="border-border/40 hover:bg-transparent">
+                    <TableHead className="w-44 text-xs font-semibold">When</TableHead>
+                    <TableHead className="w-48 text-xs font-semibold">User</TableHead>
+                    <TableHead className="text-xs font-semibold">Action</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {activityData?.content.map((entry) => (
+                    <TableRow key={entry.id} className="border-border/30 hover:bg-muted/40 transition-colors">
+                      <TableCell className="text-xs text-muted-foreground font-mono">
+                        {new Date(entry.performedAt).toLocaleString()}
+                      </TableCell>
+                      <TableCell className="text-xs font-medium text-foreground">
+                        <div>{entry.actorName}</div>
+                        {entry.actorEmail && (
+                          <div className="text-[11px] text-muted-foreground font-normal">
+                            {entry.actorEmail}
+                          </div>
+                        )}
+                      </TableCell>
+                      <TableCell className="text-xs text-foreground">
+                        <ActivitySentence entry={entry} />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
             </div>
-            <div className="flex items-center gap-1.5">
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs rounded-lg gap-1"
-                disabled={page === 0 || loadingDocs}
-                onClick={() => setPage((p) => Math.max(0, p - 1))}
-              >
-                <ChevronLeft className="size-3.5" />
-                <span>Previous</span>
-              </Button>
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 px-2.5 text-xs rounded-lg gap-1"
-                disabled={page >= totalPages - 1 || loadingDocs}
-                onClick={() => setPage((p) => p + 1)}
-              >
-                <span>Next</span>
-                <ChevronRight className="size-3.5" />
-              </Button>
+          )}
+
+          {/* Activity Pagination */}
+          {activityData && activityData.totalPages > 1 && (
+            <div className="flex items-center justify-between pt-2">
+              <div className="text-xs text-muted-foreground">
+                Showing page {actPage + 1} of {activityData.totalPages} ({activityData.totalElements} total)
+              </div>
+              <div className="flex items-center gap-1.5">
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  disabled={actPage === 0 || loadingActivity}
+                  onClick={() => setActPage((p) => Math.max(0, p - 1))}
+                >
+                  <ChevronLeft className="size-3.5" />
+                  <span>Previous</span>
+                </Button>
+                <Button
+                  variant="outline"
+                  size="sm"
+                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  disabled={actPage >= activityData.totalPages - 1 || loadingActivity}
+                  onClick={() => setActPage((p) => p + 1)}
+                >
+                  <span>Next</span>
+                  <ChevronRight className="size-3.5" />
+                </Button>
+              </div>
             </div>
-          </div>
-        )}
-      </Card>
+          )}
+        </Card>
+      )}
 
       {/* In-Place Create Document Drawer / Sheet */}
       <Sheet open={createOpen} onOpenChange={setCreateOpen}>

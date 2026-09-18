@@ -45,6 +45,14 @@ public class DepartmentAccessService {
         return userDepartmentRepository.findLevelByUserIdAndDepartmentId(userId, departmentId);
     }
 
+    /** Viewing department details and activity: members or admins. */
+    public boolean canAccess(Integer departmentId) {
+        if (currentUserProvider.isAdmin()) {
+            return true;
+        }
+        return levelOfCurrentUser(departmentId).isPresent();
+    }
+
     /** Creating documents in the department: everything except CONSUMER. */
     public boolean canCreate(Integer departmentId) {
         if (currentUserProvider.isAdmin()) {

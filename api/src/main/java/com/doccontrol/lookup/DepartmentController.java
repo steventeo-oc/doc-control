@@ -42,17 +42,20 @@ public class DepartmentController {
     public List<DepartmentDto> list(
             @RequestParam(value = "includeInactive", required = false, defaultValue = "false")
             boolean includeInactive) {
-        return (includeInactive
-                ? departmentRepository.findAllByOrderByCodeAsc()
-                : departmentRepository.findAllByActiveTrueOrderByCodeAsc())
-                .stream()
-                .map(DepartmentDto::from)
-                .toList();
+        return departmentService.listWithCounts(includeInactive);
     }
 
     @GetMapping("/{id}")
     public DepartmentDto get(@PathVariable Integer id) {
         return departmentService.get(id);
+    }
+
+    @GetMapping("/{id}/activity")
+    public com.doccontrol.audit.AuditLogQueryService.AuditLogPageDto activity(
+            @PathVariable Integer id,
+            @RequestParam(name = "page", defaultValue = "0") int page,
+            @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
+        return departmentService.activity(id, page, pageSize);
     }
 
     @GetMapping("/{id}/usage")

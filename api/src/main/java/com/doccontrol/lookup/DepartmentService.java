@@ -36,6 +36,7 @@ public class DepartmentService {
     private final DepartmentAccessService departmentAccessService;
     private final AuditService auditService;
     private final com.doccontrol.identity.UserRepository userRepository;
+    private final com.doccontrol.audit.AuditLogQueryService auditLogQueryService;
 
     public DepartmentService(DepartmentRepository departmentRepository,
                              DocumentRepository documentRepository,
@@ -43,7 +44,8 @@ public class DepartmentService {
                              DocumentSequenceCounterRepository documentSequenceCounterRepository,
                              DepartmentAccessService departmentAccessService,
                              AuditService auditService,
-                             com.doccontrol.identity.UserRepository userRepository) {
+                             com.doccontrol.identity.UserRepository userRepository,
+                             com.doccontrol.audit.AuditLogQueryService auditLogQueryService) {
         this.departmentRepository = departmentRepository;
         this.documentRepository = documentRepository;
         this.userDepartmentRepository = userDepartmentRepository;
@@ -51,6 +53,7 @@ public class DepartmentService {
         this.departmentAccessService = departmentAccessService;
         this.auditService = auditService;
         this.userRepository = userRepository;
+        this.auditLogQueryService = auditLogQueryService;
     }
 
     @Transactional
@@ -99,7 +102,33 @@ public class DepartmentService {
 
     @Transactional(readOnly = true)
     public DepartmentDto get(Integer id) {
-        return DepartmentDto.from(requireDepartment(id));
+        Department dept = requireDepartment(id);
+        long docCount = documentRepository.countByDepartmentId(id);
+        long memberCount = userDepartmentRepository.countActiveUsersByDepartmentId(id);
+        return DepartmentDto.of(dept, docCount, memberCount);
+    }
+
+    /** Lists departments enriched with live document and member counts. */
+    @Transactional(readOnly = true)
+    public List<DepartmentDto> listWithCounts(boolean includeInactive) {
+        List<Department> departments = includeInactive
+                ? departmentRepository.findAllByOrderByCodeAsc()
+                : departmentRepository.findAllByActiveTrueOrderByCodeAsc();
+        return departments.stream().map(d -> {
+            long docCount = documentRepository.countByDepartmentId(d.getId());
+            long memberCount = userDepartmentRepository.countActiveUsersByDepartmentId(d.getId());
+            return DepartmentDto.of(d, docCount, memberCount);
+        }).toList();
+    }
+
+    /** Department-scoped activity audit trail. */
+    @Transactional(readOnly = true)
+    public com.doccontrol.audit.AuditLogQueryService.AuditLogPageDto activity(Integer id, int page, int pageSize) {
+        requireDepartment(id);
+        if (!departmentAccessService.canAccess(id)) {
+            throw new ForbiddenException("You do not have access to department " + id + ".");
+        }
+        return auditLogQueryService.queryForDepartment(id, page, pageSize);
     }
 
     /** Counts powering the deactivate confirmation (plan-back F1). */

@@ -98,6 +98,22 @@ public class AuditLogQueryService {
     }
 
     /**
+     * Department-specific audit log query for the department activity tab.
+     */
+    @Transactional(readOnly = true)
+    public AuditLogPageDto queryForDepartment(Integer departmentId, int page, int pageSize) {
+        Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE),
+                Sort.by(Sort.Direction.DESC, "performedAt", "id"));
+        Specification<AuditLog> spec = (root, q, cb) -> cb.or(
+                cb.equal(root.get("departmentId"), departmentId),
+                cb.and(cb.equal(root.get("entityType"), "DEPARTMENT"), cb.equal(root.get("entityId"), departmentId))
+        );
+        Page<AuditLog> result = auditLogRepository.findAll(spec, pageable);
+        Map<Integer, String> codes = departmentCodesFor(result.getContent());
+        return AuditLogPageDto.from(result.map(entry -> toDto(entry, codes)));
+    }
+
+    /**
      * Unpaged rows for the admin CSV export (activity plan-back section 1).
      * Admin-only here as well as at the route — the same 403 rule as
      * company scope, enforced no matter who calls.

@@ -66,20 +66,20 @@ export default function DepartmentsPage() {
   const [deleting, setDeleting] = useState(false);
 
   const load = useCallback(() => {
-    if (isAdmin) {
-      lookupApi
-        .departments(true)
-        .then(setAll)
-        .catch((err: Error) => setError(err.message));
-    }
+    lookupApi
+      .departments(isAdmin)
+      .then(setAll)
+      .catch((err: Error) => setError(err.message));
   }, [isAdmin]);
 
   useEffect(load, [load]);
 
   const departments: Department[] = useMemo(() => {
     const list = isAdmin
-      ? all ?? []
-      : user?.departments.slice().sort((a, b) => a.code.localeCompare(b.code)) ?? [];
+      ? (all ?? [])
+      : (all ? all.filter((d) => user?.departments.some((ud) => ud.id === d.id)) : (user?.departments ?? []))
+          .slice()
+          .sort((a, b) => a.code.localeCompare(b.code));
     if (!search.trim()) return list;
     const q = search.trim().toLowerCase();
     return list.filter(
@@ -243,7 +243,9 @@ export default function DepartmentsPage() {
             <TableRow className="border-border/40 hover:bg-transparent">
               <TableHead className="w-28 text-xs font-semibold">Code</TableHead>
               <TableHead className="text-xs font-semibold">Label</TableHead>
-              <TableHead className="w-28 text-xs font-semibold">Status</TableHead>
+              <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
+              <TableHead className="w-28 text-xs font-semibold">Documents</TableHead>
+              <TableHead className="w-24 text-xs font-semibold">Members</TableHead>
               {isAdmin && <TableHead className="w-48 text-right text-xs font-semibold">Actions</TableHead>}
             </TableRow>
           </TableHeader>
@@ -277,6 +279,16 @@ export default function DepartmentsPage() {
                       Inactive
                     </Badge>
                   )}
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-foreground">
+                    {d.documentCount ?? 0}
+                  </span>
+                </TableCell>
+                <TableCell>
+                  <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-medium bg-muted text-foreground">
+                    {d.memberCount ?? 0}
+                  </span>
                 </TableCell>
                 {isAdmin && (
                   <TableCell className="text-right">
@@ -315,7 +327,7 @@ export default function DepartmentsPage() {
 
             {departments.length === 0 && (
               <TableRow>
-                <TableCell colSpan={isAdmin ? 4 : 3} className="py-8 text-center">
+                <TableCell colSpan={isAdmin ? 6 : 5} className="py-8 text-center">
                   <EmptyState
                     icon={Building2}
                     message={

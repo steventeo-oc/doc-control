@@ -5,6 +5,8 @@ export interface Department {
   code: string;
   label: string;
   active: boolean;
+  documentCount?: number | null;
+  memberCount?: number | null;
 }
 
 export interface DocumentTier {

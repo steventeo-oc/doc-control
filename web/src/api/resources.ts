@@ -72,6 +72,13 @@ export const lookupApi = {
     api.delete(`/departments/${id}/members/${userId}`),
   updateDepartmentMember: (id: number, userId: number, level: MembershipLevel) =>
     api.patch<DepartmentMember>(`/departments/${id}/members/${userId}`, { level }),
+  departmentActivity: (id: number, params?: { page?: number; pageSize?: number }) => {
+    const q = new URLSearchParams();
+    if (params?.page !== undefined) q.set('page', String(params.page));
+    if (params?.pageSize !== undefined) q.set('page_size', String(params.pageSize));
+    const qs = q.toString() ? `?${q.toString()}` : '';
+    return api.get<AuditLogPage>(`/departments/${id}/activity${qs}`);
+  },
 };
 
 export const documentApi = {

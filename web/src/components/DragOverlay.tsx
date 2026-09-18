@@ -14,7 +14,7 @@ export interface DragOverlayProps {
 export function DragOverlay({ title, containerLabel, x, y }: DragOverlayProps) {
   return (
     <div
-      className="fixed pointer-events-none z-50 rounded-xl bg-card/95 border-2 border-primary shadow-2xl px-4 py-2.5 flex items-center gap-2.5 backdrop-blur-md -translate-x-1/2 -translate-y-1/2 select-none"
+      className="fixed pointer-events-none z-50 rounded-xl bg-card/98 border-2 border-primary shadow-2xl px-4 py-2.5 flex items-center gap-2.5 -translate-x-1/2 -translate-y-1/2 select-none"
       style={{ left: x, top: y }}
     >
       <GripVertical className="size-4 text-primary animate-pulse" />

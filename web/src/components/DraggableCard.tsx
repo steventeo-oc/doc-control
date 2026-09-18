@@ -49,7 +49,7 @@ export function DraggableCard({
       )}
     >
       {isCustomizing && (
-        <div className="mb-2 flex items-center justify-between rounded-xl bg-muted/80 px-3 py-1.5 text-xs text-muted-foreground border border-border/40 backdrop-blur-xs select-none">
+        <div className="mb-2 flex items-center justify-between rounded-xl bg-muted/95 px-3 py-1.5 text-xs text-muted-foreground border border-border/60 select-none shadow-xs">
           {/* Drag Handle */}
           <div
             className="flex items-center gap-1.5 text-foreground/80 hover:text-foreground cursor-grab active:cursor-grabbing touch-none py-1 px-1 -ml-1 rounded-md hover:bg-accent/60 transition-colors"

@@ -157,7 +157,7 @@ export function DocumentPreviewViewer({
 
       <div className="relative w-full bg-slate-100/40 dark:bg-muted/15 p-1.5 sm:p-2" style={{ height }}>
         {loading && (
-          <div className="absolute inset-2 sm:inset-3 flex flex-col items-center justify-center gap-2.5 bg-background/85 rounded-lg border border-border/30 backdrop-blur-xs z-10">
+          <div className="absolute inset-2 sm:inset-3 flex flex-col items-center justify-center gap-2.5 bg-background/95 rounded-lg border border-border/30 z-10">
             <div className="size-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
             <span className="text-xs text-muted-foreground font-medium">Rendering document preview…</span>
           </div>
@@ -406,7 +406,7 @@ export default function DocumentPreviewModal({
 
         <div className="flex-1 w-full bg-slate-100/40 dark:bg-muted/15 p-2 sm:p-3 relative overflow-hidden flex flex-col">
           {loading && (
-            <div className="absolute inset-2 sm:inset-3 flex flex-col items-center justify-center gap-2.5 bg-background/85 rounded-xl border border-border/30 backdrop-blur-xs z-10">
+            <div className="absolute inset-2 sm:inset-3 flex flex-col items-center justify-center gap-2.5 bg-background/95 rounded-xl border border-border/30 z-10">
               <div className="size-7 border-2 border-primary border-t-transparent rounded-full animate-spin" />
               <span className="text-xs text-muted-foreground font-medium">Loading document preview…</span>
             </div>

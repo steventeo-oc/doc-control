@@ -5,6 +5,8 @@ import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserDepartmentRepository;
 import com.doccontrol.lookup.DepartmentRepository;
 import com.doccontrol.security.CurrentUserProvider;
+import com.doccontrol.document.DocumentVersionRepository;
+import com.doccontrol.workflow.WorkflowInstanceRepository;
 import org.springframework.data.domain.Page;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
@@ -15,6 +17,7 @@ import org.springframework.transaction.annotation.Transactional;
 
 import java.time.LocalDate;
 import java.time.LocalDateTime;
+import java.util.HashMap;
 import java.util.List;
 import java.util.Map;
 import java.util.stream.Collectors;
@@ -69,15 +72,21 @@ public class AuditLogQueryService {
     private final UserDepartmentRepository userDepartmentRepository;
     private final DepartmentRepository departmentRepository;
     private final CurrentUserProvider currentUserProvider;
+    private final WorkflowInstanceRepository workflowInstanceRepository;
+    private final DocumentVersionRepository documentVersionRepository;
 
     public AuditLogQueryService(AuditLogRepository auditLogRepository,
                                 UserDepartmentRepository userDepartmentRepository,
                                 DepartmentRepository departmentRepository,
-                                CurrentUserProvider currentUserProvider) {
+                                CurrentUserProvider currentUserProvider,
+                                WorkflowInstanceRepository workflowInstanceRepository,
+                                DocumentVersionRepository documentVersionRepository) {
         this.auditLogRepository = auditLogRepository;
         this.userDepartmentRepository = userDepartmentRepository;
         this.departmentRepository = departmentRepository;
         this.currentUserProvider = currentUserProvider;
+        this.workflowInstanceRepository = workflowInstanceRepository;
+        this.documentVersionRepository = documentVersionRepository;
     }
 
     /**
@@ -151,6 +160,26 @@ public class AuditLogQueryService {
     }
 
     private AuditLogDto toDto(AuditLog entry, Map<Integer, String> codes) {
+        Map<String, Object> details = entry.getDetails() == null ? new HashMap<>() : new HashMap<>(entry.getDetails());
+        if ("workflow_instance".equalsIgnoreCase(entry.getEntityType())) {
+            if (!details.containsKey("document_id") || !details.containsKey("document_number")) {
+                workflowInstanceRepository.findById(entry.getEntityId()).ifPresent(wi -> {
+                    if (wi.getDocumentVersion() != null && wi.getDocumentVersion().getDocument() != null) {
+                        details.putIfAbsent("document_id", wi.getDocumentVersion().getDocument().getId());
+                        details.putIfAbsent("document_number", wi.getDocumentVersion().getDocument().getDocumentNumber());
+                    }
+                });
+            }
+        } else if ("document_version".equalsIgnoreCase(entry.getEntityType())) {
+            if (!details.containsKey("document_id") || !details.containsKey("document_number")) {
+                documentVersionRepository.findById(entry.getEntityId()).ifPresent(dv -> {
+                    if (dv.getDocument() != null) {
+                        details.putIfAbsent("document_id", dv.getDocument().getId());
+                        details.putIfAbsent("document_number", dv.getDocument().getDocumentNumber());
+                    }
+                });
+            }
+        }
         return new AuditLogDto(
                 entry.getId(),
                 entry.getPerformedAt(),
@@ -160,7 +189,7 @@ public class AuditLogQueryService {
                 entry.getAction(),
                 entry.getEntityId(),
                 entry.getDepartmentId() == null ? null : codes.get(entry.getDepartmentId()),
-                entry.getDetails());
+                details);
     }
 
     private Specification<AuditLog> specification(User viewer, Scope scope,

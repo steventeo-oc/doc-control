@@ -16,17 +16,37 @@ function documentNumber(entry: AuditLogEntry): string | null {
   return detail(entry, 'document_number');
 }
 
+/**
+ * Resolves the underlying document ID from an audit log entry.
+ * For document rows, this is entry.entityId.
+ * For document_version, workflow_instance, and document_acknowledgment rows,
+ * the actual document ID is in entry.details.document_id.
+ */
+export function resolveDocumentId(entry: AuditLogEntry): number | null {
+  if (entry.entityType === 'document') {
+    return entry.entityId;
+  }
+  const rawDocId = entry.details?.document_id;
+  if (rawDocId !== undefined && rawDocId !== null) {
+    const parsed = Number(rawDocId);
+    if (!isNaN(parsed) && parsed > 0) return parsed;
+  }
+  return null;
+}
+
 /** Where the row navigates: the document page for document-anchored
- * activity, the department page for department rows, nothing otherwise. */
-export function activityLink(entry: AuditLogEntry): string | null {
+ * activity, the department page for department rows, nothing otherwise.
+ * If departmentId is provided, routes to /departments/:deptId/documents/:docId. */
+export function activityLink(entry: AuditLogEntry, departmentId?: number | null): string | null {
+  const docId = resolveDocumentId(entry);
+  if (docId) {
+    if (departmentId) {
+      return `/departments/${departmentId}/documents/${docId}`;
+    }
+    return `/documents/${docId}`;
+  }
+
   switch (entry.entityType) {
-    case 'document':
-    case 'document_version':
-    case 'workflow_instance':
-      return `/documents/${entry.entityId}`;
-    case 'document_acknowledgment':
-    case 'document_acknowledgment_access':
-      return `/documents/${entry.entityId}`;
     case 'department':
       return `/departments/${entry.entityId}`;
     default:
@@ -37,6 +57,7 @@ export function activityLink(entry: AuditLogEntry): string | null {
 export function activitySummary(entry: AuditLogEntry): string {
   const doc = documentNumber(entry);
   const at = (text: string) => (doc ? `${text} ${doc}` : text);
+
   switch (`${entry.entityType}/${entry.action}`) {
     case 'document/created':
       return at('Created document');
@@ -52,15 +73,40 @@ export function activitySummary(entry: AuditLogEntry): string {
       return at('Reset the review clock on');
     case 'document/review_reset_scheduled':
       return at('Scheduled a review reset for');
+    case 'document/favorited':
+      return doc ? `Marked ${doc} as favorite` : 'Marked document as favorite';
+    case 'document/unfavorited':
+      return doc ? `Removed ${doc} from favorites` : 'Removed document from favorites';
+    case 'document/reactivated':
+      return doc ? `Reactivated ${doc}` : 'Reactivated document';
+    case 'document/obsoleted': {
+      const reason = detail(entry, 'reason');
+      const suffix = reason ? ` (${reason})` : '';
+      return doc ? `Marked ${doc} as obsolete${suffix}` : `Marked document as obsolete${suffix}`;
+    }
+    case 'document/draft_discarded':
+      return doc ? `Discarded draft for ${doc}` : 'Discarded document draft';
+
     case 'document_version/created': {
       const version = detail(entry, 'version_number');
       const label = doc ? `${doc} v${version ?? '?'}` : `version ${version ?? ''}`;
       return `Uploaded ${label}`;
     }
     case 'document_version/original_downloaded':
-      return at('Downloaded the original of');
+      return at('Downloaded original of');
     case 'document_version/superseded_before_effective':
       return at('Superseded a pending version of');
+    case 'document_version/draft_discarded': {
+      const ver = detail(entry, 'version_number');
+      const label = doc ? `${doc}${ver ? ` v${ver}` : ''}` : (ver ? `v${ver}` : 'draft');
+      return `Discarded draft version for ${label}`;
+    }
+    case 'document_version/restored_from_version': {
+      const src = detail(entry, 'source_version_number');
+      const label = doc ? `${doc}` : 'document';
+      return src ? `Restored ${label} from version ${src}` : `Restored ${label} from previous version`;
+    }
+
     case 'workflow_instance/created':
       return entry.details?.kind === 'reapproval'
         ? at('Started the review re-approval of')
@@ -71,14 +117,22 @@ export function activitySummary(entry: AuditLogEntry): string {
       return at('Approved a review task for');
     case 'workflow_instance/rejected':
       return at('Rejected the approval of');
-    case 'workflow_instance/task_delegated':
-      return at('Delegated a review task for');
+    case 'workflow_instance/task_delegated': {
+      const to = detail(entry, 'to_name');
+      const target = to ? ` to ${to}` : '';
+      if (doc) {
+        return `Delegated review task for ${doc}${target}`;
+      }
+      return `Delegated review task${target}`;
+    }
+
     case 'document_acknowledgment/created':
       return at('Acknowledged');
     case 'document_acknowledgment_access/granted':
       return at('Granted acknowledgment-status visibility on');
     case 'document_acknowledgment_access/revoked':
       return at('Revoked acknowledgment-status visibility on');
+
     case 'department/created':
       return `Created department ${detail(entry, 'code') ?? `#${entry.entityId}`}`;
     case 'department/updated':
@@ -87,8 +141,18 @@ export function activitySummary(entry: AuditLogEntry): string {
       return `Deleted department ${detail(entry, 'code') ?? `#${entry.entityId}`}`;
     case 'department/member_level_changed': {
       const email = detail(entry, 'user_email');
-      return `Changed the membership level of ${email ?? 'a member'} in department #${entry.entityId}`;
+      return `Changed membership level of ${email ?? 'a member'} in department #${entry.entityId}`;
     }
+    case 'department/member_added': {
+      const name = detail(entry, 'user_name') ?? detail(entry, 'user_email') ?? 'a member';
+      const level = detail(entry, 'level');
+      return `Added ${name}${level ? ` as ${level}` : ''} to department`;
+    }
+    case 'department/member_removed': {
+      const name = detail(entry, 'user_name') ?? detail(entry, 'user_email') ?? 'a member';
+      return `Removed ${name} from department`;
+    }
+
     case 'user/created':
       return `Created user ${detail(entry, 'user_email') ?? detail(entry, 'email') ?? `#${entry.entityId}`}`;
     case 'user/updated':
@@ -100,6 +164,6 @@ export function activitySummary(entry: AuditLogEntry): string {
     case 'daily_sweep/triggered':
       return `Daily sweep ran for ${detail(entry, 'date') ?? '—'} (${detail(entry, 'triggered_by') ?? 'manual'})`;
     default:
-      return doc ? `${entry.action} on ${doc}` : `${entry.entityType} ${entry.action}`;
+      return doc ? `${entry.action.replace(/_/g, ' ')} on ${doc}` : `${entry.entityType} ${entry.action.replace(/_/g, ' ')}`;
   }
 }

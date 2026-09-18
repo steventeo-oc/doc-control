@@ -865,7 +865,7 @@ export default function DepartmentDetailPage() {
                         )}
                       </TableCell>
                       <TableCell className="text-xs text-foreground">
-                        <ActivitySentence entry={entry} />
+                        <ActivitySentence entry={entry} departmentId={department.id} />
                       </TableCell>
                     </TableRow>
                   ))}

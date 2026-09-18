@@ -111,6 +111,19 @@ class GraphNotificationSenderTests {
     }
 
     @Test
+    void sendsHtmlMailViaGraphWithHtmlContentType() throws Exception {
+        GraphNotificationSender sender = sender();
+        sender.sendHtml(recipient(), "Task Assigned", "Please review text", "<h1>Please review html</h1>");
+
+        assertThat(sendMailRequests).hasSize(1);
+        JsonNode message = new ObjectMapper().readTree(sendMailRequests.get(0).getValue());
+        assertThat(message.path("message").path("subject").asText()).isEqualTo("Task Assigned");
+        assertThat(message.path("message").path("body").path("contentType").asText()).isEqualTo("HTML");
+        assertThat(message.path("message").path("body").path("content").asText())
+                .isEqualTo("<h1>Please review html</h1>");
+    }
+
+    @Test
     void graphErrorsPropagateToTheCaller() throws Exception {
         sendMailStatus = 500;
         assertThatThrownBy(() -> sender().send(recipient(), "Reminder", "Body"))

@@ -69,6 +69,7 @@ public class WorkflowService {
     private final DepartmentAccessService departmentAccessService;
     private final NotificationSender notificationSender;
     private final AcknowledgmentService acknowledgmentService;
+    private final WorkflowNotificationService workflowNotificationService;
 
     public WorkflowService(RuntimeService runtimeService, TaskService taskService,
                            HistoryService historyService,
@@ -80,7 +81,8 @@ public class WorkflowService {
                            CurrentUserProvider currentUserProvider,
                            DepartmentAccessService departmentAccessService,
                            NotificationSender notificationSender,
-                           AcknowledgmentService acknowledgmentService) {
+                           AcknowledgmentService acknowledgmentService,
+                           WorkflowNotificationService workflowNotificationService) {
         this.runtimeService = runtimeService;
         this.taskService = taskService;
         this.historyService = historyService;
@@ -95,6 +97,7 @@ public class WorkflowService {
         this.departmentAccessService = departmentAccessService;
         this.notificationSender = notificationSender;
         this.acknowledgmentService = acknowledgmentService;
+        this.workflowNotificationService = workflowNotificationService;
     }
 
     @Transactional
@@ -131,6 +134,13 @@ public class WorkflowService {
                 "document_number", document.getDocumentNumber(),
                 "version_number", version.getVersionNumber(),
                 "assignees", slots.descriptions()), document.getDepartment());
+
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .processInstanceId(processInstance.getId())
+                .active()
+                .list();
+        workflowNotificationService.notifyReviewersOfNewTask(instance, activeTasks, document, version,
+                instance.getStartedBy());
 
         return toDto(instance);
     }
@@ -178,6 +188,13 @@ public class WorkflowService {
                 "version_number", version.getVersionNumber(),
                 "kind", WorkflowInstanceKind.REAPPROVAL.getValue(),
                 "assignees", slots.descriptions()), document.getDepartment());
+
+        List<Task> activeTasks = taskService.createTaskQuery()
+                .processInstanceId(processInstance.getId())
+                .active()
+                .list();
+        workflowNotificationService.notifyReviewersOfNewTask(instance, activeTasks, document, version,
+                instance.getStartedBy());
 
         return toDto(instance);
     }
@@ -247,7 +264,12 @@ public class WorkflowService {
         }
         WorkflowInstance instance = inProgress.get(0);
 
+        List<Task> pendingTasks = List.of();
         if (instance.getProcessInstanceId() != null) {
+            pendingTasks = taskService.createTaskQuery()
+                    .processInstanceId(instance.getProcessInstanceId())
+                    .active()
+                    .list();
             runtimeService.deleteProcessInstance(instance.getProcessInstanceId(),
                     "Cancelled by " + currentUserProvider.getCurrentUser().getEmail());
         }
@@ -256,12 +278,18 @@ public class WorkflowService {
         instance.setCompletedAt(LocalDateTime.now());
         instanceRepository.save(instance);
 
+        User me = currentUserProvider.getCurrentUser();
         auditService.record("workflow_instance", instance.getId(), "cancelled", Map.of(
                 "document_number", document.getDocumentNumber(),
                 "version_number", instance.getDocumentVersion().getVersionNumber(),
-                "cancelled_by", currentUserProvider.getCurrentUserId(),
-                "cancelled_by_name", currentUserProvider.getCurrentUser().getName(),
+                "cancelled_by", me.getId(),
+                "cancelled_by_name", me.getName(),
                 "kind", instance.getKind().getValue()), document.getDepartment());
+
+        if (!pendingTasks.isEmpty()) {
+            workflowNotificationService.notifyReviewersOfCancellation(
+                    instance, document, instance.getDocumentVersion(), me, pendingTasks);
+        }
     }
 
     /** Returns feedback (rejection or cancellation) for the latest workflow run on this document, if any. */
@@ -427,6 +455,10 @@ public class WorkflowService {
                         "effective_at", deferred
                                 ? requestedEffectiveDate.toString()
                                 : today.toString()), document.getDepartment());
+
+                workflowNotificationService.notifyOwnerAndStarterOfApproval(
+                        instance, document, instance.getDocumentVersion(),
+                        deferred ? requestedEffectiveDate : today, deferred, actor);
             }
         } else {
             // 100% required: a single rejection rejects the whole approval.
@@ -444,6 +476,9 @@ public class WorkflowService {
                     "rejected_by_name", currentUserProvider.getCurrentUser().getName(),
                     "comment", comment == null ? "" : comment,
                     "kind", instance.getKind().getValue()), document.getDepartment());
+
+            workflowNotificationService.notifyOwnerAndStarterOfRejection(
+                    instance, document, instance.getDocumentVersion(), actor, comment);
         }
         return toDto(instance);
     }
@@ -490,20 +525,8 @@ public class WorkflowService {
         auditService.record("workflow_instance", instance.getId(), "task_delegated", details, document.getDepartment());
 
         // Notify the delegatee
-        String docNum = document.getDocumentNumber();
-        Integer vNum = instance.getDocumentVersion().getVersionNumber();
-        String docTitle = document.getName();
-        String subject = "Approval Task Delegated: " + docNum + " v" + vNum;
-        StringBuilder body = new StringBuilder();
-        body.append(me.getName())
-                .append(" has delegated an approval review task to you for ")
-                .append(docNum).append(" (\"").append(docTitle).append("\") v").append(vNum).append(".\n");
-        if (message != null && !message.isBlank()) {
-            body.append("\nInstructions from ").append(me.getName()).append(":\n\"")
-                    .append(message.trim()).append("\"\n");
-        }
-        body.append("\nPlease log in to review and take action.");
-        notificationSender.send(target, subject, body.toString());
+        workflowNotificationService.notifyDelegation(target, me, document,
+                instance.getDocumentVersion(), message);
 
         return toDto(instance);
     }
@@ -557,11 +580,8 @@ public class WorkflowService {
         auditService.record("workflow_instance", instance.getId(), "task_delegation_recalled", details, document.getDepartment());
 
         if (formerAssignee != null) {
-            String docNum = document.getDocumentNumber();
-            Integer vNum = instance.getDocumentVersion().getVersionNumber();
-            notificationSender.send(formerAssignee,
-                    "Task Delegation Recalled: " + docNum + " v" + vNum,
-                    me.getName() + " has recalled the review task for " + docNum + " v" + vNum + " back to themselves.");
+            workflowNotificationService.notifyDelegationRecalled(formerAssignee, me, document,
+                    instance.getDocumentVersion());
         }
 
         return toDto(instance);

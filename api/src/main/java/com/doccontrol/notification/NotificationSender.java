@@ -12,6 +12,14 @@ public interface NotificationSender {
 
     void send(User recipient, String subject, String body);
 
+    /**
+     * Sends an email with both plain text and rich HTML representations.
+     * Implementations that do not support HTML fall back to the text body.
+     */
+    default void sendHtml(User recipient, String subject, String textBody, String htmlBody) {
+        send(recipient, subject, textBody);
+    }
+
     /** The transport identifier recorded in notification_log ('log' / 'graph'). */
     default String channel() {
         return "log";

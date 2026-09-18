@@ -56,6 +56,19 @@ public class GraphNotificationSender implements NotificationSender {
 
     @Override
     public void send(User recipient, String subject, String body) {
+        sendInternal(recipient, subject, body, "Text");
+    }
+
+    @Override
+    public void sendHtml(User recipient, String subject, String textBody, String htmlBody) {
+        if (htmlBody != null && !htmlBody.isBlank()) {
+            sendInternal(recipient, subject, htmlBody, "HTML");
+        } else {
+            sendInternal(recipient, subject, textBody, "Text");
+        }
+    }
+
+    private void sendInternal(User recipient, String subject, String content, String contentType) {
         String sendMailUrl = properties.graphBaseUrl() + "/v1.0/users/"
                 + properties.senderMailbox() + "/sendMail";
         String payload;
@@ -63,7 +76,7 @@ public class GraphNotificationSender implements NotificationSender {
             payload = JSON.writeValueAsString(Map.of(
                     "message", Map.of(
                             "subject", subject,
-                            "body", Map.of("contentType", "Text", "content", body),
+                            "body", Map.of("contentType", contentType, "content", content),
                             "toRecipients", java.util.List.of(Map.of(
                                     "emailAddress", Map.of("address", recipient.getEmail())))),
                     "saveToSentItems", false));
@@ -82,8 +95,8 @@ public class GraphNotificationSender implements NotificationSender {
             throw new IllegalStateException("Graph sendMail failed with HTTP "
                     + response.statusCode() + ": " + truncate(response.body()));
         }
-        log.info("NOTIFICATION (graph) to {} <{}>: {}", recipient.getName(), recipient.getEmail(),
-                subject);
+        log.info("NOTIFICATION (graph, {}) to {} <{}>: {}", contentType.toLowerCase(),
+                recipient.getName(), recipient.getEmail(), subject);
     }
 
     /** Client-credentials token from the tenant's v2.0 endpoint, cached until shortly before expiry. */

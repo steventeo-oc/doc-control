@@ -940,6 +940,18 @@
     3. Magic bytes validation (`%PDF-` header check): prevents native Chrome PDF viewer crashes ("Failed to load PDF document") when non-renditionable formats (e.g. `.winmd`, CAD, ZIP) are reviewed, cleanly falling back to an in-browser preview unavailable card with a direct file download button.
     4. Reviewer draft visibility safeguard: `DocumentVersionService.findVisibleVersion(...)` permits reviewers in active workflows to access unreleased draft versions without 404 access barriers.
     5. Soft styling & unstacked controls: removed duplicate close cross icon via `showCloseButton={false}`, unstacked "Open in tab" and "X" buttons into a unified flex toolbar in `TasksPage.tsx`, and softened all dialog borders, divider lines, and form controls to `border-border/40` and `rounded-2xl`.
+    **Real-Time Email Notifications & Rich HTML Templates (2026-09-18)**:
+    1. Upgraded outbound notification boundary: `NotificationSender.sendHtml(...)` added with default fallback; `GraphNotificationSender` supports `"contentType": "HTML"` for rich email dispatch; `LogNotificationSender` logs clean text summaries.
+    2. `NotificationTemplateService` generates responsive, inline-CSS email templates (DocControl header branding, color-coded status badges, document metadata cards, reviewer comment callouts, prominent CTA buttons linking to `{baseUrl}/tasks` or `/documents/{id}`, and fallback direct links) plus clean plain-text representations.
+    3. `WorkflowNotificationService` provides event-driven notification dispatch:
+       - `TASK_ASSIGNED`: real-time notice to each assigned reviewer (named or candidate role members) on workflow start / periodic review re-approval with due dates.
+       - `APPROVAL_COMPLETED`: notice to document owner and submitter when 100% approval is achieved (immediate or scheduled effectivity).
+       - `APPROVAL_REJECTED`: notice to document owner and submitter with reviewer name and rejection feedback comments.
+       - `WORKFLOW_CANCELLED`: notice to all active reviewers when an in-flight workflow is cancelled.
+       - `TASK_DELEGATED` & `TASK_RECALLED`: upgraded with rich templates and instructions callouts.
+    4. Best-effort resilience (Flag F1): all notification dispatches are safely wrapped in try/catch blocks with warning logging and recorded in `notification_log` without rolling back workflow state transitions.
+    5. Upgraded `PasswordResetService` to use branded HTML templates with "Reset Password" CTA button.
+    6. Verified with 144/144 tests green (including unit tests `GraphNotificationSenderTests`, `NotificationTemplateServiceTests`, `WorkflowNotificationServiceTests`, and integration tests `WorkflowEndpointTests`, `PasswordResetTests`), and rebuilt live `api` container in WSL2 Docker.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

@@ -5,6 +5,7 @@ import com.doccontrol.audit.SystemActor;
 import com.doccontrol.config.AppProperties;
 import com.doccontrol.config.PasswordResetProperties;
 import com.doccontrol.notification.NotificationSender;
+import com.doccontrol.notification.NotificationTemplateService;
 import org.springframework.security.crypto.password.PasswordEncoder;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -35,6 +36,7 @@ public class PasswordResetService {
     private final SystemActor systemActor;
     private final AppProperties appProperties;
     private final PasswordResetProperties resetProperties;
+    private final NotificationTemplateService templateService;
     private final SecureRandom secureRandom = new SecureRandom();
 
     public PasswordResetService(UserRepository userRepository,
@@ -44,7 +46,8 @@ public class PasswordResetService {
                                  AuditService auditService,
                                  SystemActor systemActor,
                                  AppProperties appProperties,
-                                 PasswordResetProperties resetProperties) {
+                                 PasswordResetProperties resetProperties,
+                                 NotificationTemplateService templateService) {
         this.userRepository = userRepository;
         this.tokenRepository = tokenRepository;
         this.passwordEncoder = passwordEncoder;
@@ -53,6 +56,7 @@ public class PasswordResetService {
         this.systemActor = systemActor;
         this.appProperties = appProperties;
         this.resetProperties = resetProperties;
+        this.templateService = templateService;
     }
 
     /**
@@ -60,23 +64,27 @@ public class PasswordResetService {
      * nonexistent or inactive email (non-enumeration).
      */
     @Transactional
-    public void requestReset(String email) {
-        Optional<User> maybeUser = userRepository.findByEmailIgnoreCase(email);
-        if (maybeUser.isEmpty() || !maybeUser.get().isActive()) {
+    public void requestReset(String rawEmail) {
+        if (rawEmail == null || rawEmail.isBlank()) {
             return;
         }
-        User user = maybeUser.get();
+
+        String email = rawEmail.trim().toLowerCase();
+        User user = userRepository.findByEmailIgnoreCase(email).orElse(null);
+
+        // Non-enumeration: silent return for nonexistent or inactive accounts
+        if (user == null || !user.isActive()) {
+            return;
+        }
 
         LocalDateTime now = LocalDateTime.now();
-        List<PasswordResetToken> existing = tokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
 
-        // Resend cooldown: skip silently if an unexpired token was already
-        // issued within the cooldown window — still no observable
-        // difference to the caller.
-        LocalDateTime cooldownStart = now.minusMinutes(resetProperties.resendCooldownMinutes());
-        boolean withinCooldown = existing.stream()
-                .anyMatch(t -> t.getExpiresAt().isAfter(now) && t.getCreatedAt().isAfter(cooldownStart));
-        if (withinCooldown) {
+        // Rate-limit: if a token was already issued recently, silently ignore
+        // the request so a mail storm cannot be triggered.
+        List<PasswordResetToken> existing = tokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
+        boolean inCooldown = existing.stream().anyMatch(t ->
+                t.getCreatedAt().plusMinutes(resetProperties.resendCooldownMinutes()).isAfter(now));
+        if (inCooldown) {
             return;
         }
 
@@ -92,12 +100,30 @@ public class PasswordResetService {
         tokenRepository.save(token);
 
         String link = appProperties.baseUrl() + "/reset-password?token=" + rawToken;
-        String body = "Someone requested a password reset for this account. If this was you, "
-                + "click the link below within " + resetProperties.expiryMinutes()
-                + " minutes to choose a new password:\n\n" + link
-                + "\n\nIf you didn't request this, you can ignore this email — your password "
-                + "hasn't changed.";
-        notificationSender.send(user, "Reset your Document Control password", body);
+
+        Map<String, String> details = new java.util.LinkedHashMap<>();
+        details.put("Account", user.getEmail());
+        details.put("Expires In", resetProperties.expiryMinutes() + " minutes");
+
+        String leadParagraph = "Someone requested a password reset for your account. If this was you, "
+                + "click the button below within " + resetProperties.expiryMinutes() + " minutes to choose a new password. "
+                + "If you didn't request this, you can safely ignore this email — your password hasn't changed.";
+
+        NotificationTemplateService.EmailContent content = templateService.render(
+                user.getName(),
+                "Password Reset",
+                NotificationTemplateService.BadgeStyle.BLUE,
+                "Reset Your Password",
+                leadParagraph,
+                details,
+                null,
+                null,
+                "Reset Password",
+                link
+        );
+
+        notificationSender.sendHtml(user, "Reset your Document Control password",
+                content.textBody(), content.htmlBody());
 
         auditService.recordAs(systemActor.get(), "user", user.getId(), "password_reset_requested",
                 Map.of());

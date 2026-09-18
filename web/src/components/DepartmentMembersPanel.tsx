@@ -1,11 +1,13 @@
 import { useCallback, useEffect, useState } from 'react';
-import { Plus, Trash2, UserPlus, Users } from 'lucide-react';
+import { Check, Loader2, Plus, Search, Trash2, UserPlus, Users, X } from 'lucide-react';
 import { lookupApi } from '../api/resources';
 import type { DepartmentCandidateUser, DepartmentMember, MembershipLevel } from '../api/types';
+import { cn } from '../lib/utils';
 import { EmptyState } from './EmptyState';
 import { Button } from './ui/button';
 import { Badge } from './ui/badge';
 import { Card } from './ui/card';
+import { Input } from './ui/input';
 import { Label } from './ui/label';
 import {
   Table,
@@ -62,8 +64,10 @@ export default function DepartmentMembersPanel({
   // Add Member Modal State
   const [addOpen, setAddOpen] = useState(false);
   const [availableUsers, setAvailableUsers] = useState<DepartmentCandidateUser[]>([]);
+  const [userSearch, setUserSearch] = useState('');
   const [loadingUsers, setLoadingUsers] = useState(false);
   const [selectedUserId, setSelectedUserId] = useState<string>('');
+  const [selectedUserObj, setSelectedUserObj] = useState<DepartmentCandidateUser | null>(null);
   const [selectedLevel, setSelectedLevel] = useState<MembershipLevel>('CONTRIBUTOR');
   const [adding, setAdding] = useState(false);
 
@@ -80,10 +84,29 @@ export default function DepartmentMembersPanel({
 
   useEffect(loadMembers, [loadMembers]);
 
+  // Debounced Search for Available Users
+  useEffect(() => {
+    if (!addOpen) return;
+    const timer = setTimeout(() => {
+      setLoadingUsers(true);
+      lookupApi
+        .departmentAvailableUsers(departmentId, userSearch.trim() || undefined)
+        .then((res) => {
+          setAvailableUsers(res);
+        })
+        .catch(() => setAvailableUsers([]))
+        .finally(() => setLoadingUsers(false));
+    }, 250);
+
+    return () => clearTimeout(timer);
+  }, [addOpen, userSearch, departmentId]);
+
   function openAddModal() {
     setError(null);
     setNotice(null);
     setSelectedUserId('');
+    setSelectedUserObj(null);
+    setUserSearch('');
     setSelectedLevel('CONTRIBUTOR');
     setAddOpen(true);
     setLoadingUsers(true);
@@ -93,6 +116,11 @@ export default function DepartmentMembersPanel({
       .then(setAvailableUsers)
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoadingUsers(false));
+  }
+
+  function handleSelectUser(u: DepartmentCandidateUser) {
+    setSelectedUserId(String(u.id));
+    setSelectedUserObj(u);
   }
 
   function handleAddMember(e: React.FormEvent) {
@@ -272,7 +300,7 @@ export default function DepartmentMembersPanel({
         </div>
       )}
 
-      {/* Add Member Dialog */}
+      {/* Add Member Dialog with Searchable Combobox */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
@@ -281,38 +309,132 @@ export default function DepartmentMembersPanel({
               <span>Add Department Member</span>
             </DialogTitle>
             <DialogDescription className="text-xs">
-              Select an active colleague to add to department{' '}
+              Search and select an active employee to add to department{' '}
               <strong className="font-semibold text-foreground">{departmentCode || 'this department'}</strong>.
             </DialogDescription>
           </DialogHeader>
 
           <form onSubmit={handleAddMember} className="space-y-4 mt-2">
+            {/* Search Input */}
             <div className="space-y-1.5">
-              <Label htmlFor="candidate-user" className="text-xs font-semibold">
-                User
+              <Label htmlFor="candidate-search" className="text-xs font-semibold">
+                Search Employee
               </Label>
-              {loadingUsers ? (
-                <div className="py-2 text-xs text-muted-foreground">Loading eligible colleagues…</div>
-              ) : availableUsers.length === 0 ? (
-                <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground border border-border/40">
-                  All active users in the company are already members of this department.
-                </div>
-              ) : (
-                <Select value={selectedUserId} onValueChange={setSelectedUserId} required>
-                  <SelectTrigger id="candidate-user" className="w-full text-xs rounded-xl border-border/40">
-                    <SelectValue placeholder="Select an eligible colleague…" />
-                  </SelectTrigger>
-                  <SelectContent className="rounded-xl border-border/40 shadow-xl max-h-56">
-                    {availableUsers.map((u) => (
-                      <SelectItem key={u.id} value={String(u.id)} className="text-xs">
-                        {u.name} <span className="text-muted-foreground">({u.email})</span>
-                      </SelectItem>
-                    ))}
-                  </SelectContent>
-                </Select>
-              )}
+              <div className="relative">
+                <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
+                <Input
+                  id="candidate-search"
+                  placeholder="Type name or email to search…"
+                  value={userSearch}
+                  onChange={(e) => setUserSearch(e.target.value)}
+                  className="pl-8 pr-8 text-xs rounded-xl border-border/40"
+                  autoComplete="off"
+                />
+                {userSearch && (
+                  <button
+                    type="button"
+                    onClick={() => setUserSearch('')}
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    title="Clear search"
+                  >
+                    <X className="size-3.5" />
+                  </button>
+                )}
+              </div>
             </div>
 
+            {/* Candidate List or Loading State */}
+            <div className="space-y-1">
+              <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
+                <span>Eligible Colleagues</span>
+                {loadingUsers ? (
+                  <span className="flex items-center gap-1">
+                    <Loader2 className="size-3 animate-spin" /> Searching…
+                  </span>
+                ) : (
+                  <span>{availableUsers.length} found</span>
+                )}
+              </div>
+
+              <div className="max-h-48 overflow-y-auto rounded-xl border border-border/40 p-1 space-y-1 bg-muted/20">
+                {availableUsers.map((u) => {
+                  const isSelected = selectedUserId === String(u.id);
+                  const initials = (u.name || '')
+                    .split(' ')
+                    .filter(Boolean)
+                    .map((n) => n[0])
+                    .slice(0, 2)
+                    .join('')
+                    .toUpperCase() || 'U';
+
+                  return (
+                    <button
+                      key={u.id}
+                      type="button"
+                      onClick={() => handleSelectUser(u)}
+                      className={cn(
+                        'w-full flex items-center justify-between p-2 rounded-lg text-left transition-all text-xs cursor-pointer',
+                        isSelected
+                          ? 'bg-primary/10 border border-primary/30 text-foreground font-medium ring-1 ring-primary/20'
+                          : 'hover:bg-muted/60 text-foreground border border-transparent'
+                      )}
+                    >
+                      <div className="flex items-center gap-2.5 min-w-0">
+                        <div
+                          className={cn(
+                            'size-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
+                            isSelected
+                              ? 'bg-primary text-primary-foreground'
+                              : 'bg-muted-foreground/15 text-muted-foreground'
+                          )}
+                        >
+                          {initials}
+                        </div>
+                        <div className="flex flex-col min-w-0">
+                          <span className="font-medium truncate text-foreground">{u.name}</span>
+                          <span className="text-[11px] text-muted-foreground truncate">{u.email}</span>
+                        </div>
+                      </div>
+                      {isSelected && <Check className="size-4 text-primary shrink-0 ml-2" />}
+                    </button>
+                  );
+                })}
+
+                {!loadingUsers && availableUsers.length === 0 && (
+                  <div className="py-6 text-center text-xs text-muted-foreground">
+                    {userSearch
+                      ? `No eligible colleagues found matching "${userSearch}".`
+                      : 'All active employees are already members of this department.'}
+                  </div>
+                )}
+              </div>
+            </div>
+
+            {/* Selected User Indicator */}
+            {selectedUserObj && (
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-2.5 flex items-center justify-between text-xs">
+                <div className="flex items-center gap-2 min-w-0">
+                  <Check className="size-3.5 text-primary shrink-0" />
+                  <span className="text-muted-foreground">Selected:</span>
+                  <strong className="text-foreground truncate">{selectedUserObj.name}</strong>
+                  <span className="text-muted-foreground truncate text-[11px]">({selectedUserObj.email})</span>
+                </div>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  onClick={() => {
+                    setSelectedUserId('');
+                    setSelectedUserObj(null);
+                  }}
+                >
+                  Change
+                </Button>
+              </div>
+            )}
+
+            {/* Role Selection */}
             <div className="space-y-1.5">
               <Label htmlFor="candidate-level" className="text-xs font-semibold">
                 Department Role
@@ -349,7 +471,7 @@ export default function DepartmentMembersPanel({
               <Button
                 type="submit"
                 size="sm"
-                disabled={adding || !selectedUserId || availableUsers.length === 0}
+                disabled={adding || !selectedUserId}
               >
                 {adding ? 'Adding…' : 'Add to Department'}
               </Button>

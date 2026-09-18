@@ -14,13 +14,13 @@ import { Card } from '../components/ui/card';
 import { Input } from '../components/ui/input';
 import { Label } from '../components/ui/label';
 import {
-  Dialog,
-  DialogContent,
-  DialogDescription,
-  DialogFooter,
-  DialogHeader,
-  DialogTitle,
-} from '../components/ui/dialog';
+  Sheet,
+  SheetContent,
+  SheetDescription,
+  SheetFooter,
+  SheetHeader,
+  SheetTitle,
+} from '../components/ui/sheet';
 import {
   Select,
   SelectContent,
@@ -450,141 +450,144 @@ export default function DepartmentDetailPage() {
         )}
       </Card>
 
-      {/* In-Place Create Document Dialog */}
-      <Dialog open={createOpen} onOpenChange={setCreateOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
-          <DialogHeader>
-            <DialogTitle className="flex items-center gap-2">
-              <FileText className="size-5 text-primary" />
-              <span>New Document</span>
-            </DialogTitle>
-            <DialogDescription className="text-xs text-muted-foreground">
-              Create a new controlled document in department{' '}
-              <strong className="font-semibold text-foreground">{department.code}</strong>.
-            </DialogDescription>
-          </DialogHeader>
+      {/* In-Place Create Document Drawer / Sheet */}
+      <Sheet open={createOpen} onOpenChange={setCreateOpen}>
+        <SheetContent side="right" className="w-full sm:max-w-lg p-6 flex flex-col justify-between overflow-y-auto">
+          <div>
+            <SheetHeader>
+              <SheetTitle className="flex items-center gap-2">
+                <FileText className="size-5 text-primary" />
+                <span>New Document</span>
+              </SheetTitle>
+              <SheetDescription className="text-xs text-muted-foreground">
+                Create a new controlled document in department{' '}
+                <strong className="font-semibold text-foreground">{department.code}</strong>.
+              </SheetDescription>
+            </SheetHeader>
 
-          {createError && (
-            <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
-              {createError}
-            </div>
-          )}
-
-          <form onSubmit={handleCreateDocument} className="space-y-4 mt-2">
-            {/* Department (Fixed) */}
-            <div className="space-y-1">
-              <Label className="text-xs font-semibold">Department</Label>
-              <div className="rounded-xl border border-border/40 bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
-                <span className="font-medium text-foreground">
-                  {department.label}
-                </span>
-                <Badge variant="outline" className="font-mono text-[10px] font-semibold bg-background">
-                  {department.code}
-                </Badge>
+            {createError && (
+              <div className="mt-3 rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+                {createError}
               </div>
-            </div>
+            )}
 
-            {/* Document Type */}
-            <div className="space-y-1">
-              <Label htmlFor="doc-type" className="text-xs font-semibold">
-                Document Type
-              </Label>
-              <Select
-                value={selectedTypeId ? String(selectedTypeId) : ''}
-                onValueChange={(val) => setSelectedTypeId(Number(val))}
-                required
-              >
-                <SelectTrigger id="doc-type" className="text-xs rounded-xl border-border/40">
-                  <SelectValue placeholder="Select a document type…" />
-                </SelectTrigger>
-                <SelectContent className="rounded-xl border-border/40 shadow-xl max-h-56">
-                  {types
-                    .filter((t) => t.active)
-                    .map((t) => (
-                      <SelectItem key={t.id} value={String(t.id)} className="text-xs">
-                        <span className="font-mono font-semibold mr-1.5">{t.code}</span>
-                        <span className="text-muted-foreground">— {t.label}</span>
-                      </SelectItem>
-                    ))}
-                </SelectContent>
-              </Select>
-            </div>
-
-            {/* Allocated Number Preview */}
-            <div className="space-y-1">
-              <div className="flex items-center justify-between">
-                <Label className="text-xs font-semibold">Allocated Document Number</Label>
-                <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
-                  Auto-assigned
-                </span>
+            <form id="create-doc-form" onSubmit={handleCreateDocument} className="space-y-4 mt-4">
+              {/* Department (Fixed) */}
+              <div className="space-y-1.5">
+                <Label className="text-xs font-semibold">Department</Label>
+                <div className="rounded-xl border border-border/40 bg-muted/40 px-3 py-2 text-xs flex items-center justify-between">
+                  <span className="font-medium text-foreground">
+                    {department.label}
+                  </span>
+                  <Badge variant="outline" className="font-mono text-[10px] font-semibold bg-background">
+                    {department.code}
+                  </Badge>
+                </div>
               </div>
-              <div className="relative">
+
+              {/* Document Type */}
+              <div className="space-y-1.5">
+                <Label htmlFor="doc-type" className="text-xs font-semibold">
+                  Document Type
+                </Label>
+                <Select
+                  value={selectedTypeId ? String(selectedTypeId) : ''}
+                  onValueChange={(val) => setSelectedTypeId(Number(val))}
+                  required
+                >
+                  <SelectTrigger id="doc-type" className="text-xs rounded-xl border-border/40">
+                    <SelectValue placeholder="Select a document type…" />
+                  </SelectTrigger>
+                  <SelectContent className="rounded-xl border-border/40 shadow-xl max-h-56">
+                    {types
+                      .filter((t) => t.active)
+                      .map((t) => (
+                        <SelectItem key={t.id} value={String(t.id)} className="text-xs">
+                          <span className="font-mono font-semibold mr-1.5">{t.code}</span>
+                          <span className="text-muted-foreground">— {t.label}</span>
+                        </SelectItem>
+                      ))}
+                  </SelectContent>
+                </Select>
+              </div>
+
+              {/* Allocated Number Preview */}
+              <div className="space-y-1.5">
+                <div className="flex items-center justify-between">
+                  <Label className="text-xs font-semibold">Allocated Document Number</Label>
+                  <span className="text-[10px] font-semibold uppercase tracking-wider text-muted-foreground">
+                    Auto-assigned
+                  </span>
+                </div>
+                <div className="relative">
+                  <Input
+                    readOnly
+                    tabIndex={-1}
+                    value={previewDisplayNumber}
+                    className="bg-muted/50 font-mono text-xs font-semibold tracking-wide cursor-default select-all rounded-xl border-border/40"
+                  />
+                  {loadingNumber && (
+                    <div className="absolute right-3 top-1/2 -translate-y-1/2">
+                      <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
+                    </div>
+                  )}
+                </div>
+                <p className="text-[11px] text-muted-foreground">
+                  {previewHelperText}
+                </p>
+              </div>
+
+              {/* Document Title / Name */}
+              <div className="space-y-1.5">
+                <Label htmlFor="doc-name" className="text-xs font-semibold">
+                  Document Title
+                </Label>
                 <Input
-                  readOnly
-                  tabIndex={-1}
-                  value={previewDisplayNumber}
-                  className="bg-muted/50 font-mono text-xs font-semibold tracking-wide cursor-default select-all rounded-xl border-border/40"
+                  id="doc-name"
+                  name="name"
+                  required
+                  maxLength={255}
+                  placeholder="e.g. Standard Operating Procedure for Assembly Calibration"
+                  className="text-xs rounded-xl border-border/40"
                 />
-                {loadingNumber && (
-                  <div className="absolute right-3 top-1/2 -translate-y-1/2">
-                    <Loader2 className="size-3.5 animate-spin text-muted-foreground" />
-                  </div>
-                )}
               </div>
-              <p className="text-[11px] text-muted-foreground">
-                {previewHelperText}
-              </p>
-            </div>
 
-            {/* Document Title / Name */}
-            <div className="space-y-1">
-              <Label htmlFor="doc-name" className="text-xs font-semibold">
-                Document Title
-              </Label>
-              <Input
-                id="doc-name"
-                name="name"
-                required
-                maxLength={255}
-                placeholder="e.g. Standard Operating Procedure for Assembly Calibration"
-                className="text-xs rounded-xl border-border/40"
-              />
-            </div>
+              {/* Initial File (Optional) */}
+              <div className="space-y-1.5">
+                <Label htmlFor="doc-file" className="text-xs font-semibold cursor-pointer">
+                  Initial File <span className="text-muted-foreground font-normal">(optional — creates v1 draft)</span>
+                </Label>
+                <Input
+                  id="doc-file"
+                  name="file"
+                  type="file"
+                  className="cursor-pointer file:cursor-pointer text-xs rounded-xl border-border/40"
+                />
+              </div>
+            </form>
+          </div>
 
-            {/* Initial File (Optional) */}
-            <div className="space-y-1">
-              <Label htmlFor="doc-file" className="text-xs font-semibold cursor-pointer">
-                Initial File <span className="text-muted-foreground font-normal">(optional — creates v1 draft)</span>
-              </Label>
-              <Input
-                id="doc-file"
-                name="file"
-                type="file"
-                className="cursor-pointer file:cursor-pointer text-xs rounded-xl border-border/40"
-              />
-            </div>
-
-            <DialogFooter className="mt-4">
-              <Button
-                type="button"
-                variant="outline"
-                size="sm"
-                onClick={() => setCreateOpen(false)}
-                disabled={creating}
-              >
-                Cancel
-              </Button>
-              <Button
-                type="submit"
-                size="sm"
-                disabled={creating || !selectedTypeId}
-              >
-                {creating ? 'Creating…' : 'Create Document'}
-              </Button>
-            </DialogFooter>
-          </form>
-        </DialogContent>
-      </Dialog>
+          <SheetFooter className="p-0 flex flex-row justify-end gap-2 mt-6">
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              onClick={() => setCreateOpen(false)}
+              disabled={creating}
+            >
+              Cancel
+            </Button>
+            <Button
+              type="submit"
+              form="create-doc-form"
+              size="sm"
+              disabled={creating || !selectedTypeId}
+            >
+              {creating ? 'Creating…' : 'Create Document'}
+            </Button>
+          </SheetFooter>
+        </SheetContent>
+      </Sheet>
     </div>
   );
 }

@@ -128,19 +128,33 @@ public class DepartmentService {
 
     /**
      * Active users who are not currently members of this department — candidate
-     * list for Manager self-service member onboarding.
+     * list for Manager self-service member onboarding. Supports search by name/email
+     * and result limiting for large organizations.
      */
     @Transactional(readOnly = true)
-    public List<DepartmentCandidateUserDto> availableUsers(Integer id) {
+    public List<DepartmentCandidateUserDto> availableUsers(Integer id, String q, int limit) {
         requireDepartment(id);
         requireMemberManager(id);
         List<Integer> existingUserIds = userDepartmentRepository.findAllByDepartmentId(id).stream()
                 .map(membership -> membership.getUser().getId())
                 .toList();
+
+        int maxResults = Math.min(Math.max(limit, 1), 100);
+        String query = q != null ? q.trim().toLowerCase() : "";
+
         return userRepository.findAllByActiveTrueOrderByNameAsc().stream()
                 .filter(u -> !existingUserIds.contains(u.getId()))
+                .filter(u -> query.isEmpty()
+                        || (u.getName() != null && u.getName().toLowerCase().contains(query))
+                        || (u.getEmail() != null && u.getEmail().toLowerCase().contains(query)))
+                .limit(maxResults)
                 .map(DepartmentCandidateUserDto::from)
                 .toList();
+    }
+
+    @Transactional(readOnly = true)
+    public List<DepartmentCandidateUserDto> availableUsers(Integer id) {
+        return availableUsers(id, null, 100);
     }
 
     /**

@@ -67,8 +67,11 @@ public class DepartmentController {
     }
 
     @GetMapping("/{id}/available-users")
-    public List<DepartmentCandidateUserDto> availableUsers(@PathVariable Integer id) {
-        return departmentService.availableUsers(id);
+    public List<DepartmentCandidateUserDto> availableUsers(
+            @PathVariable Integer id,
+            @RequestParam(value = "q", required = false) String q,
+            @RequestParam(value = "limit", required = false, defaultValue = "30") int limit) {
+        return departmentService.availableUsers(id, q, limit);
     }
 
     @PostMapping("/{id}/members")

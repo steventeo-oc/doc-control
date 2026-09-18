@@ -62,8 +62,10 @@ export const lookupApi = {
   getDepartment: (id: number) => api.get<Department>(`/departments/${id}`),
   departmentMembers: (id: number) =>
     api.get<DepartmentMember[]>(`/departments/${id}/members`),
-  departmentAvailableUsers: (id: number) =>
-    api.get<DepartmentCandidateUser[]>(`/departments/${id}/available-users`),
+  departmentAvailableUsers: (id: number, q?: string) => {
+    const query = q ? `?q=${encodeURIComponent(q)}` : '';
+    return api.get<DepartmentCandidateUser[]>(`/departments/${id}/available-users${query}`);
+  },
   addDepartmentMember: (id: number, data: { userId: number; level: MembershipLevel }) =>
     api.post<DepartmentMember>(`/departments/${id}/members`, data),
   removeDepartmentMember: (id: number, userId: number) =>

@@ -302,7 +302,7 @@ export default function DepartmentMembersPanel({
 
       {/* Add Member Dialog with Searchable Combobox */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
-        <DialogContent className="sm:max-w-md rounded-2xl">
+        <DialogContent className="sm:max-w-md rounded-2xl overflow-hidden">
           <DialogHeader>
             <DialogTitle className="flex items-center gap-2">
               <UserPlus className="size-4 text-primary" />
@@ -314,27 +314,27 @@ export default function DepartmentMembersPanel({
             </DialogDescription>
           </DialogHeader>
 
-          <form onSubmit={handleAddMember} className="space-y-4 mt-2">
+          <form onSubmit={handleAddMember} className="space-y-4 mt-2 w-full min-w-0">
             {/* Search Input */}
-            <div className="space-y-1.5">
+            <div className="space-y-1.5 w-full min-w-0">
               <Label htmlFor="candidate-search" className="text-xs font-semibold">
                 Search Employee
               </Label>
-              <div className="relative">
+              <div className="relative w-full min-w-0">
                 <Search className="absolute left-2.5 top-2.5 size-3.5 text-muted-foreground" />
                 <Input
                   id="candidate-search"
                   placeholder="Type name or email to search…"
                   value={userSearch}
                   onChange={(e) => setUserSearch(e.target.value)}
-                  className="pl-8 pr-8 text-xs rounded-xl border-border/40"
+                  className="pl-8 pr-8 text-xs rounded-xl border-border/40 w-full"
                   autoComplete="off"
                 />
                 {userSearch && (
                   <button
                     type="button"
                     onClick={() => setUserSearch('')}
-                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground"
+                    className="absolute right-2.5 top-2.5 text-muted-foreground hover:text-foreground bg-transparent border-0 p-0 cursor-pointer"
                     title="Clear search"
                   >
                     <X className="size-3.5" />
@@ -344,7 +344,7 @@ export default function DepartmentMembersPanel({
             </div>
 
             {/* Candidate List or Loading State */}
-            <div className="space-y-1">
+            <div className="space-y-1 w-full min-w-0">
               <div className="flex items-center justify-between text-[11px] text-muted-foreground px-0.5">
                 <span>Eligible Colleagues</span>
                 {loadingUsers ? (
@@ -356,7 +356,7 @@ export default function DepartmentMembersPanel({
                 )}
               </div>
 
-              <div className="max-h-48 overflow-y-auto rounded-xl border border-border/40 p-1 space-y-1 bg-muted/20">
+              <div className="max-h-48 overflow-y-auto overflow-x-hidden rounded-xl border border-border/40 p-1 space-y-1 bg-muted/20 w-full min-w-0">
                 {availableUsers.map((u) => {
                   const isSelected = selectedUserId === String(u.id);
                   const initials = (u.name || '')
@@ -368,18 +368,25 @@ export default function DepartmentMembersPanel({
                     .toUpperCase() || 'U';
 
                   return (
-                    <button
+                    <div
                       key={u.id}
-                      type="button"
+                      role="button"
+                      tabIndex={0}
                       onClick={() => handleSelectUser(u)}
+                      onKeyDown={(e) => {
+                        if (e.key === 'Enter' || e.key === ' ') {
+                          e.preventDefault();
+                          handleSelectUser(u);
+                        }
+                      }}
                       className={cn(
-                        'w-full flex items-center justify-between p-2 rounded-lg text-left transition-all text-xs cursor-pointer',
+                        'w-full flex items-center justify-between p-2 rounded-xl text-left transition-all text-xs cursor-pointer min-w-0 select-none',
                         isSelected
                           ? 'bg-primary/10 border border-primary/30 text-foreground font-medium ring-1 ring-primary/20'
                           : 'hover:bg-muted/60 text-foreground border border-transparent'
                       )}
                     >
-                      <div className="flex items-center gap-2.5 min-w-0">
+                      <div className="flex items-center gap-2.5 min-w-0 flex-1 overflow-hidden">
                         <div
                           className={cn(
                             'size-7 rounded-full flex items-center justify-center text-[10px] font-bold shrink-0',
@@ -390,13 +397,13 @@ export default function DepartmentMembersPanel({
                         >
                           {initials}
                         </div>
-                        <div className="flex flex-col min-w-0">
-                          <span className="font-medium truncate text-foreground">{u.name}</span>
-                          <span className="text-[11px] text-muted-foreground truncate">{u.email}</span>
+                        <div className="flex flex-col min-w-0 flex-1 overflow-hidden">
+                          <span className="font-medium truncate text-foreground block">{u.name}</span>
+                          <span className="text-[11px] text-muted-foreground truncate block">{u.email}</span>
                         </div>
                       </div>
                       {isSelected && <Check className="size-4 text-primary shrink-0 ml-2" />}
-                    </button>
+                    </div>
                   );
                 })}
 
@@ -412,18 +419,20 @@ export default function DepartmentMembersPanel({
 
             {/* Selected User Indicator */}
             {selectedUserObj && (
-              <div className="rounded-xl border border-primary/20 bg-primary/5 p-2.5 flex items-center justify-between text-xs">
-                <div className="flex items-center gap-2 min-w-0">
+              <div className="rounded-xl border border-primary/20 bg-primary/5 p-2.5 flex items-center justify-between gap-2 text-xs w-full min-w-0">
+                <div className="flex items-center gap-2 min-w-0 flex-1 overflow-hidden">
                   <Check className="size-3.5 text-primary shrink-0" />
-                  <span className="text-muted-foreground">Selected:</span>
-                  <strong className="text-foreground truncate">{selectedUserObj.name}</strong>
-                  <span className="text-muted-foreground truncate text-[11px]">({selectedUserObj.email})</span>
+                  <span className="text-muted-foreground shrink-0">Selected:</span>
+                  <span className="font-semibold text-foreground truncate min-w-0">{selectedUserObj.name}</span>
+                  <span className="text-muted-foreground truncate text-[11px] shrink-0 max-w-[150px]">
+                    ({selectedUserObj.email})
+                  </span>
                 </div>
                 <Button
                   type="button"
                   variant="ghost"
                   size="sm"
-                  className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground"
+                  className="h-6 px-1.5 text-[11px] text-muted-foreground hover:text-foreground shrink-0"
                   onClick={() => {
                     setSelectedUserId('');
                     setSelectedUserObj(null);

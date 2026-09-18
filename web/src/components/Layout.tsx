@@ -570,7 +570,7 @@ export default function Layout() {
           <main
             className={cn(
               'flex-1 p-6',
-              section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1100px]',
+              section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1536px]',
               section === 'dashboard' &&
                 'min-[861px]:flex min-[861px]:flex-col min-[861px]:min-h-0 min-[861px]:overflow-hidden',
             )}

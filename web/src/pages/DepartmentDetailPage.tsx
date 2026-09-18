@@ -86,7 +86,7 @@ export default function DepartmentDetailPage() {
   const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated'>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
-  const pageSize = 15;
+  const [pageSize, setPageSize] = useState(15);
 
   // Department activity feed state
   const [actPage, setActPage] = useState(0);
@@ -179,7 +179,7 @@ export default function DepartmentDetailPage() {
       .then(setDocs)
       .catch(() => setDocs(null))
       .finally(() => setLoadingDocs(false));
-  }, [department, docSearch, statusFilter, typeFilter, tierFilter, sortField, sortOrder, page]);
+  }, [department, docSearch, statusFilter, typeFilter, tierFilter, sortField, sortOrder, page, pageSize]);
 
   useEffect(() => {
     loadDocuments();
@@ -611,7 +611,7 @@ export default function DepartmentDetailPage() {
             </div>
           </div>
 
-          <div className="rounded-xl border border-border/40 overflow-hidden">
+          <div className="rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
             <Table>
               <TableHeader>
                 <TableRow className="border-border/40 hover:bg-transparent">
@@ -630,7 +630,7 @@ export default function DepartmentDetailPage() {
                     </div>
                   </TableHead>
                   <TableHead
-                    className="text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    className="min-w-[220px] text-xs font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center gap-1">
@@ -799,32 +799,51 @@ export default function DepartmentDetailPage() {
           </div>
 
           {/* Pagination Controls */}
-          {totalPages > 1 && (
-            <div className="flex items-center justify-between pt-2">
-              <div className="text-xs text-muted-foreground">
-                Showing page {page + 1} of {totalPages} ({docs?.totalElements} total)
-              </div>
+          {docs && docs.totalElements > 0 && (
+            <div className="flex flex-wrap items-center justify-between gap-3 pt-2">
               <div className="flex items-center gap-1.5">
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  className="h-8 px-2.5 text-xs rounded-lg gap-1"
                   disabled={page === 0 || loadingDocs}
                   onClick={() => setPage((p) => Math.max(0, p - 1))}
                 >
                   <ChevronLeft className="size-3.5" />
                   <span>Previous</span>
                 </Button>
+                <span className="text-xs text-muted-foreground px-1">
+                  Page {page + 1} of {Math.max(1, totalPages)} ({docs.totalElements} documents)
+                </span>
                 <Button
                   variant="outline"
                   size="sm"
-                  className="h-7 px-2.5 text-xs rounded-lg gap-1"
+                  className="h-8 px-2.5 text-xs rounded-lg gap-1"
                   disabled={page >= totalPages - 1 || loadingDocs}
                   onClick={() => setPage((p) => p + 1)}
                 >
                   <span>Next</span>
                   <ChevronRight className="size-3.5" />
                 </Button>
+              </div>
+              <div className="flex items-center gap-2">
+                <span className="text-xs text-muted-foreground">Rows per page:</span>
+                <Select
+                  value={String(pageSize)}
+                  onValueChange={(val) => {
+                    setPageSize(Number(val));
+                    setPage(0);
+                  }}
+                >
+                  <SelectTrigger className="h-8 w-20 text-xs">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="15">15</SelectItem>
+                    <SelectItem value="25">25</SelectItem>
+                    <SelectItem value="50">50</SelectItem>
+                  </SelectContent>
+                </Select>
               </div>
             </div>
           )}

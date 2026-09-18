@@ -439,114 +439,116 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
           />
         </div>
       ) : (
-        <Table className="mt-2">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Task</TableHead>
-              <TableHead>Document</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Assignment</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredTasks.map((task) => (
-              <TableRow key={task.id}>
-                <TableCell className="font-medium">
-                  <div className="flex items-center gap-1.5 flex-wrap">
-                    <span>{task.name}</span>
-                    {task.reapproval && (
-                      <StatusBadge status="reapproval">re-approval</StatusBadge>
-                    )}
-                  </div>
-                  {task.delegatedBy && (
-                    <div className="mt-1.5 rounded bg-blue-500/10 border border-blue-500/20 px-2 py-1 text-[11px] text-blue-700 dark:text-blue-300">
-                      <span className="font-semibold">Delegated by {task.delegatedBy}</span>
-                      {task.delegationMessage && (
-                        <p className="mt-0.5 italic text-muted-foreground break-words font-normal">
-                          "{task.delegationMessage}"
-                        </p>
+        <div className="mt-4 rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead>Task</TableHead>
+                <TableHead className="min-w-[200px]">Document</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Assignment</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredTasks.map((task) => (
+                <TableRow key={task.id} className="border-border/30 hover:bg-muted/40 transition-colors">
+                  <TableCell className="font-medium">
+                    <div className="flex items-center gap-1.5 flex-wrap">
+                      <span>{task.name}</span>
+                      {task.reapproval && (
+                        <StatusBadge status="reapproval">re-approval</StatusBadge>
                       )}
                     </div>
-                  )}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <Link
-                      to={`/documents/${task.documentId}`}
-                      className="font-medium text-primary hover:underline flex items-center gap-1"
-                    >
-                      {task.documentNumber}
-                      <ArrowUpRight className="size-3 text-muted-foreground/60" />
-                    </Link>
-                    {task.documentName && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
-                        {task.documentName}
-                      </span>
+                    {task.delegatedBy && (
+                      <div className="mt-1.5 rounded bg-blue-500/10 border border-blue-500/20 px-2 py-1 text-[11px] text-blue-700 dark:text-blue-300">
+                        <span className="font-semibold">Delegated by {task.delegatedBy}</span>
+                        {task.delegationMessage && (
+                          <p className="mt-0.5 italic text-muted-foreground break-words font-normal">
+                            "{task.delegationMessage}"
+                          </p>
+                        )}
+                      </div>
                     )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col">
-                    <span className="font-semibold text-xs">v{task.versionNumber}</span>
-                    {task.changeNotes && (
-                      <span
-                        className="text-[11px] text-muted-foreground italic line-clamp-1 max-w-[140px]"
-                        title={task.changeNotes}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <Link
+                        to={`/documents/${task.documentId}`}
+                        className="font-medium text-primary hover:underline flex items-center gap-1"
                       >
-                        {task.changeNotes}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {task.assigneeName ?? task.candidateGroups.map((g) => `role: ${g}`).join(', ')}
-                  {task.claimedByMe && <span className="font-medium text-foreground"> (you)</span>}
-                </TableCell>
-                <TableCell>
-                  <DueDateBadge dueDate={task.dueDate} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="inline-flex items-center gap-1.5 justify-end">
-                    {task.versionId && (
+                        {task.documentNumber}
+                        <ArrowUpRight className="size-3 text-muted-foreground/60" />
+                      </Link>
+                      {task.documentName && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
+                          {task.documentName}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col">
+                      <span className="font-semibold text-xs">v{task.versionNumber}</span>
+                      {task.changeNotes && (
+                        <span
+                          className="text-[11px] text-muted-foreground italic line-clamp-1 max-w-[140px]"
+                          title={task.changeNotes}
+                        >
+                          {task.changeNotes}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {task.assigneeName ?? task.candidateGroups.map((g) => `role: ${g}`).join(', ')}
+                    {task.claimedByMe && <span className="font-medium text-foreground"> (you)</span>}
+                  </TableCell>
+                  <TableCell>
+                    <DueDateBadge dueDate={task.dueDate} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-1.5 justify-end">
+                      {task.versionId && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="ghost"
+                          className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                          onClick={() => setPreviewTask(task)}
+                          title="Quick preview document draft"
+                        >
+                          <Eye className="size-3.5" />
+                          <span className="hidden sm:inline">Preview</span>
+                        </Button>
+                      )}
                       <Button
                         type="button"
                         size="sm"
-                        variant="ghost"
-                        className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                        onClick={() => setPreviewTask(task)}
-                        title="Quick preview document draft"
+                        variant="outline"
+                        onClick={() => openDelegateModal(task)}
+                        title="Delegate task to colleague"
+                        className="h-8 text-xs"
                       >
-                        <Eye className="size-3.5" />
-                        <span className="hidden sm:inline">Preview</span>
+                        <UserPlus className="size-3.5 mr-1" />
+                        Delegate
                       </Button>
-                    )}
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="outline"
-                      onClick={() => openDelegateModal(task)}
-                      title="Delegate task to colleague"
-                      className="h-8 text-xs"
-                    >
-                      <UserPlus className="size-3.5 mr-1" />
-                      Delegate
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => openReviewModal(task)}
-                      className="h-8 text-xs font-medium"
-                    >
-                      Review
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => openReviewModal(task)}
+                        className="h-8 text-xs font-medium"
+                      >
+                        Review
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       <p className="mt-4 text-sm text-muted-foreground">
@@ -1044,84 +1046,86 @@ function PendingMyAcknowledgment({ onUpdated }: { onUpdated: () => void }) {
           />
         </div>
       ) : (
-        <Table className="mt-2">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead>Department</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Effective Date</TableHead>
-              <TableHead>Window Closes</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredPending.map((entry) => (
-              <TableRow key={entry.documentId}>
-                <TableCell className="font-medium">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
-                      <Link
-                        to={`/documents/${entry.documentId}`}
-                        className="text-primary hover:underline font-semibold flex items-center gap-1"
-                      >
-                        {entry.documentNumber}
-                        <ArrowUpRight className="size-3 text-muted-foreground/60" />
-                      </Link>
-                      {entry.overdue && (
-                        <StatusBadge status="overdue">
-                          overdue
-                        </StatusBadge>
+        <div className="mt-4 rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead className="min-w-[200px]">Document</TableHead>
+                <TableHead>Department</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Effective Date</TableHead>
+                <TableHead>Window Closes</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredPending.map((entry) => (
+                <TableRow key={entry.documentId} className="border-border/30 hover:bg-muted/40 transition-colors">
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to={`/documents/${entry.documentId}`}
+                          className="text-primary hover:underline font-semibold flex items-center gap-1"
+                        >
+                          {entry.documentNumber}
+                          <ArrowUpRight className="size-3 text-muted-foreground/60" />
+                        </Link>
+                        {entry.overdue && (
+                          <StatusBadge status="overdue">
+                            overdue
+                          </StatusBadge>
+                        )}
+                      </div>
+                      {entry.name && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
+                          {entry.name}
+                        </span>
                       )}
                     </div>
-                    {entry.name && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
-                        {entry.name}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell>
-                  <StatusBadge status="dept">{entry.departmentCode}</StatusBadge>
-                </TableCell>
-                <TableCell className="font-semibold text-xs">v{entry.versionNumber}</TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  {entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleDateString() : '—'}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs">
-                  <DueDateBadge dueDate={entry.windowClosesAt} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="inline-flex items-center gap-1.5 justify-end">
-                    <Button
-                      type="button"
-                      size="sm"
-                      variant="ghost"
-                      className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
-                      onClick={() => setPreviewAckDoc(entry)}
-                      title="Quick preview document before acknowledging"
-                    >
-                      <Eye className="size-3.5" />
-                      <span className="hidden sm:inline">Preview</span>
-                    </Button>
-                    <Button
-                      type="button"
-                      size="sm"
-                      onClick={() => {
-                        setAckModalDoc(entry);
-                        setConfirmedRead(false);
-                      }}
-                      className="h-8 text-xs font-medium"
-                    >
-                      <CheckCircle2 className="size-3.5 mr-1" />
-                      Acknowledge
-                    </Button>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  </TableCell>
+                  <TableCell>
+                    <StatusBadge status="dept">{entry.departmentCode}</StatusBadge>
+                  </TableCell>
+                  <TableCell className="font-semibold text-xs">v{entry.versionNumber}</TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    {entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleDateString() : '—'}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs">
+                    <DueDateBadge dueDate={entry.windowClosesAt} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-1.5 justify-end">
+                      <Button
+                        type="button"
+                        size="sm"
+                        variant="ghost"
+                        className="h-8 px-2 text-xs gap-1 text-muted-foreground hover:text-foreground"
+                        onClick={() => setPreviewAckDoc(entry)}
+                        title="Quick preview document before acknowledging"
+                      >
+                        <Eye className="size-3.5" />
+                        <span className="hidden sm:inline">Preview</span>
+                      </Button>
+                      <Button
+                        type="button"
+                        size="sm"
+                        onClick={() => {
+                          setAckModalDoc(entry);
+                          setConfirmedRead(false);
+                        }}
+                        className="h-8 text-xs font-medium"
+                      >
+                        <CheckCircle2 className="size-3.5 mr-1" />
+                        Acknowledge
+                      </Button>
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Document Quick Preview Modal for Acknowledgment */}
@@ -1404,96 +1408,98 @@ function StartedByMe({ onUpdated }: { onUpdated: () => void }) {
           />
         </div>
       ) : (
-        <Table className="mt-4">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Started</TableHead>
-              <TableHead>Reviewers & Feedback</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredRows.map((row) => (
-              <TableRow key={row.id}>
-                <TableCell className="font-medium">
-                  <div className="flex flex-col">
-                    <div className="flex items-center gap-1.5">
+        <div className="mt-4 rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead className="min-w-[200px]">Document</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Started</TableHead>
+                <TableHead>Reviewers & Feedback</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {filteredRows.map((row) => (
+                <TableRow key={row.id} className="border-border/30 hover:bg-muted/40 transition-colors">
+                  <TableCell className="font-medium">
+                    <div className="flex flex-col">
+                      <div className="flex items-center gap-1.5">
+                        <Link
+                          to={`/documents/${row.documentId}`}
+                          className="text-primary hover:underline font-semibold flex items-center gap-1"
+                        >
+                          {row.documentNumber}
+                          <ArrowUpRight className="size-3 text-muted-foreground/60" />
+                        </Link>
+                        {row.reapproval && (
+                          <StatusBadge status="reapproval">re-approval</StatusBadge>
+                        )}
+                      </div>
+                      {row.documentName && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
+                          {row.documentName}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-semibold text-xs">v{row.versionNumber}</TableCell>
+                  <TableCell>
+                    <StartedStatusBadge status={row.status} />
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                    {new Date(row.startedAt).toLocaleString()}
+                  </TableCell>
+                  <TableCell className="text-xs">
+                    {row.status === 'rejected' ? (
+                      <div className="rounded bg-destructive/10 border border-destructive/20 p-2 text-destructive max-w-sm space-y-1">
+                        <div className="font-semibold flex items-center gap-1">
+                          <XCircle className="size-3.5 shrink-0" />
+                          <span>Rejected by {row.feedbackActor || 'Reviewer'}</span>
+                        </div>
+                        {row.feedbackComment ? (
+                          <p className="italic text-[11px] text-destructive/90 break-words">
+                            "{row.feedbackComment}"
+                          </p>
+                        ) : (
+                          <p className="text-[11px] opacity-70">No specific comment provided.</p>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="text-muted-foreground">
+                        {row.reviewers.length === 0 ? '—' : reviewerLine(row.reviewers)}
+                      </div>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-2 justify-end">
+                      {row.status === 'in_progress' && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
+                          onClick={() => setCancelRow(row)}
+                          title="Cancel this in-flight approval"
+                        >
+                          <Ban className="size-3.5 mr-1" />
+                          Cancel
+                        </Button>
+                      )}
                       <Link
                         to={`/documents/${row.documentId}`}
-                        className="text-primary hover:underline font-semibold flex items-center gap-1"
+                        className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
                       >
-                        {row.documentNumber}
-                        <ArrowUpRight className="size-3 text-muted-foreground/60" />
+                        View
                       </Link>
-                      {row.reapproval && (
-                        <StatusBadge status="reapproval">re-approval</StatusBadge>
-                      )}
                     </div>
-                    {row.documentName && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
-                        {row.documentName}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="font-semibold text-xs">v{row.versionNumber}</TableCell>
-                <TableCell>
-                  <StartedStatusBadge status={row.status} />
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                  {new Date(row.startedAt).toLocaleString()}
-                </TableCell>
-                <TableCell className="text-xs">
-                  {row.status === 'rejected' ? (
-                    <div className="rounded bg-destructive/10 border border-destructive/20 p-2 text-destructive max-w-sm space-y-1">
-                      <div className="font-semibold flex items-center gap-1">
-                        <XCircle className="size-3.5 shrink-0" />
-                        <span>Rejected by {row.feedbackActor || 'Reviewer'}</span>
-                      </div>
-                      {row.feedbackComment ? (
-                        <p className="italic text-[11px] text-destructive/90 break-words">
-                          "{row.feedbackComment}"
-                        </p>
-                      ) : (
-                        <p className="text-[11px] opacity-70">No specific comment provided.</p>
-                      )}
-                    </div>
-                  ) : (
-                    <div className="text-muted-foreground">
-                      {row.reviewers.length === 0 ? '—' : reviewerLine(row.reviewers)}
-                    </div>
-                  )}
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="inline-flex items-center gap-2 justify-end">
-                    {row.status === 'in_progress' && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-destructive hover:text-destructive hover:bg-destructive/10 border-destructive/30"
-                        onClick={() => setCancelRow(row)}
-                        title="Cancel this in-flight approval"
-                      >
-                        <Ban className="size-3.5 mr-1" />
-                        Cancel
-                      </Button>
-                    )}
-                    <Link
-                      to={`/documents/${row.documentId}`}
-                      className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
-                    >
-                      View
-                    </Link>
-                  </div>
-                </TableCell>
-              </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Cancel Workflow Safeguard Dialog */}
@@ -1728,104 +1734,106 @@ function DelegatedByMe({ onUpdated }: { onUpdated: () => void }) {
           />
         </div>
       ) : (
-        <Table className="mt-2">
-          <TableHeader>
-            <TableRow>
-              <TableHead>Document</TableHead>
-              <TableHead>Version</TableHead>
-              <TableHead>Delegated To</TableHead>
-              <TableHead>Instructions / Message</TableHead>
-              <TableHead>Status</TableHead>
-              <TableHead>Delegated At</TableHead>
-              <TableHead>Due Date</TableHead>
-              <TableHead className="text-right">Actions</TableHead>
-            </TableRow>
-          </TableHeader>
-          <TableBody>
-            {filteredTasks.map((task) => (
-              <TableRow key={task.taskId}>
-                <TableCell>
-                  <div className="flex flex-col">
-                    {task.documentId ? (
-                      <Link
-                        to={`/documents/${task.documentId}`}
-                        className="font-medium text-primary hover:underline flex items-center gap-1"
-                      >
-                        {task.documentNumber}
-                        <ArrowUpRight className="size-3 text-muted-foreground/60" />
-                      </Link>
-                    ) : (
-                      <span className="font-medium">{task.documentNumber || '—'}</span>
-                    )}
-                    {task.documentName && (
-                      <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
-                        {task.documentName}
-                      </span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="font-semibold text-xs">
-                  v{task.versionNumber ?? 1}
-                </TableCell>
-                <TableCell>
-                  <div className="flex flex-col text-xs">
-                    <span className="font-medium text-foreground">{task.delegatedToName}</span>
-                    {task.delegatedToEmail && (
-                      <span className="text-muted-foreground">{task.delegatedToEmail}</span>
-                    )}
-                  </div>
-                </TableCell>
-                <TableCell className="text-xs max-w-xs">
-                  {task.delegationMessage ? (
-                    <span className="italic text-muted-foreground line-clamp-2" title={task.delegationMessage}>
-                      "{task.delegationMessage}"
-                    </span>
-                  ) : (
-                    <span className="text-muted-foreground/50">—</span>
-                  )}
-                </TableCell>
-                <TableCell>
-                  {task.status === 'pending' ? (
-                    <StatusBadge status="in_review">in review</StatusBadge>
-                  ) : (
-                    <StatusBadge status="released">completed</StatusBadge>
-                  )}
-                </TableCell>
-                <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
-                  {task.delegatedAt ? new Date(task.delegatedAt).toLocaleString() : '—'}
-                </TableCell>
-                <TableCell>
-                  <DueDateBadge dueDate={task.dueDate} />
-                </TableCell>
-                <TableCell className="text-right">
-                  <div className="inline-flex items-center gap-2 justify-end">
-                    {task.canRecall && (
-                      <Button
-                        type="button"
-                        size="sm"
-                        variant="outline"
-                        className="text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/30"
-                        onClick={() => setRecallTask(task)}
-                        title="Recall this delegated task back to your queue"
-                      >
-                        <RotateCcw className="size-3.5 mr-1" />
-                        Recall
-                      </Button>
-                    )}
-                    {task.documentId && (
-                      <Link
-                        to={`/documents/${task.documentId}`}
-                        className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
-                      >
-                        View
-                      </Link>
-                    )}
-                  </div>
-                </TableCell>
+        <div className="mt-4 rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+          <Table>
+            <TableHeader>
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead className="min-w-[200px]">Document</TableHead>
+                <TableHead>Version</TableHead>
+                <TableHead>Delegated To</TableHead>
+                <TableHead>Instructions / Message</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Delegated At</TableHead>
+                <TableHead>Due Date</TableHead>
+                <TableHead className="text-right">Actions</TableHead>
               </TableRow>
-            ))}
-          </TableBody>
-        </Table>
+            </TableHeader>
+            <TableBody>
+              {filteredTasks.map((task) => (
+                <TableRow key={task.taskId} className="border-border/30 hover:bg-muted/40 transition-colors">
+                  <TableCell>
+                    <div className="flex flex-col">
+                      {task.documentId ? (
+                        <Link
+                          to={`/documents/${task.documentId}`}
+                          className="font-medium text-primary hover:underline flex items-center gap-1"
+                        >
+                          {task.documentNumber}
+                          <ArrowUpRight className="size-3 text-muted-foreground/60" />
+                        </Link>
+                      ) : (
+                        <span className="font-medium">{task.documentNumber || '—'}</span>
+                      )}
+                      {task.documentName && (
+                        <span className="text-xs text-muted-foreground line-clamp-1 max-w-xs">
+                          {task.documentName}
+                        </span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="font-semibold text-xs">
+                    v{task.versionNumber ?? 1}
+                  </TableCell>
+                  <TableCell>
+                    <div className="flex flex-col text-xs">
+                      <span className="font-medium text-foreground">{task.delegatedToName}</span>
+                      {task.delegatedToEmail && (
+                        <span className="text-muted-foreground">{task.delegatedToEmail}</span>
+                      )}
+                    </div>
+                  </TableCell>
+                  <TableCell className="text-xs max-w-xs">
+                    {task.delegationMessage ? (
+                      <span className="italic text-muted-foreground line-clamp-2" title={task.delegationMessage}>
+                        "{task.delegationMessage}"
+                      </span>
+                    ) : (
+                      <span className="text-muted-foreground/50">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {task.status === 'pending' ? (
+                      <StatusBadge status="in_review">in review</StatusBadge>
+                    ) : (
+                      <StatusBadge status="released">completed</StatusBadge>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-muted-foreground text-xs whitespace-nowrap">
+                    {task.delegatedAt ? new Date(task.delegatedAt).toLocaleString() : '—'}
+                  </TableCell>
+                  <TableCell>
+                    <DueDateBadge dueDate={task.dueDate} />
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <div className="inline-flex items-center gap-2 justify-end">
+                      {task.canRecall && (
+                        <Button
+                          type="button"
+                          size="sm"
+                          variant="outline"
+                          className="text-amber-700 dark:text-amber-400 hover:bg-amber-500/10 border-amber-500/30"
+                          onClick={() => setRecallTask(task)}
+                          title="Recall this delegated task back to your queue"
+                        >
+                          <RotateCcw className="size-3.5 mr-1" />
+                          Recall
+                        </Button>
+                      )}
+                      {task.documentId && (
+                        <Link
+                          to={`/documents/${task.documentId}`}
+                          className="inline-flex items-center justify-center rounded-md text-xs font-medium ring-offset-background transition-colors focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-ring focus-visible:ring-offset-2 border border-input bg-background hover:bg-accent hover:text-accent-foreground h-8 px-3"
+                        >
+                          View
+                        </Link>
+                      )}
+                    </div>
+                  </TableCell>
+                </TableRow>
+              ))}
+            </TableBody>
+          </Table>
+        </div>
       )}
 
       {/* Recall Safeguard Dialog */}

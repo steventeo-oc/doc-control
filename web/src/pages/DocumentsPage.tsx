@@ -54,7 +54,7 @@ export default function DocumentsPage() {
   const [filters, setFilters] = useState({ type: '', tier: '', department: '', status: '', q: '' });
   const [searchInput, setSearchInput] = useState('');
   const [pageNumber, setPageNumber] = useState(0);
-  const [pageSize, setPageSize] = useState(10);
+  const [pageSize, setPageSize] = useState(20);
   const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated' | null>(null);
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('asc');
   const [loading, setLoading] = useState(false);
@@ -577,36 +577,37 @@ export default function DocumentsPage() {
           <EmptyState icon={FileX} message="No documents match." />
         </div>
       ) : (
-        <Table className={`mt-4 transition-opacity ${loading ? 'opacity-60' : ''}`}>
-          <TableHeader>
-            <TableRow>
-              <TableHead className="w-9 px-2" />
-              <TableHead
-                className="cursor-pointer select-none hover:text-foreground"
-                onClick={() => handleSort('number')}
-              >
-                <div className="flex items-center gap-1">
-                  <span>Number</span>
-                  {sortField === 'number' ? (
-                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
-                  ) : (
-                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
-                  )}
-                </div>
-              </TableHead>
-              <TableHead
-                className="cursor-pointer select-none hover:text-foreground"
-                onClick={() => handleSort('name')}
-              >
-                <div className="flex items-center gap-1">
-                  <span>Name</span>
-                  {sortField === 'name' ? (
-                    sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
-                  ) : (
-                    <ArrowUpDown className="size-3 text-muted-foreground/50" />
-                  )}
-                </div>
-              </TableHead>
+        <div className="mt-4 rounded-2xl border border-border/40 bg-card p-0 shadow-xs overflow-hidden">
+          <Table className={cn('transition-opacity', loading && 'opacity-60')}>
+            <TableHeader>
+              <TableRow className="border-border/40 hover:bg-transparent">
+                <TableHead className="w-9 px-2" />
+                <TableHead
+                  className="w-36 cursor-pointer select-none hover:text-foreground"
+                  onClick={() => handleSort('number')}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Number</span>
+                    {sortField === 'number' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                    ) : (
+                      <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                    )}
+                  </div>
+                </TableHead>
+                <TableHead
+                  className="min-w-[240px] cursor-pointer select-none hover:text-foreground"
+                  onClick={() => handleSort('name')}
+                >
+                  <div className="flex items-center gap-1">
+                    <span>Name</span>
+                    {sortField === 'name' ? (
+                      sortOrder === 'asc' ? <ArrowUp className="size-3.5" /> : <ArrowDown className="size-3.5" />
+                    ) : (
+                      <ArrowUpDown className="size-3 text-muted-foreground/50" />
+                    )}
+                  </div>
+                </TableHead>
               <TableHead
                 className="cursor-pointer select-none hover:text-foreground"
                 onClick={() => handleSort('status')}
@@ -643,7 +644,7 @@ export default function DocumentsPage() {
           </TableHeader>
           <TableBody>
             {(page?.content ?? []).map((doc: DocumentSummary) => (
-              <TableRow key={doc.id}>
+              <TableRow key={doc.id} className="border-border/30 hover:bg-muted/40 transition-colors">
                 <TableCell className="w-9 px-2">
                   {view !== 'trash' && (
                     <button
@@ -668,14 +669,14 @@ export default function DocumentsPage() {
                 </TableCell>
                 <TableCell>
                   <Link
-                    className="text-primary hover:underline font-medium"
+                    className="text-primary hover:underline font-semibold"
                     to={`/documents/${doc.id}`}
                     state={{ fromView: view }}
                   >
                     {doc.documentNumber}
                   </Link>
                 </TableCell>
-                <TableCell>{doc.name}</TableCell>
+                <TableCell className="font-medium text-foreground">{doc.name}</TableCell>
                 <TableCell>
                   <StatusBadge status={doc.status as StatusBadgeKind}>{doc.status}</StatusBadge>
                 </TableCell>
@@ -729,6 +730,7 @@ export default function DocumentsPage() {
             ))}
           </TableBody>
         </Table>
+        </div>
       )}
 
       {page && page.totalPages > 0 && (
@@ -765,13 +767,14 @@ export default function DocumentsPage() {
                 setPageNumber(0);
               }}
             >
-              <SelectTrigger className="h-8 w-18">
+              <SelectTrigger className="h-8 w-20">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="10">10</SelectItem>
                 <SelectItem value="20">20</SelectItem>
                 <SelectItem value="50">50</SelectItem>
+                <SelectItem value="100">100</SelectItem>
               </SelectContent>
             </Select>
           </div>

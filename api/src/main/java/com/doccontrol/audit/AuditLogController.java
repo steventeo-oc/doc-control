@@ -43,6 +43,8 @@ public class AuditLogController {
     public AuditLogQueryService.AuditLogPageDto list(
             @RequestParam(name = "scope", defaultValue = "mine") String scope,
             @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "department_id", required = false) Integer departmentId,
+            @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(name = "to", required = false)
@@ -51,7 +53,7 @@ public class AuditLogController {
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
         User viewer = currentUserProvider.getCurrentUser();
         return queryService.query(viewer, AuditLogQueryService.Scope.parse(scope),
-                ActivityCategory.parse(category), from, to, page, pageSize);
+                ActivityCategory.parse(category), departmentId, q, from, to, page, pageSize);
     }
 
     /** The filtered set as CSV — unpaged, admin-only (also enforced in the service). */
@@ -59,13 +61,16 @@ public class AuditLogController {
     public ResponseEntity<String> export(
             @RequestParam(name = "scope", defaultValue = "company") String scope,
             @RequestParam(name = "category", required = false) String category,
+            @RequestParam(name = "department_id", required = false) Integer departmentId,
+            @RequestParam(name = "q", required = false) String q,
             @RequestParam(name = "from", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate from,
             @RequestParam(name = "to", required = false)
             @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate to) {
         User viewer = currentUserProvider.getCurrentUser();
         List<AuditLogQueryService.AuditLogDto> rows = queryService.exportRows(viewer,
-                AuditLogQueryService.Scope.parse(scope), ActivityCategory.parse(category), from, to);
+                AuditLogQueryService.Scope.parse(scope), ActivityCategory.parse(category),
+                departmentId, q, from, to);
         StringBuilder csv = new StringBuilder(CSV_HEADER).append("\r\n");
         for (AuditLogQueryService.AuditLogDto row : rows) {
             csv.append(csvField(row.performedAt() == null

@@ -7,6 +7,31 @@ import type { AuditLogEntry } from './types';
  * deep link. Unmapped combinations fall back to a readable default.
  */
 
+export type CategoryInfo = {
+  key: string;
+  label: string;
+  /** Tailwind color class stem for badge styling. */
+  color: string;
+};
+
+const CATEGORY_MAP: Record<string, CategoryInfo> = {
+  document: { key: 'documents', label: 'Documents', color: 'blue' },
+  document_version: { key: 'documents', label: 'Documents', color: 'blue' },
+  workflow_instance: { key: 'workflow', label: 'Workflow', color: 'purple' },
+  daily_sweep: { key: 'workflow', label: 'Workflow', color: 'purple' },
+  document_acknowledgment: { key: 'acknowledgment', label: 'Acknowledgment', color: 'emerald' },
+  document_acknowledgment_access: { key: 'acknowledgment', label: 'Acknowledgment', color: 'emerald' },
+  department: { key: 'membership', label: 'Membership', color: 'amber' },
+  user: { key: 'membership', label: 'Membership', color: 'amber' },
+};
+
+const FALLBACK_CATEGORY: CategoryInfo = { key: 'system', label: 'System', color: 'slate' };
+
+/** Returns the human-readable category for an audit entry's entityType. */
+export function activityCategory(entry: AuditLogEntry): CategoryInfo {
+  return CATEGORY_MAP[entry.entityType] ?? FALLBACK_CATEGORY;
+}
+
 function detail(entry: AuditLogEntry, key: string): string | null {
   const value = entry.details?.[key];
   return value === undefined || value === null ? null : String(value);

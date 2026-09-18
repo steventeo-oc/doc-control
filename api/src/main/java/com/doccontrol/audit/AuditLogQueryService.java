@@ -48,7 +48,7 @@ public class AuditLogQueryService {
     /** One activity row as the API returns it. */
     public record AuditLogDto(Integer id, LocalDateTime performedAt, String actorName,
                               String actorEmail, String entityType, String action,
-                              Integer entityId, String departmentCode,
+                              Integer entityId, Integer departmentId, String departmentCode,
                               Map<String, Object> details) {
     }
 
@@ -97,11 +97,18 @@ public class AuditLogQueryService {
     @Transactional(readOnly = true)
     public AuditLogPageDto query(User viewer, Scope scope, ActivityCategory category,
                                  LocalDate from, LocalDate to, int page, int pageSize) {
+        return query(viewer, scope, category, null, null, from, to, page, pageSize);
+    }
+
+    @Transactional(readOnly = true)
+    public AuditLogPageDto query(User viewer, Scope scope, ActivityCategory category,
+                                 Integer departmentId, String q,
+                                 LocalDate from, LocalDate to, int page, int pageSize) {
         requireScopeAllowed(viewer, scope);
         Pageable pageable = PageRequest.of(Math.max(page, 0), Math.min(Math.max(pageSize, 1), MAX_PAGE_SIZE),
                 Sort.by(Sort.Direction.DESC, "performedAt", "id"));
         Page<AuditLog> result = auditLogRepository.findAll(
-                specification(viewer, scope, category, from, to), pageable);
+                specification(viewer, scope, category, departmentId, q, from, to), pageable);
         Map<Integer, String> codes = departmentCodesFor(result.getContent());
         return AuditLogPageDto.from(result.map(entry -> toDto(entry, codes)));
     }
@@ -130,12 +137,19 @@ public class AuditLogQueryService {
     @Transactional(readOnly = true)
     public List<AuditLogDto> exportRows(User viewer, Scope scope, ActivityCategory category,
                                         LocalDate from, LocalDate to) {
+        return exportRows(viewer, scope, category, null, null, from, to);
+    }
+
+    @Transactional(readOnly = true)
+    public List<AuditLogDto> exportRows(User viewer, Scope scope, ActivityCategory category,
+                                        Integer departmentId, String q,
+                                        LocalDate from, LocalDate to) {
         if (!currentUserProvider.isAdmin()) {
             throw new ForbiddenException("Only admins can export the audit log.");
         }
         requireScopeAllowed(viewer, scope);
         List<AuditLog> rows = auditLogRepository.findAll(
-                specification(viewer, scope, category, from, to),
+                specification(viewer, scope, category, departmentId, q, from, to),
                 Sort.by(Sort.Direction.DESC, "performedAt", "id"));
         Map<Integer, String> codes = departmentCodesFor(rows);
         return rows.stream().map(entry -> toDto(entry, codes)).toList();
@@ -188,35 +202,60 @@ public class AuditLogQueryService {
                 entry.getEntityType(),
                 entry.getAction(),
                 entry.getEntityId(),
+                entry.getDepartmentId(),
                 entry.getDepartmentId() == null ? null : codes.get(entry.getDepartmentId()),
                 details);
     }
 
     private Specification<AuditLog> specification(User viewer, Scope scope,
                                                   ActivityCategory category,
+                                                  Integer departmentId, String q,
                                                   LocalDate from, LocalDate to) {
         Specification<AuditLog> spec = switch (scope) {
-            case MINE -> (root, q, cb) -> cb.equal(root.get("performedBy").get("id"), viewer.getId());
+            case MINE -> (root, query, cb) -> cb.equal(root.get("performedBy").get("id"), viewer.getId());
             case DEPARTMENTS -> {
                 List<Integer> departmentIds = userDepartmentRepository.findByUserId(viewer.getId())
                         .stream().map(ud -> ud.getDepartment().getId()).toList();
                 // short-circuit: no memberships → no department rows, ever
                 yield departmentIds.isEmpty()
-                        ? (root, q, cb) -> cb.disjunction()
-                        : (root, q, cb) -> root.get("departmentId").in(departmentIds);
+                        ? (root, query, cb) -> cb.disjunction()
+                        : (root, query, cb) -> root.get("departmentId").in(departmentIds);
             }
-            case COMPANY -> (root, q, cb) -> cb.conjunction();
+            case COMPANY -> (root, query, cb) -> cb.conjunction();
         };
+        if (departmentId != null) {
+            if (scope == Scope.DEPARTMENTS) {
+                List<Integer> departmentIds = userDepartmentRepository.findByUserId(viewer.getId())
+                        .stream().map(ud -> ud.getDepartment().getId()).toList();
+                if (!departmentIds.contains(departmentId)) {
+                    spec = spec.and((root, query, cb) -> cb.disjunction());
+                } else {
+                    spec = spec.and((root, query, cb) -> cb.equal(root.get("departmentId"), departmentId));
+                }
+            } else {
+                spec = spec.and((root, query, cb) -> cb.equal(root.get("departmentId"), departmentId));
+            }
+        }
         if (category != null) {
-            spec = spec.and((root, q, cb) -> root.get("entityType").in(category.entityTypes()));
+            spec = spec.and((root, query, cb) -> root.get("entityType").in(category.entityTypes()));
         }
         if (from != null) {
-            spec = spec.and((root, q, cb) -> cb.greaterThanOrEqualTo(root.get("performedAt"),
+            spec = spec.and((root, query, cb) -> cb.greaterThanOrEqualTo(root.get("performedAt"),
                     from.atStartOfDay()));
         }
         if (to != null) {
-            spec = spec.and((root, q, cb) -> cb.lessThan(root.get("performedAt"),
+            spec = spec.and((root, query, cb) -> cb.lessThan(root.get("performedAt"),
                     to.plusDays(1).atStartOfDay()));
+        }
+        if (q != null && !q.isBlank()) {
+            String needle = "%" + q.trim().toLowerCase() + "%";
+            spec = spec.and((root, query, cb) -> cb.or(
+                    cb.like(cb.lower(root.get("performedBy").get("name")), needle),
+                    cb.like(cb.lower(root.get("performedBy").get("email")), needle),
+                    cb.like(cb.lower(root.get("action")), needle),
+                    cb.like(cb.lower(root.get("entityType")), needle),
+                    cb.like(cb.lower(cb.function("text", String.class, root.get("details"))), needle)
+            ));
         }
         return spec;
     }

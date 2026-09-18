@@ -219,6 +219,8 @@ export const acknowledgmentApi = {
 export interface ActivityFilters {
   scope: ActivityScope;
   category?: string;
+  departmentId?: number;
+  q?: string;
   /** Inclusive ISO dates (the UI's Today/7/14/28 presets compute these). */
   from?: string;
   to?: string;
@@ -231,6 +233,8 @@ export const auditApi = {
     const params = new URLSearchParams();
     params.set('scope', filters.scope);
     if (filters.category) params.set('category', filters.category);
+    if (filters.departmentId) params.set('department_id', String(filters.departmentId));
+    if (filters.q) params.set('q', filters.q);
     if (filters.from) params.set('from', filters.from);
     if (filters.to) params.set('to', filters.to);
     params.set('page', String(filters.page ?? 0));
@@ -243,6 +247,8 @@ export const auditApi = {
     const params = new URLSearchParams();
     params.set('scope', filters.scope);
     if (filters.category) params.set('category', filters.category);
+    if (filters.departmentId) params.set('department_id', String(filters.departmentId));
+    if (filters.q) params.set('q', filters.q);
     if (filters.from) params.set('from', filters.from);
     if (filters.to) params.set('to', filters.to);
     return `/api/audit-log/export?${params.toString()}`;

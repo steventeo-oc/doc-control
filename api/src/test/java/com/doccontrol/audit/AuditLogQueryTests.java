@@ -229,6 +229,44 @@ class AuditLogQueryTests {
         assertThat(page.get("totalPages").asInt()).isEqualTo(4);
     }
 
+    @Test
+    void departmentIdFilterInCompanyAndDepartmentsScope() throws Exception {
+        Fixture f = seed();
+        MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
+
+        // Filter company scope by deptA id -> exactly the 2 deptA rows
+        JsonNode pageDeptA = listScope(admin, "?scope=company&department_id=" + f.deptA().getId());
+        assertThat(pageDeptA.get("totalElements").asLong()).isEqualTo(2);
+        assertThat(deptCodesOf(pageDeptA)).containsOnly(f.deptA().getCode());
+
+        // Filter departments scope as user A for deptA -> exactly 2 rows
+        JsonNode pageUserA = listScope(loginAs(f.actorAEmail()), "?scope=departments&department_id=" + f.deptA().getId());
+        assertThat(pageUserA.get("totalElements").asLong()).isEqualTo(2);
+
+        // Filter departments scope as user A for deptB (which user A does not belong to) -> 0 rows
+        JsonNode pageUserAOther = listScope(loginAs(f.actorAEmail()), "?scope=departments&department_id=" + f.deptB().getId());
+        assertThat(pageUserAOther.get("totalElements").asLong()).isEqualTo(0);
+    }
+
+    @Test
+    void keywordSearchFiltersByActorActionOrDetails() throws Exception {
+        Fixture f = seed();
+        MockHttpSession admin = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
+
+        // Search for actor B email
+        JsonNode byEmail = listScope(admin, "?scope=company&q=audit-b");
+        assertThat(byEmail.get("totalElements").asLong()).isEqualTo(1);
+        assertThat(actorEmailsOf(byEmail)).containsOnly(f.actorBEmail());
+
+        // Search for status_changed
+        JsonNode byAction = listScope(admin, "?scope=company&q=status_changed");
+        assertThat(byAction.get("totalElements").asLong()).isEqualTo(1);
+
+        // Search for document number in details ("SOP-A-0001")
+        JsonNode byDocNum = listScope(admin, "?scope=company&q=SOP-A-0001");
+        assertThat(byDocNum.get("totalElements").asLong()).isEqualTo(1);
+    }
+
     private JsonNode listScope(MockHttpSession session, String query) throws Exception {
         MvcResult result = mockMvc.perform(get("/audit-log" + query).session(session))
                 .andExpect(status().isOk())

@@ -270,6 +270,7 @@ export interface AuditLogEntry {
   entityType: string;
   action: string;
   entityId: number;
+  departmentId?: number | null;
   departmentCode: string | null;
   details: Record<string, unknown> | null;
 }

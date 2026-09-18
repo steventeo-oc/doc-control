@@ -3,13 +3,17 @@ import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
   Building2,
-  CircleUserRound,
   ClipboardCheck,
+  Eye,
+  EyeOff,
   FileText,
+  KeyRound,
   LayoutDashboard,
   ListChecks,
+  LogOut,
   Menu,
   Settings,
+  ShieldCheck,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
@@ -17,6 +21,7 @@ import { lookupApi, userApi, workflowApi } from '../api/resources';
 import type { Department, TaskCounts, UserSummary } from '../api/types';
 import { ApiError } from '../api/client';
 import { cn } from '../lib/utils';
+import { Badge } from './ui/badge';
 import { Button } from './ui/button';
 import { Input } from './ui/input';
 import { Label } from './ui/label';
@@ -110,6 +115,13 @@ function RailLink({ to, icon: Icon, label }: { to: string; icon: LucideIcon; lab
  * DOM at once (one behind `hidden md:flex`, one behind `md:hidden`) — a
  * single shared state would portal-render two menus simultaneously.
  */
+function getInitials(name?: string | null): string {
+  if (!name) return 'U';
+  const parts = name.trim().split(/\s+/);
+  if (parts.length === 1) return parts[0].substring(0, 2).toUpperCase();
+  return (parts[0][0] + parts[parts.length - 1][0]).toUpperCase();
+}
+
 function AccountMenu(props: {
   user: UserSummary | null;
   open: boolean;
@@ -118,11 +130,14 @@ function AccountMenu(props: {
   onOpenPassword: () => void;
   onLogout: () => void;
 }) {
+  const initials = getInitials(props.user?.name);
+  const isAdmin = props.user?.roles.includes('Admin') ?? false;
+
   return (
     <DropdownMenu open={props.open} onOpenChange={props.onOpenChange}>
       <DropdownMenuTrigger
         aria-label="Account menu"
-        title="Account menu"
+        title={props.user ? `${props.user.name} (${props.user.email})` : 'Account menu'}
         className={cn(
           // bg-transparent/border-0: raw <button> elements fall through to
           // the legacy base-layer button rule (white bg + gray border) —
@@ -132,30 +147,74 @@ function AccountMenu(props: {
             ? // Desktop rail: the same stacked icon+label treatment as
               // RailLink, so the account entry reads as part of the same
               // list instead of a floating icon.
-              'flex w-full flex-col items-center gap-1 px-1 py-2 text-[11px] leading-tight'
+              'flex w-full flex-col items-center gap-1.5 px-1 py-2 text-[11px] leading-tight'
             : // Mobile top bar: there is horizontal room here — icon with a
               // visible label beside it.
               'flex items-center gap-2 px-2 py-1.5 text-sm',
         )}
       >
-        <CircleUserRound
-          className={cn('text-slate-300', props.side === 'right' ? 'size-5' : 'size-6')}
-          aria-hidden="true"
-        />
-        <span>Account</span>
+        <div className="flex size-7 shrink-0 items-center justify-center rounded-full bg-primary/25 border border-primary/40 text-xs font-semibold text-white shadow-xs">
+          {initials}
+        </div>
+        <span>{props.side === 'right' ? 'Account' : (props.user?.name ?? 'Account')}</span>
       </DropdownMenuTrigger>
-      <DropdownMenuContent side={props.side} align="end" className="w-64">
-        <DropdownMenuLabel className="font-normal">
-          <div className="flex flex-col gap-0.5">
-            <span className="font-medium text-foreground">{props.user?.name}</span>
-            <span className="text-xs text-muted-foreground">{props.user?.email}</span>
-            <span className="text-xs text-muted-foreground">
-              {props.user?.departments.map((d) => `${d.code}: ${d.level}`).join(' · ')}
-            </span>
+      <DropdownMenuContent side={props.side} align="end" className="w-72 p-1.5">
+        <DropdownMenuLabel className="font-normal p-2 pb-2.5">
+          <div className="flex items-start gap-2.5">
+            <div className="flex size-9 shrink-0 items-center justify-center rounded-full bg-primary/15 text-xs font-semibold text-primary">
+              {initials}
+            </div>
+            <div className="flex flex-col gap-0.5 min-w-0 flex-1">
+              <div className="flex items-center justify-between gap-1">
+                <span className="font-medium text-foreground truncate text-sm">
+                  {props.user?.name}
+                </span>
+                {isAdmin && (
+                  <Badge variant="secondary" className="text-[10px] px-1.5 py-0 h-4 shrink-0 font-medium">
+                    Admin
+                  </Badge>
+                )}
+              </div>
+              <span className="text-xs text-muted-foreground truncate">
+                {props.user?.email}
+              </span>
+            </div>
           </div>
+
+          {/* Department Memberships */}
+          {props.user?.departments && props.user.departments.length > 0 && (
+            <div className="mt-2.5 pt-2 border-t border-border/60 flex flex-wrap gap-1">
+              {props.user.departments.map((d) => (
+                <span
+                  key={d.id}
+                  className={cn(
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded text-[10px] font-medium',
+                    d.level === 'MANAGER'
+                      ? 'bg-success/15 text-success'
+                      : d.level === 'COLLABORATOR'
+                      ? 'bg-info/15 text-info'
+                      : 'bg-muted text-muted-foreground',
+                  )}
+                  title={`${d.label} (${d.level})`}
+                >
+                  <span className="font-semibold">{d.code}</span>
+                  <span className="text-[9px] opacity-80 lowercase">{d.level.toLowerCase()}</span>
+                </span>
+              ))}
+            </div>
+          )}
         </DropdownMenuLabel>
         <DropdownMenuSeparator />
+
+        <DropdownMenuItem asChild>
+          <NavLink to="/activity?scope=mine" className="flex items-center gap-2 cursor-pointer text-sm">
+            <Activity className="size-4 text-muted-foreground" />
+            <span>My activity</span>
+          </NavLink>
+        </DropdownMenuItem>
+
         <DropdownMenuItem
+          className="flex items-center gap-2 cursor-pointer text-sm"
           onSelect={(event) => {
             // Prevent Radix from returning focus to the trigger before the
             // Dialog mounts — a known conflict when a Dialog is opened
@@ -168,9 +227,19 @@ function AccountMenu(props: {
             props.onOpenPassword();
           }}
         >
-          Change password
+          <KeyRound className="size-4 text-muted-foreground" />
+          <span>Change password</span>
         </DropdownMenuItem>
-        <DropdownMenuItem onSelect={props.onLogout}>Log out</DropdownMenuItem>
+
+        <DropdownMenuSeparator />
+
+        <DropdownMenuItem
+          className="flex items-center gap-2 cursor-pointer text-sm text-destructive focus:text-destructive focus:bg-destructive/10"
+          onSelect={props.onLogout}
+        >
+          <LogOut className="size-4" />
+          <span>Log out</span>
+        </DropdownMenuItem>
       </DropdownMenuContent>
     </DropdownMenu>
   );
@@ -286,6 +355,10 @@ export default function Layout() {
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [currentPassword, setCurrentPassword] = useState('');
   const [newPassword, setNewPassword] = useState('');
+  const [confirmPassword, setConfirmPassword] = useState('');
+  const [showCurrentPassword, setShowCurrentPassword] = useState(false);
+  const [showNewPassword, setShowNewPassword] = useState(false);
+  const [showConfirmPassword, setShowConfirmPassword] = useState(false);
   const [passwordError, setPasswordError] = useState<string | null>(null);
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [passwordSubmitting, setPasswordSubmitting] = useState(false);
@@ -293,6 +366,10 @@ export default function Layout() {
   function openPasswordDialog() {
     setCurrentPassword('');
     setNewPassword('');
+    setConfirmPassword('');
+    setShowCurrentPassword(false);
+    setShowNewPassword(false);
+    setShowConfirmPassword(false);
     setPasswordError(null);
     setPasswordSuccess(false);
     setPasswordOpen(true);
@@ -301,6 +378,14 @@ export default function Layout() {
   async function handlePasswordSubmit(event: FormEvent) {
     event.preventDefault();
     if (!user) return;
+    if (newPassword !== confirmPassword) {
+      setPasswordError('New passwords do not match.');
+      return;
+    }
+    if (newPassword.length < 8) {
+      setPasswordError('New password must be at least 8 characters.');
+      return;
+    }
     setPasswordSubmitting(true);
     setPasswordError(null);
     try {
@@ -308,6 +393,7 @@ export default function Layout() {
       setPasswordSuccess(true);
       setCurrentPassword('');
       setNewPassword('');
+      setConfirmPassword('');
     } catch (err) {
       setPasswordError(err instanceof ApiError ? err.message : 'Password change failed.');
     } finally {
@@ -494,48 +580,108 @@ export default function Layout() {
       </div>
 
       <Dialog open={passwordOpen} onOpenChange={setPasswordOpen}>
-        <DialogContent>
+        <DialogContent className="sm:max-w-md">
           <DialogHeader>
             <DialogTitle>Change password</DialogTitle>
             <DialogDescription>
-              Enter your current password and a new password (minimum 8 characters).
+              Enter your current password and choose a new password (minimum 8 characters).
             </DialogDescription>
           </DialogHeader>
           {passwordSuccess ? (
-            <div className="rounded-md bg-success/10 px-3 py-2 text-sm text-success">
-              Password changed.
+            <div className="flex flex-col gap-4 py-2">
+              <div className="rounded-md bg-success/10 border border-success/20 px-3.5 py-3 text-sm text-success flex items-center gap-2.5">
+                <ShieldCheck className="size-5 shrink-0" />
+                <span>Your password has been changed successfully.</span>
+              </div>
+              <DialogFooter>
+                <Button type="button" onClick={() => setPasswordOpen(false)}>
+                  Done
+                </Button>
+              </DialogFooter>
             </div>
           ) : (
             <form className="flex flex-col gap-4" onSubmit={handlePasswordSubmit}>
               {passwordError && (
-                <div className="rounded-md bg-destructive/10 px-3 py-2 text-sm text-destructive">
+                <div className="rounded-md bg-destructive/10 border border-destructive/20 px-3 py-2 text-sm text-destructive">
                   {passwordError}
                 </div>
               )}
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="current-password">Current password</Label>
-                <Input
-                  id="current-password"
-                  type="password"
-                  autoComplete="current-password"
-                  required
-                  value={currentPassword}
-                  onChange={(e) => setCurrentPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="current-password"
+                    type={showCurrentPassword ? 'text' : 'password'}
+                    autoComplete="current-password"
+                    required
+                    value={currentPassword}
+                    onChange={(e) => setCurrentPassword(e.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showCurrentPassword ? 'Hide current password' : 'Show current password'}
+                    onClick={() => setShowCurrentPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showCurrentPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="new-password">New password</Label>
-                <Input
-                  id="new-password"
-                  type="password"
-                  autoComplete="new-password"
-                  required
-                  minLength={8}
-                  value={newPassword}
-                  onChange={(e) => setNewPassword(e.target.value)}
-                />
+                <div className="relative">
+                  <Input
+                    id="new-password"
+                    type={showNewPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={newPassword}
+                    onChange={(e) => setNewPassword(e.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showNewPassword ? 'Hide new password' : 'Show new password'}
+                    onClick={() => setShowNewPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showNewPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
               </div>
-              <DialogFooter>
+              <div className="flex flex-col gap-1.5">
+                <Label htmlFor="confirm-password">Confirm new password</Label>
+                <div className="relative">
+                  <Input
+                    id="confirm-password"
+                    type={showConfirmPassword ? 'text' : 'password'}
+                    autoComplete="new-password"
+                    required
+                    minLength={8}
+                    value={confirmPassword}
+                    onChange={(e) => setConfirmPassword(e.target.value)}
+                    className="pr-9"
+                  />
+                  <button
+                    type="button"
+                    aria-label={showConfirmPassword ? 'Hide confirmed password' : 'Show confirmed password'}
+                    onClick={() => setShowConfirmPassword((v) => !v)}
+                    className="absolute right-2.5 top-1/2 -translate-y-1/2 text-muted-foreground hover:text-foreground"
+                  >
+                    {showConfirmPassword ? <EyeOff className="size-4" /> : <Eye className="size-4" />}
+                  </button>
+                </div>
+              </div>
+              <DialogFooter className="gap-2 sm:gap-0">
+                <Button
+                  type="button"
+                  variant="outline"
+                  onClick={() => setPasswordOpen(false)}
+                >
+                  Cancel
+                </Button>
                 <Button type="submit" disabled={passwordSubmitting}>
                   {passwordSubmitting ? 'Changing…' : 'Change password'}
                 </Button>

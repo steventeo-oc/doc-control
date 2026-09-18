@@ -918,6 +918,28 @@
     Verified with unit test `DocumentListFilterTests`, frontend TypeScript build (0 errors),
     and automated Edge CDP browser testing across 12 reference screenshots in `screenshots/improvements/`. Next up per the plan-back's
     §8 order: Phase 3 (Departments — list, detail, members panel), not started.
+    **Document Favorites & Number Generation Preview (2026-09-17)**:
+    1. Migration V11 (`V11__user_document_favorites.sql`) and `UserDocumentFavorite` entity/repo added. Users can star/favorite documents (`POST/DELETE /documents/{id}/favorite`), with `isFavorite` flag on summaries and detail DTOs.
+    2. `GET /documents/next-number-preview?typeId=...&departmentId=...` (`DocumentNumberPreviewDto`) provides real-time preview of the calculated next sequence number directly inside the New Document creation drawer.
+    **Version Restore & Draft Discard (2026-09-17)**:
+    1. `POST /documents/{id}/versions/{versionId}/restore` (`restoreAsDraft`) allows reverting to prior superseded versions by creating a new draft copy carrying over the previous file content with an audited revision record.
+    2. `DELETE /documents/{id}/versions/{versionId}` (`discardDraft`) safely deletes unapproved draft versions, cleaning associated workflow instances and notification logs without touching released versions.
+    **Document Status vs. Progress Separation (2026-09-17)**:
+    Clarified document lifecycle by separating the overloaded Status column into life-cycle **Status** (`Draft`, `Approved`, `Effective`, `Obsolete`) and an explicit **Undergoing Task / Progress** column (`In Approval Workflow`, `Pending My Review`, `Pending My Acknowledgment`, `Locked (Draft vN)`). Cleaned obsolete "superseded" dropdown filter.
+    **Tasks Page Overhaul & Approval History (2026-09-17/18)**:
+    1. Unified tabbed navigation replacing dual views: `My Approvals`, `Pending My Acknowledgment`, `Started by Me`, and `Delegated by Me` with live count badges (`TaskCountsDto`).
+    2. Detailed approval history timeline displaying reviewer progress, completion dates/times, reviewer feedback notes (`WorkflowFeedbackDto`), delegator tracking (`DelegatedTaskDto`), and cancellation reasons.
+    3. Delegation tracking & messaging: mandatory instructions/context sent to colleagues when reassigning review tasks, tracked live in the "Delegated by Me" tab.
+    4. Real-time keyword search and urgency filter pills (`All`, `Overdue`, `Due Soon (≤ 2 days)`, `Delegated to Me`).
+    5. Strict One-by-One Acknowledgment: preserved mandatory individual review and compliance checkbox per ISO 9001 standards (no bulk action).
+    **Document Draft & Approval Locking (2026-09-17/18)**:
+    Backend invariants (`409 Conflict`) in `DocumentVersionService` and `DocumentService` prevent concurrent draft creation or metadata edits while an approval workflow or draft is in progress. Prominent visual lock badges and disabled mutation forms protect document integrity.
+    **Quick In-Browser Document Preview & Resilient File Handling (2026-09-18)**:
+    1. `?inline=true` parameter on `GET /documents/{id}/versions/{versionId}/download` serves inline `Content-Disposition` for in-browser PDF rendering.
+    2. `DocumentPreviewModal.tsx` provides both an embedded viewer (`DocumentPreviewViewer`) and a fullscreen modal (`DocumentPreviewModal`).
+    3. Magic bytes validation (`%PDF-` header check): prevents native Chrome PDF viewer crashes ("Failed to load PDF document") when non-renditionable formats (e.g. `.winmd`, CAD, ZIP) are reviewed, cleanly falling back to an in-browser preview unavailable card with a direct file download button.
+    4. Reviewer draft visibility safeguard: `DocumentVersionService.findVisibleVersion(...)` permits reviewers in active workflows to access unreleased draft versions without 404 access barriers.
+    5. Soft styling & unstacked controls: removed duplicate close cross icon via `showCloseButton={false}`, unstacked "Open in tab" and "X" buttons into a unified flex toolbar in `TasksPage.tsx`, and softened all dialog borders, divider lines, and form controls to `border-border/40` and `rounded-2xl`.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

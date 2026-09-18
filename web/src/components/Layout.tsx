@@ -407,14 +407,7 @@ export default function Layout() {
 
   return (
     <div
-      className={cn(
-        'flex min-h-screen flex-col md:flex-row bg-background',
-        // Dashboard & navigation plan-back round two: on the dashboard at
-        // ≥861px the shell is exactly the viewport and nothing page-scrolls —
-        // each dashboard card scrolls internally instead. Every other route,
-        // and narrower widths on the dashboard, keep the natural page scroll.
-        section === 'dashboard' && 'min-[861px]:h-screen min-[861px]:overflow-hidden',
-      )}
+      className="flex min-h-screen flex-col md:flex-row bg-background"
     >
       {/* Mobile top bar (below md only): hamburger, brand mark, account menu —
           the three ways in, without the full-height rail. */}
@@ -519,18 +512,8 @@ export default function Layout() {
         />
       </aside>
 
-      <div
-        className={cn(
-          'flex min-w-0 flex-1 flex-col justify-between',
-          section === 'dashboard' && 'min-[861px]:h-screen min-[861px]:min-h-0',
-        )}
-      >
-        <div
-          className={cn(
-            'flex min-w-0 flex-1 items-start gap-6',
-            section === 'dashboard' && 'min-[861px]:items-stretch min-[861px]:min-h-0',
-          )}
-        >
+      <div className="flex min-w-0 flex-1 flex-col justify-between">
+        <div className="flex min-w-0 flex-1 items-start gap-6">
           {sidebarItems.length > 0 && (
             <aside className="hidden min-w-[220px] shrink-0 flex-col gap-0.5 border-r border-border p-4 md:flex self-stretch sticky top-0 max-h-[calc(100vh-49px)] overflow-y-auto z-10">
               {sidebarItems.map((item) => {
@@ -564,17 +547,7 @@ export default function Layout() {
               })}
             </aside>
           )}
-          {/* The dashboard uses the full viewport width (round-two polish);
-              the section pages keep the 1100px reading width anchored next to
-              the sub-nav sidebar with consistent spacing. */}
-          <main
-            className={cn(
-              'flex-1 p-6',
-              section === 'dashboard' ? 'max-w-none' : 'w-full max-w-[1536px]',
-              section === 'dashboard' &&
-                'min-[861px]:flex min-[861px]:flex-col min-[861px]:min-h-0 min-[861px]:overflow-hidden',
-            )}
-          >
+          <main className="flex-1 p-6 w-full max-w-[1536px]">
             <Outlet />
           </main>
         </div>

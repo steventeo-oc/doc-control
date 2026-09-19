@@ -1,6 +1,8 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, useCallback, useEffect, useMemo, useState } from 'react';
 import {
   Check,
+  ChevronLeft,
+  ChevronRight,
   Eye,
   EyeOff,
   KeyRound,
@@ -63,6 +65,8 @@ const MEMBERSHIP_LEVELS: { level: MembershipLevel; label: string; desc: string }
   { level: 'CONSUMER', label: 'Consumer', desc: 'Read released documents and complete acknowledgments' },
 ];
 
+const PAGE_SIZES = [10, 15, 20, 50, 100];
+
 function getInitials(name?: string | null): string {
   if (!name) return 'U';
   const parts = name.trim().split(/\s+/);
@@ -83,6 +87,10 @@ export default function UsersPage() {
   const [search, setSearch] = useState('');
   const [roleFilter, setRoleFilter] = useState('ALL');
   const [statusFilter, setStatusFilter] = useState('ALL');
+
+  // Pagination
+  const [page, setPage] = useState(0);
+  const [pageSize, setPageSize] = useState(15);
 
   // --- Add User Dialog ---
   const [addOpen, setAddOpen] = useState(false);
@@ -303,7 +311,7 @@ export default function UsersPage() {
     });
   }
 
-  // --- Filtering ---
+  // --- Filtering & Pagination ---
   const filteredUsers = users.filter((u) => {
     if (roleFilter !== 'ALL' && !u.roles.includes(roleFilter)) {
       return false;
@@ -323,7 +331,26 @@ export default function UsersPage() {
     return true;
   });
 
+  const totalPages = Math.max(1, Math.ceil(filteredUsers.length / pageSize));
+  const paginatedUsers = useMemo(() => {
+    const start = page * pageSize;
+    return filteredUsers.slice(start, start + pageSize);
+  }, [filteredUsers, page, pageSize]);
+
+  useEffect(() => {
+    if (page >= totalPages && totalPages > 0) {
+      setPage(Math.max(0, totalPages - 1));
+    }
+  }, [totalPages, page]);
+
   const hasActiveFilters = search.trim() !== '' || roleFilter !== 'ALL' || statusFilter !== 'ALL';
+
+  const handleClearFilters = () => {
+    setSearch('');
+    setRoleFilter('ALL');
+    setStatusFilter('ALL');
+    setPage(0);
+  };
 
   return (
     <>
@@ -366,13 +393,19 @@ export default function UsersPage() {
               type="text"
               placeholder="Search by name, email, or department…"
               value={search}
-              onChange={(e) => setSearch(e.target.value)}
+              onChange={(e) => {
+                setSearch(e.target.value);
+                setPage(0);
+              }}
               className="pl-9 pr-8"
             />
             {search && (
               <button
                 type="button"
-                onClick={() => setSearch('')}
+                onClick={() => {
+                  setSearch('');
+                  setPage(0);
+                }}
                 className="absolute right-2 top-1/2 -translate-y-1/2 rounded-sm p-0.5 text-muted-foreground hover:text-foreground"
               >
                 <X className="size-3.5" />
@@ -380,7 +413,13 @@ export default function UsersPage() {
             )}
           </div>
 
-          <Select value={roleFilter} onValueChange={setRoleFilter}>
+          <Select
+            value={roleFilter}
+            onValueChange={(val) => {
+              setRoleFilter(val);
+              setPage(0);
+            }}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All roles" />
             </SelectTrigger>
@@ -391,7 +430,13 @@ export default function UsersPage() {
             </SelectContent>
           </Select>
 
-          <Select value={statusFilter} onValueChange={setStatusFilter}>
+          <Select
+            value={statusFilter}
+            onValueChange={(val) => {
+              setStatusFilter(val);
+              setPage(0);
+            }}
+          >
             <SelectTrigger className="w-[140px]">
               <SelectValue placeholder="All statuses" />
             </SelectTrigger>
@@ -406,11 +451,7 @@ export default function UsersPage() {
             <Button
               variant="ghost"
               size="sm"
-              onClick={() => {
-                setSearch('');
-                setRoleFilter('ALL');
-                setStatusFilter('ALL');
-              }}
+              onClick={handleClearFilters}
             >
               <X className="mr-1 size-3.5" />
               Clear filters
@@ -466,7 +507,7 @@ export default function UsersPage() {
                   </TableCell>
                 </TableRow>
               )}
-              {filteredUsers.map((user) => {
+              {paginatedUsers.map((user) => {
                 const isMe = user.id === me?.id;
                 const visibleDepts = user.departments.slice(0, 3);
                 const extraCount = user.departments.length - visibleDepts.length;
@@ -631,6 +672,59 @@ export default function UsersPage() {
           </Table>
         </CardContent>
       </Card>
+
+      {/* Pagination Controls */}
+      {filteredUsers.length > 0 && (
+        <div className="mt-4 flex flex-wrap items-center justify-between gap-3 text-sm text-muted-foreground">
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2.5 text-xs rounded-lg gap-1"
+              disabled={page === 0}
+              onClick={() => setPage((p) => Math.max(0, p - 1))}
+            >
+              <ChevronLeft className="size-3.5" />
+              <span>Previous</span>
+            </Button>
+            <span className="text-xs px-1">
+              Page {page + 1} of {totalPages} ({filteredUsers.length} {filteredUsers.length === 1 ? 'user' : 'users'})
+            </span>
+            <Button
+              variant="outline"
+              size="sm"
+              className="h-8 px-2.5 text-xs rounded-lg gap-1"
+              disabled={page >= totalPages - 1}
+              onClick={() => setPage((p) => p + 1)}
+            >
+              <span>Next</span>
+              <ChevronRight className="size-3.5" />
+            </Button>
+          </div>
+
+          <div className="flex items-center gap-2">
+            <span className="text-xs">Rows per page:</span>
+            <Select
+              value={String(pageSize)}
+              onValueChange={(val) => {
+                setPageSize(Number(val));
+                setPage(0);
+              }}
+            >
+              <SelectTrigger className="h-8 w-20 text-xs">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {PAGE_SIZES.map((size) => (
+                  <SelectItem key={size} value={String(size)} className="text-xs">
+                    {size}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
+      )}
 
       {/* --- Add User Dialog --- */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>

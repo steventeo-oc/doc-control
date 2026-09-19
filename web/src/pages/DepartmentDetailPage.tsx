@@ -4,7 +4,6 @@ import {
   Activity,
   ArrowDown,
   ArrowLeft,
-  ArrowRight,
   ArrowUp,
   ArrowUpDown,
   Building2,
@@ -418,18 +417,12 @@ export default function DepartmentDetailPage() {
       {/* KPI Metric Stat Cards (Total Documents & Department Members) */}
       <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
         {/* Card 1: Total Documents */}
-        <Card
-          onClick={() => setActiveTab('documents')}
-          className={cn(
-            'group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-xs transition-all duration-200 cursor-pointer hover:shadow-md hover:border-primary/40',
-            activeTab === 'documents' ? 'border-primary/40 ring-1 ring-primary/20' : 'border-border/40'
-          )}
-        >
+        <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Total Documents
             </span>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary transition-transform group-hover:scale-105">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-primary/10 text-primary">
               <FileText className="size-4.5" />
             </span>
           </div>
@@ -437,28 +430,19 @@ export default function DepartmentDetailPage() {
             <div className="text-3xl font-bold tracking-tight text-foreground">
               {department.documentCount ?? docs?.totalElements ?? 0}
             </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Controlled documents registered under {department.code}</span>
-              <span className="inline-flex items-center gap-1 font-medium text-primary opacity-0 transition-opacity group-hover:opacity-100">
-                View documents <ArrowRight className="size-3" />
-              </span>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Controlled documents registered under {department.code}
+            </p>
           </div>
         </Card>
 
         {/* Card 2: Department Members */}
-        <Card
-          onClick={() => setActiveTab('members')}
-          className={cn(
-            'group relative overflow-hidden rounded-2xl border bg-card p-5 shadow-xs transition-all duration-200 cursor-pointer hover:shadow-md hover:border-emerald-500/40',
-            activeTab === 'members' ? 'border-emerald-500/40 ring-1 ring-emerald-500/20' : 'border-border/40'
-          )}
-        >
+        <Card className="rounded-2xl border border-border/40 bg-card p-5 shadow-xs">
           <div className="flex items-center justify-between">
             <span className="text-xs font-semibold uppercase tracking-wider text-muted-foreground">
               Department Members
             </span>
-            <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400 transition-transform group-hover:scale-105">
+            <span className="flex size-9 items-center justify-center rounded-xl bg-emerald-500/10 text-emerald-600 dark:text-emerald-400">
               <Users className="size-4.5" />
             </span>
           </div>
@@ -466,12 +450,9 @@ export default function DepartmentDetailPage() {
             <div className="text-3xl font-bold tracking-tight text-foreground">
               {department.memberCount ?? 0}
             </div>
-            <div className="flex items-center justify-between text-xs text-muted-foreground">
-              <span>Assigned personnel & role authorization</span>
-              <span className="inline-flex items-center gap-1 font-medium text-emerald-600 dark:text-emerald-400 opacity-0 transition-opacity group-hover:opacity-100">
-                Manage roster <ArrowRight className="size-3" />
-              </span>
-            </div>
+            <p className="text-xs text-muted-foreground">
+              Assigned personnel & role authorization
+            </p>
           </div>
         </Card>
       </div>

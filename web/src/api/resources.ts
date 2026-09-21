@@ -99,6 +99,21 @@ export const documentApi = {
     params.set('page_size', String(filters.pageSize ?? 20));
     return api.get<DocumentsPage>(`/documents?${params.toString()}`);
   },
+  exportUrl: (filters: DocumentFilters) => {
+    const params = new URLSearchParams();
+    if (filters.type) params.set('type', filters.type);
+    if (filters.tier) params.set('tier', String(filters.tier));
+    if (filters.department) params.set('department', filters.department);
+    if (filters.status) params.set('status', filters.status);
+    if (filters.q) params.set('q', filters.q);
+    if (filters.sort) params.set('sort', filters.sort);
+    if (filters.trashed) params.set('trashed', 'true');
+    if (filters.archived) params.set('archived', 'true');
+    if (filters.owner) params.set('owner', filters.owner);
+    if (filters.favorite) params.set('favorite', 'true');
+    const qs = params.toString();
+    return `/api/documents/export${qs ? `?${qs}` : ''}`;
+  },
   get: (id: number) => api.get<DocumentDetail>(`/documents/${id}`),
   create: (documentTypeId: number, departmentId: number, name: string, file: File | null) => {
     const form = new FormData();

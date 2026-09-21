@@ -21,6 +21,7 @@ import jakarta.persistence.criteria.Predicate;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.data.domain.Page;
+import org.springframework.data.domain.PageImpl;
 import org.springframework.data.domain.PageRequest;
 import org.springframework.data.domain.Pageable;
 import org.springframework.data.domain.Sort;
@@ -263,7 +264,30 @@ public class DocumentService {
                                  Boolean favorite, String sort, int page, int pageSize) {
         Sort sortSpec = parseSort(sort);
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100), sortSpec);
+        Specification<Document> spec = buildSpecification(typeCode, tier, departmentCode, status, q,
+                reviewOverdue, trashed, archived, owner, favorite);
+        Page<Document> docPage = documentRepository.findAll(spec, pageable);
+        List<DocumentSummaryDto> summaries = toSummaryDtos(docPage.getContent());
+        Page<DocumentSummaryDto> result = new PageImpl<>(summaries, pageable, docPage.getTotalElements());
+        return DocumentsPageDto.from(result);
+    }
 
+    @Transactional(readOnly = true)
+    public List<DocumentSummaryDto> exportRows(String typeCode, Integer tier, String departmentCode,
+                                               DocumentStatus status, String q, Boolean reviewOverdue,
+                                               Boolean trashed, Boolean archived, String owner,
+                                               Boolean favorite, String sort) {
+        Sort sortSpec = parseSort(sort);
+        Specification<Document> spec = buildSpecification(typeCode, tier, departmentCode, status, q,
+                reviewOverdue, trashed, archived, owner, favorite);
+        List<Document> documents = documentRepository.findAll(spec, sortSpec);
+        return toSummaryDtos(documents);
+    }
+
+    private Specification<Document> buildSpecification(String typeCode, Integer tier, String departmentCode,
+                                                       DocumentStatus status, String q, Boolean reviewOverdue,
+                                                       Boolean trashed, Boolean archived, String owner,
+                                                       Boolean favorite) {
         List<Specification<Document>> parts = new ArrayList<>();
         if (tier != null) {
             parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("tier").get("tierNumber"), tier));
@@ -343,13 +367,16 @@ public class DocumentService {
                         : cb.or(base, root.get("id").in(reviewing));
             });
         }
+        return Specification.allOf(parts);
+    }
 
+    private List<DocumentSummaryDto> toSummaryDtos(List<Document> documents) {
+        if (documents.isEmpty()) {
+            return List.of();
+        }
         Integer me = currentUserProvider.getCurrentUserId();
         Set<Integer> userFavIds = new HashSet<>(userDocumentFavoriteRepository.findDocumentIdsByUserId(me));
-        Specification<Document> spec = Specification.allOf(parts);
-        Page<Document> docPage = documentRepository.findAll(spec, pageable);
-
-        List<Integer> docIds = docPage.getContent().stream().map(Document::getId).toList();
+        List<Integer> docIds = documents.stream().map(Document::getId).toList();
 
         Map<Integer, com.doccontrol.workflow.WorkflowInstance> activeWfByDocId = docIds.isEmpty() ? Map.of() :
                 workflowInstanceRepository.findInProgressByDocumentIdIn(docIds).stream()
@@ -365,7 +392,7 @@ public class DocumentService {
                                 v -> v,
                                 (a, b) -> a));
 
-        Page<DocumentSummaryDto> result = docPage.map(doc -> {
+        return documents.stream().map(doc -> {
             boolean fav = userFavIds.contains(doc.getId());
             Integer revVerNum = null;
             String revStatus = null;
@@ -387,8 +414,7 @@ public class DocumentService {
                 }
             }
             return DocumentSummaryDto.from(doc, fav, revVerNum, revStatus);
-        });
-        return DocumentsPageDto.from(result);
+        }).toList();
     }
 
     @Transactional

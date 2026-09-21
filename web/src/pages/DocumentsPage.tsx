@@ -1,6 +1,6 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
-import { ArrowDown, ArrowUp, ArrowUpDown, FileX, Loader2, Star, X } from 'lucide-react';
+import { ArrowDown, ArrowUp, ArrowUpDown, Download, FileX, Loader2, Star, X } from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
 import type { Department, DocumentNumberPreview, DocumentSummary, DocumentTier, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
@@ -310,11 +310,32 @@ export default function DocumentsPage() {
             : 'Documents'
         }
         actions={
-          view !== 'trash' && view !== 'archived' && (
-            <Button type="button" onClick={() => handleOpenChange(true)}>
-              New document
+          <div className="flex items-center gap-2">
+            <Button variant="outline" size="sm" asChild>
+              <a
+                href={documentApi.exportUrl({
+                  type: filters.type || undefined,
+                  tier: filters.tier ? Number(filters.tier) : undefined,
+                  department: filters.department || undefined,
+                  status: filters.status || undefined,
+                  q: filters.q || undefined,
+                  sort: sortField ? `${sortField},${sortOrder}` : undefined,
+                  trashed: view === 'trash' || undefined,
+                  archived: view === 'archived' || undefined,
+                  owner: view === 'mine' ? 'me' : undefined,
+                  favorite: view === 'favorites' ? true : undefined,
+                })}
+              >
+                <Download className="mr-1.5 size-4" />
+                Export CSV
+              </a>
             </Button>
-          )
+            {view !== 'trash' && view !== 'archived' && (
+              <Button size="sm" type="button" onClick={() => handleOpenChange(true)}>
+                New document
+              </Button>
+            )}
+          </div>
         }
       />
 

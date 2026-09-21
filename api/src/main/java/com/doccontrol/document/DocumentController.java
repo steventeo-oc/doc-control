@@ -1,6 +1,7 @@
 package com.doccontrol.document;
 
 import jakarta.validation.Valid;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.MediaType;
 import org.springframework.http.ResponseEntity;
 import org.springframework.web.bind.annotation.DeleteMapping;
@@ -15,6 +16,9 @@ import org.springframework.web.multipart.MultipartFile;
 
 import java.io.IOException;
 import java.net.URI;
+import java.time.LocalDate;
+import java.time.format.DateTimeFormatter;
+import java.util.List;
 
 @RestController
 public class DocumentController {
@@ -26,6 +30,9 @@ public class DocumentController {
         this.documentService = documentService;
         this.documentVersionService = documentVersionService;
     }
+
+    private static final String CSV_HEADER =
+            "document_number,title,status,progress,tier,type,department,owner,next_review_due,review_overdue,created_at,updated_at";
 
     @GetMapping("/documents")
     public DocumentsPageDto list(
@@ -44,6 +51,68 @@ public class DocumentController {
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
         return documentService.list(type, tier, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
                 page, pageSize);
+    }
+
+    @GetMapping("/documents/export")
+    public ResponseEntity<String> export(
+            @RequestParam(required = false) String type,
+            @RequestParam(required = false) Integer tier,
+            @RequestParam(required = false) String department,
+            @RequestParam(required = false) DocumentStatus status,
+            @RequestParam(required = false) String q,
+            @RequestParam(required = false) Boolean review_overdue,
+            @RequestParam(required = false) Boolean trashed,
+            @RequestParam(required = false) Boolean archived,
+            @RequestParam(required = false) String owner,
+            @RequestParam(required = false) Boolean favorite,
+            @RequestParam(required = false) String sort) {
+        List<DocumentSummaryDto> rows = documentService.exportRows(type, tier, department, status, q,
+                review_overdue, trashed, archived, owner, favorite, sort);
+
+        StringBuilder csv = new StringBuilder("\uFEFF").append(CSV_HEADER).append("\r\n");
+        for (DocumentSummaryDto row : rows) {
+            String progress = "";
+            if ("IN_REVIEW".equals(row.revisionStatus())) {
+                progress = "v" + row.revisionVersionNumber() + " in review";
+            } else if ("DRAFT".equals(row.revisionStatus())) {
+                progress = "v" + row.revisionVersionNumber() + " draft";
+            } else if ("RE_APPROVAL".equals(row.revisionStatus())) {
+                progress = "re-approval";
+            }
+
+            String tierStr = row.tierNumber() == null ? "" : "Tier " + row.tierNumber()
+                    + (row.tierLabel() != null && !row.tierLabel().isBlank() ? " (" + row.tierLabel() + ")" : "");
+
+            csv.append(csvField(row.documentNumber())).append(',')
+                    .append(csvField(row.name())).append(',')
+                    .append(csvField(row.status())).append(',')
+                    .append(csvField(progress)).append(',')
+                    .append(csvField(tierStr)).append(',')
+                    .append(csvField(row.documentTypeCode())).append(',')
+                    .append(csvField(row.departmentCode())).append(',')
+                    .append(csvField(row.ownerName())).append(',')
+                    .append(csvField(row.nextReviewDue() == null ? "" : row.nextReviewDue().toString())).append(',')
+                    .append(csvField(row.reviewOverdue() ? "YES" : "NO")).append(',')
+                    .append(csvField(row.createdAt() == null ? "" : row.createdAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss")))).append(',')
+                    .append(csvField(row.updatedAt() == null ? "" : row.updatedAt().format(DateTimeFormatter.ofPattern("yyyy-MM-dd HH:mm:ss"))))
+                    .append("\r\n");
+        }
+
+        String filename = "documents-" + LocalDate.now() + ".csv";
+        return ResponseEntity.ok()
+                .header(HttpHeaders.CONTENT_DISPOSITION, "attachment; filename=\"" + filename + "\"")
+                .contentType(MediaType.valueOf("text/csv; charset=UTF-8"))
+                .body(csv.toString());
+    }
+
+    private static String csvField(String value) {
+        if (value == null) {
+            return "";
+        }
+        if (value.contains(",") || value.contains("\"") || value.contains("\n") || value.contains("\r")) {
+            return '"' + value.replace("\"", "\"\"") + '"';
+        }
+        return value;
     }
 
     @PostMapping("/documents/{id}/favorite")

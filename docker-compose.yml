@@ -1,14 +1,6 @@
-version: "3.9"
-
-# Document Control system — local/dev environment.
-# Separate from the Testing Floor/MES stack by design (see CLAUDE.md).
-# This file is a starting point, not final production config — production
-# should add resource limits, restart policies tuned for the real server,
-# and TLS termination at the reverse proxy.
-#
-# Host ports are overridable via env (compose reads .env or the shell), e.g.
-# when the dev machine already runs local Postgres/MinIO on the defaults:
-#   POSTGRES_HOST_PORT=15432 MINIO_HOST_PORT=19000 MINIO_CONSOLE_HOST_PORT=19001 docker compose up -d
+# Document Control System — Docker Compose Configuration
+# Production & Local Hosting
+# Configuration is managed via .env (copy from .env.example)
 
 services:
   postgres:
@@ -16,15 +8,15 @@ services:
     container_name: doccontrol-postgres
     restart: unless-stopped
     environment:
-      POSTGRES_DB: doccontrol
-      POSTGRES_USER: doccontrol
-      POSTGRES_PASSWORD: changeme_in_env_file
+      POSTGRES_DB: ${POSTGRES_DB:-doccontrol}
+      POSTGRES_USER: ${POSTGRES_USER:-doccontrol}
+      POSTGRES_PASSWORD: ${POSTGRES_PASSWORD:-changeme_in_env_file}
     ports:
       - "${POSTGRES_HOST_PORT:-5432}:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
-      test: ["CMD-SHELL", "pg_isready -U doccontrol"]
+      test: ["CMD-SHELL", "pg_isready -U ${POSTGRES_USER:-doccontrol}"]
       interval: 10s
       timeout: 5s
       retries: 5
@@ -35,8 +27,8 @@ services:
     restart: unless-stopped
     command: server /data --console-address ":9001"
     environment:
-      MINIO_ROOT_USER: doccontrol
-      MINIO_ROOT_PASSWORD: changeme_in_env_file
+      MINIO_ROOT_USER: ${MINIO_ROOT_USER:-doccontrol}
+      MINIO_ROOT_PASSWORD: ${MINIO_ROOT_PASSWORD:-changeme_in_env_file}
     ports:
       - "${MINIO_HOST_PORT:-9000}:9000"   # S3 API
       - "${MINIO_CONSOLE_HOST_PORT:-9001}:9001"   # Web console
@@ -58,33 +50,28 @@ services:
       minio:
         condition: service_healthy
     environment:
-      SPRING_DATASOURCE_URL: jdbc:postgresql://postgres:5432/doccontrol
-      SPRING_DATASOURCE_USERNAME: doccontrol
-      SPRING_DATASOURCE_PASSWORD: changeme_in_env_file
-      DOCCONTROL_STORAGE_ENDPOINT: http://minio:9000
-      # Microsoft Graph mail (Phase 2b): values come from the environment or
-      # .env (gitignored) — log-only unless enabled=true with the full set
-      # (tenant of the app registration; client id/secret of its Mail.Send
-      # app; the sending mailbox's SMTP address):
+      SPRING_DATASOURCE_URL: ${SPRING_DATASOURCE_URL:-jdbc:postgresql://postgres:5432/doccontrol}
+      SPRING_DATASOURCE_USERNAME: ${SPRING_DATASOURCE_USERNAME:-doccontrol}
+      SPRING_DATASOURCE_PASSWORD: ${SPRING_DATASOURCE_PASSWORD:-changeme_in_env_file}
+      DOCCONTROL_STORAGE_ENDPOINT: ${DOCCONTROL_STORAGE_ENDPOINT:-http://minio:9000}
+      DOCCONTROL_STORAGE_ACCESS_KEY: ${DOCCONTROL_STORAGE_ACCESS_KEY:-doccontrol}
+      DOCCONTROL_STORAGE_SECRET_KEY: ${DOCCONTROL_STORAGE_SECRET_KEY:-changeme_in_env_file}
+      DOCCONTROL_STORAGE_BUCKET: ${DOCCONTROL_STORAGE_BUCKET:-doccontrol}
       DOCCONTROL_NOTIFICATION_ENABLED: ${DOCCONTROL_NOTIFICATION_ENABLED:-false}
       DOCCONTROL_NOTIFICATION_TENANT_ID: ${DOCCONTROL_NOTIFICATION_TENANT_ID:-}
       DOCCONTROL_NOTIFICATION_CLIENT_ID: ${DOCCONTROL_NOTIFICATION_CLIENT_ID:-}
       DOCCONTROL_NOTIFICATION_CLIENT_SECRET: ${DOCCONTROL_NOTIFICATION_CLIENT_SECRET:-}
       DOCCONTROL_NOTIFICATION_SENDER_MAILBOX: ${DOCCONTROL_NOTIFICATION_SENDER_MAILBOX:-}
-      # "Sign in with Microsoft" (Microsoft_SSO_PlanBack.md): reuses the Graph
-      # app registration values above — the flag is the only new variable.
       DOCCONTROL_SSO_ENABLED: ${DOCCONTROL_SSO_ENABLED:-false}
-      # Phase 2e watermarking: office downloads convert to PDF in the
-      # Gotenberg sidecar (LibreOffice headless) and get stamped —
-      # rendition-url defaults to the compose service name:
       DOCCONTROL_WATERMARK_RENDITION_URL: ${DOCCONTROL_WATERMARK_RENDITION_URL:-http://gotenberg:3000}
-      # Set these for anything beyond local dev (see CLAUDE.md go-live checklist):
-      # DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ...
-      # DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ...
-      # SPRING_PROFILES_ACTIVE: prod   # startup hard-fails on default admin
-      #                                # credentials under this profile
+      DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL: ${DOCCONTROL_BOOTSTRAP_ADMIN_EMAIL:-admin@doccontrol.local}
+      DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD: ${DOCCONTROL_BOOTSTRAP_ADMIN_PASSWORD:-changeme_admin}
+      DOCCONTROL_BOOTSTRAP_ADMIN_DEPARTMENT: ${DOCCONTROL_BOOTSTRAP_ADMIN_DEPARTMENT:-QA}
+      APP_BASE_URL: ${APP_BASE_URL:-http://localhost:3000}
+      APP_CORS_ALLOWED_ORIGINS: ${APP_CORS_ALLOWED_ORIGINS:-http://localhost:3000}
+      SPRING_PROFILES_ACTIVE: ${SPRING_PROFILES_ACTIVE:-default}
     ports:
-      - "8080:8080"
+      - "${API_HOST_PORT:-8080}:8080"
 
   web:
     build: ./web
@@ -93,15 +80,10 @@ services:
     depends_on:
       - api
     ports:
-      - "3000:80"
+      - "${WEB_HOST_PORT:-3000}:80"
 
   gotenberg:
-    # Phase 2e watermarking: LibreOffice headless behind one HTTP endpoint
-    # (POST /forms/libreoffice/convert) — the profile-lock/restart/timeout
-    # plumbing is solved upstream. Internal network only (no host ports);
-    # the api reaches it at http://gotenberg:3000. Budget ~0.5-1GiB RAM;
-    # conversions serialize per instance. Brand fonts are not baked in —
-    # confirmed unnecessary (SOPs use standard fonts only, 2026-09-11).
+    # Phase 2e watermarking: LibreOffice headless for automated document conversion
     image: gotenberg/gotenberg:8-libreoffice
     container_name: doccontrol-gotenberg
     restart: unless-stopped

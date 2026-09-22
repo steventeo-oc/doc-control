@@ -1,0 +1,91 @@
+# The production box's model servers and the wiring to the shared LLM (AI_Assistant_Design_PlanBack.md, F10).
+# Layered over the main file; nothing here is used on a machine without GPUs (use the `mock-models` profile there):
+#
+#   docker compose -f docker-compose.yml -f docker-compose.ai.yml --profile assistant up -d --build
+#
+# Once, before the first start: remove the hand-started spike containers of the same names (their published ports and
+# the weights in the cache directory are reused):   docker rm -f emb-qwen rerank
+#
+# Required in .env (compose refuses to start without them, on purpose):
+#   ASSISTANT_LLM_BASE_URL   http://<llm container name>:<its port>/v1, as reachable from LLM_DOCKER_NETWORK
+#   ASSISTANT_LLM_API_KEY    the dedicated key for doc-control (RUNBOOK section 7)
+#   LLM_DOCKER_NETWORK       the Docker network the LLM container is on (`docker network ls`, `docker inspect <llm>`)
+# Optional: SGLANG_IMAGE (default deepseek-v41-4x6000:local, the locally built image the LLM itself runs from),
+#           EMB_GPU (4) and RERANK_GPU (7), HF_CACHE_DIR (~/hf-cache).
+
+services:
+  emb-qwen:
+    image: ${SGLANG_IMAGE:-deepseek-v41-4x6000:local}
+    container_name: emb-qwen
+    profiles: ["assistant"]
+    restart: unless-stopped
+    ipc: host
+    entrypoint: ["/opt/sglang/bin/python3"]
+    command: ["-m", "sglang.launch_server", "--model-path", "Qwen/Qwen3-Embedding-4B", "--is-embedding",
+              "--host", "0.0.0.0", "--port", "8011"]
+    environment:
+      HF_HOME: /hf
+    volumes:
+      - ${HF_CACHE_DIR:-${HOME}/hf-cache}:/hf
+    ports:
+      - "127.0.0.1:8011:8011"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${EMB_GPU:-4}"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "/opt/sglang/bin/python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8011/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+  rerank:
+    image: ${SGLANG_IMAGE:-deepseek-v41-4x6000:local}
+    container_name: rerank
+    profiles: ["assistant"]
+    restart: unless-stopped
+    ipc: host
+    entrypoint: ["/opt/sglang/bin/python3"]
+    command: ["-m", "sglang.launch_server", "--model-path", "BAAI/bge-reranker-v2-m3", "--is-embedding",
+              "--disable-radix-cache", "--chunked-prefill-size", "-1", "--attention-backend", "triton",
+              "--host", "0.0.0.0", "--port", "8012"]
+    environment:
+      HF_HOME: /hf
+    volumes:
+      - ${HF_CACHE_DIR:-${HOME}/hf-cache}:/hf
+    ports:
+      - "127.0.0.1:8012:8012"
+    deploy:
+      resources:
+        reservations:
+          devices:
+            - driver: nvidia
+              device_ids: ["${RERANK_GPU:-7}"]
+              capabilities: [gpu]
+    healthcheck:
+      test: ["CMD", "/opt/sglang/bin/python3", "-c",
+             "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8012/health', timeout=5)"]
+      interval: 30s
+      timeout: 10s
+      retries: 5
+      start_period: 300s
+
+  assistant:
+    networks:
+      - default
+      - llm
+    environment:
+      ASSISTANT_EMB_BASE_URL: http://emb-qwen:8011/v1
+      ASSISTANT_RERANK_BASE_URL: http://rerank:8012/v1
+      ASSISTANT_LLM_BASE_URL: "${ASSISTANT_LLM_BASE_URL:?set ASSISTANT_LLM_BASE_URL in .env (see docker-compose.ai.yml)}"
+      ASSISTANT_LLM_API_KEY: "${ASSISTANT_LLM_API_KEY:?set ASSISTANT_LLM_API_KEY in .env (the dedicated doc-control key)}"
+
+networks:
+  llm:
+    name: "${LLM_DOCKER_NETWORK:?set LLM_DOCKER_NETWORK in .env (run docker network ls for the network the LLM container is on)}"
+    external: true

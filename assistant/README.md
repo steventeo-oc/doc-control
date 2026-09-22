@@ -9,12 +9,18 @@ citations. Design: `../AI_Assistant_Design_PlanBack.md`. Measurements behind it:
 | Phase | Content | State |
 |---|---|---|
 | A. Core | extraction (incl. Word text boxes), credential redaction, chunking, embeddings, hybrid search + reranker, neighbour chunks, prompt, three answer states, query log, HTTP API, release gate | **built; gate PASS on the box** (strict-2: abstained 12/12, right document first 100%, p95 2.7 s) |
-| B. Integration | database view (migration V12) and MinIO reader, session check against the api, compose profiles, nginx route, admin status page, smoke section 16 | **approved 2026-09-22** (119 Python tests on 3.10 and 3.12, 8 Java tests, full smoke green with stand-in models) |
-| C. The page | React "Ask" page and rail item (`web/`) | **built; awaiting review** (48 stub + 11 real-stack browser checks) |
-| D. Go live | switch on for everyone, RUNBOOK, weekly review | not started |
+| B. Integration | database view (migration V12) and MinIO reader, session check against the api, compose profiles, nginx route, admin status page, smoke section 16 | **approved 2026-09-22** (Java + Python tests green, full smoke green with stand-in models) |
+| C. The page | React "Ask" page and rail item (`web/`) | **built and reviewed** |
+| D. Go live | switch on for everyone, RUNBOOK, weekly review | **live in production 2026-09-22** — deployed via [PR #1](https://github.com/steventeo-oc/doc-control/pull/1), all signed-in users, no department restriction; `tools/weekly_summary.py` turns the log into the plan-back's weekly numbers |
 
 Setup, start-up and day-to-day operation: `../RUNBOOK.md` section 7. Development runs with `ASSISTANT_SOURCE=folder` and
 `ASSISTANT_AUTH=none` (Settings refuses that combination with the real source).
+
+**Saved conversations (v1.1, `../AI_Assistant_Conversations_PlanBack.md`)**: Phase 1 (persistence — start, continue,
+reopen, rename, archive; retrieval unaffected) is **built, not yet deployed**: `app/conversations.py`,
+`Assistant.ask`'s optional `history`/`conversation_id`, five endpoints under `/api/assistant/conversations`, and
+the React page rebuilt around a conversation sidebar. Phase 2 (context-aware retrieval for a follow-up, via query
+rewriting) is designed but not built — it waits on Phase 1 actually being used first.
 
 ## Layout
 
@@ -36,13 +42,16 @@ app/
   prompts.py     named prompt versions (strict-1 = measured in the spike, strict-2 = the default)
   ask.py         retrieve, select sources, ask, classify (answered | not_found | unavailable), log
   logdb.py       assistant_query_log with feedback (not audit_log)
+  conversations.py  saved conversations (v1.1 Phase 1): create/list/history/messages/rename/archive
   ratelimit.py   per-user window that protects the shared LLM
-  api.py         /api/assistant/* (config, ask, feedback, admin status, status.html, sync, log.csv, health)
+  api.py         /api/assistant/* (config, ask, conversations, feedback, admin status, status.html, sync, log.csv, health)
   main.py        wiring for uvicorn
   gate.py        the release gate: the golden questions through this code path
+  chat.py        ask questions in a terminal, real models, before anything is deployed (RUNBOOK section 7)
 tools/
   mock_models.py stand-ins for the embedding, reranker and LLM servers (compose profile `mock-models`, smoke 16)
-tests/           119 tests, no GPU or network needed (fake model servers, generated Word/PDF files)
+  weekly_summary.py  turns a downloaded query-log CSV into the plan-back's weekly numbers (RUNBOOK "Weekly review")
+tests/           171 tests, no GPU or network needed (fake model servers, generated Word/PDF files)
 ```
 
 ## Run the tests

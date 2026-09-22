@@ -14,6 +14,7 @@ from docx.oxml import parse_xml
 from app.ask import Assistant
 from app.auth import LOCAL_IDENTITY
 from app.config import Settings
+from app.conversations import Conversations
 from app.db import Database
 from app.index import Index
 from app.logdb import QueryLog
@@ -225,6 +226,7 @@ class Env:
         self.source = FakeSource()
         self.clock = [1_000_000.0]
         self.log = QueryLog(db, clock=lambda: self.clock[0])
+        self.conversations = Conversations(db, clock=lambda: self.clock[0])
         self.syncer = Syncer(settings, self.index, self.source, self.embedder, clock=lambda: self.clock[0])
         self.assistant = Assistant(settings, self.index, self.embedder, self.reranker, self.llm, self.log)
         self.user = LOCAL_IDENTITY

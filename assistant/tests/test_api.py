@@ -20,7 +20,7 @@ def client_for(env, identity=LOCAL_IDENTITY, limiter=None):
 
     services = Services(settings=env.settings, assistant=env.assistant, index=env.index, syncer=env.syncer,
                         log=env.log, limiter=limiter or RateLimiter(100, 0, env.log, clock=lambda: env.clock[0]),
-                        authenticate=authenticate)
+                        conversations=env.conversations, authenticate=authenticate)
     return TestClient(create_app(services)), who
 
 
@@ -173,3 +173,104 @@ def test_the_status_page_before_any_sync_and_with_a_failing_model(env):
     page = client.get("/api/assistant/admin/status.html").text
     assert "No sync has finished yet." in page and "Nothing skipped or failed." in page
     assert "cannot reach http://embedding:8011/v1/models" in page and 'class="bad"' in page
+
+
+# ---------------------------------------------------------------- saved conversations (Phase 1)
+
+def test_starting_a_conversation_creates_it_asks_and_returns_both(stocked):
+    client, _ = client_for(stocked, USER)
+    r = client.post("/api/assistant/conversations", json={"question": "How long is the burn-in stability run?"})
+    assert r.status_code == 200
+    body = r.json()
+    assert body["state"] == "answered" and body["conversationId"] is not None
+    [row] = client.get("/api/assistant/conversations").json()
+    assert row["id"] == body["conversationId"] and row["title"] == "How long is the burn-in stability run?"
+    assert row["messageCount"] == 1
+
+
+def test_starting_a_conversation_obeys_the_same_gates_as_a_one_off_ask(stocked):
+    client, _ = client_for(stocked, USER)
+    assert client.post("/api/assistant/conversations", json={"question": "   "}).status_code == 400
+    assert client.post("/api/assistant/conversations", json={"question": "x" * 601}).status_code == 400
+    stocked.rebuild_assistant(enabled=False)
+    client, _ = client_for(stocked, USER)
+    assert client.post("/api/assistant/conversations", json={"question": "hello"}).status_code == 404
+
+
+def test_continuing_a_conversation_sends_its_history_and_appears_in_get(stocked):
+    client, _ = client_for(stocked, USER)
+    started = client.post("/api/assistant/conversations", json={"question": "How long is the burn-in run?"}).json()
+    cid = started["conversationId"]
+
+    second = client.post(f"/api/assistant/conversations/{cid}/messages",
+                         json={"question": "and where do I record it?"})
+    assert second.status_code == 200 and second.json()["conversationId"] == cid
+    messages_sent = stocked.llm.calls[-1]
+    assert messages_sent[1]["content"] == "How long is the burn-in run?"       # the first turn, as real history now
+
+    convo = client.get(f"/api/assistant/conversations/{cid}").json()
+    assert convo["title"] == "How long is the burn-in run?"
+    assert [m["question"] for m in convo["messages"]] == ["How long is the burn-in run?", "and where do I record it?"]
+    assert convo["messages"][0]["answer"] and convo["messages"][0]["sources"]
+
+
+def test_a_reopened_not_found_message_never_shows_the_raw_marker(stocked):
+    client, _ = client_for(stocked, USER)
+    stocked.llm.reply = "NOT_FOUND: nothing here about that."
+    started = client.post("/api/assistant/conversations", json={"question": "annual leave?"}).json()
+    assert started["answer"] == "nothing here about that."                     # already true of the live answer
+    convo = client.get(f"/api/assistant/conversations/{started['conversationId']}").json()
+    assert convo["messages"][0]["answer"] == "nothing here about that." and "NOT_FOUND" not in convo["messages"][0]["answer"]
+
+
+def test_one_user_cannot_see_rename_delete_or_continue_another_users_conversation(stocked):
+    mine, _ = client_for(stocked, USER)
+    started = mine.post("/api/assistant/conversations", json={"question": "burn-in"}).json()
+    cid = started["conversationId"]
+
+    theirs, _ = client_for(stocked, OTHER)
+    assert theirs.get(f"/api/assistant/conversations/{cid}").status_code == 404
+    assert theirs.post(f"/api/assistant/conversations/{cid}/messages", json={"question": "x"}).status_code == 404
+    assert theirs.patch(f"/api/assistant/conversations/{cid}", json={"title": "hijacked"}).status_code == 404
+    assert theirs.delete(f"/api/assistant/conversations/{cid}").status_code == 404
+    assert theirs.get("/api/assistant/conversations").json() == []
+    assert mine.get(f"/api/assistant/conversations/{cid}").json()["title"] == "burn-in"       # untouched
+
+
+def test_rename_and_delete(stocked):
+    client, _ = client_for(stocked, USER)
+    cid = client.post("/api/assistant/conversations", json={"question": "burn-in"}).json()["conversationId"]
+
+    assert client.patch(f"/api/assistant/conversations/{cid}", json={"title": "My burn-in questions"}).status_code == 204
+    assert client.get("/api/assistant/conversations").json()[0]["title"] == "My burn-in questions"
+
+    assert client.delete(f"/api/assistant/conversations/{cid}").status_code == 204
+    assert client.get("/api/assistant/conversations").json() == []
+    assert client.get(f"/api/assistant/conversations/{cid}").status_code == 404
+    assert client.delete(f"/api/assistant/conversations/{cid}").status_code == 404             # already gone
+
+
+def test_listing_and_reopening_work_even_when_the_assistant_is_switched_off(stocked):
+    client, _ = client_for(stocked, USER)
+    cid = client.post("/api/assistant/conversations", json={"question": "burn-in"}).json()["conversationId"]
+    stocked.rebuild_assistant(enabled=False)
+    client, _ = client_for(stocked, USER)
+    assert client.get("/api/assistant/conversations").status_code == 200
+    assert client.get(f"/api/assistant/conversations/{cid}").status_code == 200
+    assert client.post(f"/api/assistant/conversations/{cid}/messages", json={"question": "more"}).status_code == 404
+
+
+def test_continuing_a_conversation_shares_the_rate_limit_with_ask(stocked):
+    limiter = RateLimiter(1, 0, stocked.log, clock=lambda: stocked.clock[0])
+    client, _ = client_for(stocked, USER, limiter=limiter)
+    cid = client.post("/api/assistant/conversations", json={"question": "burn-in"}).json()["conversationId"]
+    r = client.post(f"/api/assistant/conversations/{cid}/messages", json={"question": "more"})
+    assert r.status_code == 429 and "Retry-After" in r.headers
+
+
+def test_an_empty_index_returns_503_from_every_ask_shaped_endpoint(env):
+    client, _ = client_for(env, USER)
+    assert client.post("/api/assistant/ask", json={"question": "hello"}).status_code == 503
+    r = client.post("/api/assistant/conversations", json={"question": "hello"})
+    assert r.status_code == 503
+    assert client.get("/api/assistant/conversations").json() == []            # listing itself never needs the index

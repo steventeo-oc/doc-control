@@ -10,6 +10,12 @@ from contextlib import contextmanager
 
 SCHEMA = """
 CREATE TABLE IF NOT EXISTS meta (key TEXT PRIMARY KEY, value TEXT);
+CREATE TABLE IF NOT EXISTS conversation (
+    id INTEGER PRIMARY KEY AUTOINCREMENT,
+    user_id TEXT NOT NULL, title TEXT NOT NULL,
+    created_at REAL NOT NULL, updated_at REAL NOT NULL, archived_at REAL
+);
+CREATE INDEX IF NOT EXISTS ix_conversation_user ON conversation(user_id, archived_at, updated_at);
 CREATE TABLE IF NOT EXISTS doc_version (
     version_id TEXT PRIMARY KEY,
     document_id TEXT, document_number TEXT NOT NULL, name TEXT NOT NULL,
@@ -32,9 +38,13 @@ CREATE TABLE IF NOT EXISTS query_log (
     at REAL NOT NULL, user_id TEXT, user_name TEXT,
     question TEXT NOT NULL, answer TEXT, state TEXT NOT NULL, sources TEXT,
     model TEXT, prompt_version TEXT, index_snapshot TEXT, ms INTEGER, timings TEXT,
-    rating TEXT, comment TEXT
+    rating TEXT, comment TEXT,
+    conversation_id INTEGER REFERENCES conversation(id)   -- NULL: a one-off question, not part of a saved thread
 );
 CREATE INDEX IF NOT EXISTS ix_query_log_user_at ON query_log(user_id, at);
+-- The conversation_id index is created in _migrate(), after the column is guaranteed to exist: on a database from
+-- before this feature, query_log already exists without the column, so a plain CREATE INDEX right here (in the
+-- same script, before _migrate() runs) would fail outright.
 CREATE TABLE IF NOT EXISTS sync_run (
     id INTEGER PRIMARY KEY AUTOINCREMENT,
     started_at REAL NOT NULL, finished_at REAL,
@@ -55,6 +65,17 @@ class Database:
             if self.path != ":memory:":
                 self.conn.execute("PRAGMA journal_mode=WAL")
             self.conn.executescript(SCHEMA)
+            self._migrate()
+
+    def _migrate(self):
+        """SQLite has no 'ADD COLUMN IF NOT EXISTS', and a database already on disk (production, this session's own
+        earlier test runs) predates the conversation_id column the fresh CREATE TABLE above already includes for a
+        brand-new file. Runs on every open; the ALTER is a no-op once the column exists, and the index is created
+        here rather than in SCHEMA precisely so it never runs before the column it indexes is guaranteed to exist."""
+        columns = {row["name"] for row in self.conn.execute("PRAGMA table_info(query_log)").fetchall()}
+        if "conversation_id" not in columns:
+            self.conn.execute("ALTER TABLE query_log ADD COLUMN conversation_id INTEGER REFERENCES conversation(id)")
+        self.conn.execute("CREATE INDEX IF NOT EXISTS ix_query_log_conversation ON query_log(conversation_id, id)")
 
     @contextmanager
     def tx(self):

@@ -1,0 +1,6 @@
+.venv/
+__pycache__/
+.pytest_cache/
+# release-gate working data and reports hold text derived from company documents
+/gate-data/
+/gate-report*/

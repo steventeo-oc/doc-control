@@ -124,12 +124,17 @@ class Assistant:
         self._system = system_prompt(settings.prompt)
 
     # ------------------------------------------------------------------
-    def ask(self, question, user):
+    def ask(self, question, user, history=None, conversation_id=None):
+        """`history` (Phase 1 of the saved-conversations plan-back): prior {question, answer} pairs, oldest first,
+        already capped by the caller (Conversations.history) -- shown to the model so a threaded follow-up has
+        context. Retrieval is unaffected: this question alone is still what gets embedded and searched, exactly as
+        in a one-off ask. `conversation_id` only affects where the exchange is logged."""
         started = time.perf_counter()
         snapshot = self.index.snapshot
         if snapshot.empty:
             raise IndexBuilding()
         timings, degraded = {}, []
+        history = history or []
 
         t = time.perf_counter()
         try:
@@ -137,7 +142,7 @@ class Assistant:
         except ModelError as exc:
             log.warning("embedding server unavailable: %s", exc)
             return self._finish(user, question, snapshot, [], [], "unavailable", UNAVAILABLE_TEXT, started,
-                                {"embed_ms": _ms(t)}, ["embedding"], {}, None)
+                                {"embed_ms": _ms(t)}, ["embedding"], {}, None, conversation_id=conversation_id)
         timings["embed_ms"] = _ms(t)
 
         t = time.perf_counter()
@@ -159,23 +164,29 @@ class Assistant:
         sources = select_sources(snapshot, ranking, self.s.top_chunks, self.s.neighbours, self.s.neighbour_top,
                                  self.s.overlap)
         prompt = build_user_prompt(question, sources)
-        debug = {"ranked_docs": ranked_docs, "prompt_tokens_est": approx_tokens(self._system + prompt),
+        history_text = "".join(h["question"] + h["answer"] for h in history)
+        debug = {"ranked_docs": ranked_docs, "history_turns": len(history),
+                 "prompt_tokens_est": approx_tokens(self._system + history_text + prompt),
                  # exactly what the model was shown, for whoever is judging an answer (the terminal client's --context)
                  "passages": [{"label": s.label, "document_number": s.document_number, "section": s.section,
                                "text": s.text} for s in sources]}
 
         if not self._slots.acquire(timeout=self.s.queue_wait_s):
             return self._finish(user, question, snapshot, sources, [], "unavailable", BUSY_TEXT, started, timings,
-                                degraded + ["llm-busy"], debug, None)
+                                degraded + ["llm-busy"], debug, None, conversation_id=conversation_id)
         t = time.perf_counter()
+        messages = [{"role": "system", "content": self._system}]
+        for turn in history:
+            messages.append({"role": "user", "content": turn["question"]})
+            messages.append({"role": "assistant", "content": turn["answer"]})
+        messages.append({"role": "user", "content": prompt})
         try:
-            reply = self.llm.chat([{"role": "system", "content": self._system},
-                                   {"role": "user", "content": prompt}], max_tokens=self.s.max_tokens,
-                                  temperature=self.s.llm_temperature)
+            reply = self.llm.chat(messages, max_tokens=self.s.max_tokens, temperature=self.s.llm_temperature)
         except ModelError as exc:
             log.warning("LLM unavailable: %s", exc)
             return self._finish(user, question, snapshot, sources, [], "unavailable", UNAVAILABLE_TEXT, started,
-                                {**timings, "llm_ms": _ms(t)}, degraded + ["llm"], debug, None)
+                                {**timings, "llm_ms": _ms(t)}, degraded + ["llm"], debug, None,
+                                conversation_id=conversation_id)
         finally:
             self._slots.release()
         timings["llm_ms"] = _ms(t)
@@ -185,28 +196,31 @@ class Assistant:
             answer, _ = redact(answer)
         if not answer:
             return self._finish(user, question, snapshot, sources, [], "unavailable", UNAVAILABLE_TEXT, started,
-                                timings, degraded + ["empty-answer"], debug, reply)
+                                timings, degraded + ["empty-answer"], debug, reply, conversation_id=conversation_id)
         state = "not_found" if answer.upper().startswith("NOT_FOUND") else "answered"
         labels = cited_labels(answer)
         known = {s.label for s in sources}
         return self._finish(user, question, snapshot, sources, sorted(set(labels) & known), state, answer, started,
-                            timings, degraded, {**debug, "bad_citations": sorted(set(labels) - known)}, reply)
+                            timings, degraded, {**debug, "bad_citations": sorted(set(labels) - known)}, reply,
+                            conversation_id=conversation_id)
 
     # ------------------------------------------------------------------
     def _finish(self, user, question, snapshot, sources, cited, state, answer, started, timings, degraded,
-                debug, reply):
+                debug, reply, conversation_id=None):
         ms = int((time.perf_counter() - started) * 1000)
         source_rows = [{"label": s.label, "documentId": _doc_id(s.document_id), "documentNumber": s.document_number,
                         "title": s.name, "section": s.section, "version": s.version_number,
                         "effectiveAt": s.effective_at, "cited": s.label in cited} for s in sources]
         last = self.index.last_sync()
         log_id = self.log_db.write(user, question, answer, state, source_rows, self.llm.model, self.s.prompt,
-                                   snapshot.stamp, ms, {**timings, "degraded": degraded})
+                                   snapshot.stamp, ms, {**timings, "degraded": degraded},
+                                   conversation_id=conversation_id)
         response = {"id": log_id, "state": state, "answer": reader_text(state, answer), "sources": source_rows,
                     "index": {"syncedAt": iso_utc(last["finished_at"]) if last else None,
                               "documents": len(snapshot.versions)},
                     "model": self.llm.model, "promptVersion": self.s.prompt, "ms": ms,
-                    "truncated": bool(reply and reply.get("finish") == "length")}
+                    "truncated": bool(reply and reply.get("finish") == "length"),
+                    "conversationId": conversation_id}
         debug = {**debug, "timings": timings, "degraded": degraded, "state": state,
                  "cited_docs": sorted({s.document_number for s in sources if s.label in cited}),
                  "usage": (reply or {}).get("usage") or {}}

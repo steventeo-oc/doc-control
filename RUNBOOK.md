@@ -369,3 +369,31 @@ the status page and real questions, and run the release gate (`assistant/README.
   syncs, asks a question it answers and one it does not, trashes the
   document, syncs and asks again. With the stand-in models it proves the
   plumbing only; run it on the box for the real models.
+
+### Weekly review
+
+The plan-back's actual go-live condition, not optional: the pilot is meant
+to be watched, not just switched on. Once a week (an admin, signed in):
+
+1. **Download the log** — `/api/assistant/admin/log.csv`, optionally
+   `?since=2026-09-15` for just the last 7 days.
+2. **Summarise it**:
+   ```
+   python -m tools.weekly_summary ~/Downloads/assistant-log.csv
+   ```
+   (from `assistant/`, any Python with no extra packages needed). Prints
+   active users, questions per user, the share rated helpful, the share
+   not covered with its most-repeated questions, thumbs-down comments, and
+   p50/p95 latency.
+3. **Look at the status page** too — the CSV can't see sync health,
+   skipped/failed documents, or whether a model server is reachable right
+   now; `/api/assistant/admin/status.html` is the only place for those.
+
+What to actually do with it: a **repeated not-covered question** is either
+a real content gap (tell the document's owner) or a naming/phrasing
+problem (a candidate to add to the golden set so the release gate starts
+checking it); a **thumbs-down with a comment** is direct, specific
+feedback — read every one; a **rising p95** or a **model marked down on
+the status page** is worth investigating before it becomes a pattern.
+`AI_Assistant_Design_PlanBack.md` §8 has the fuller list of what "good"
+looks like after four weeks.

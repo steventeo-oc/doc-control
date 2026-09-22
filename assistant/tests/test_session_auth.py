@@ -187,7 +187,7 @@ def test_a_listed_origin_still_works_when_the_host_differs():
 def app_client(env, auth):
     services = Services(settings=env.settings, assistant=env.assistant, index=env.index, syncer=env.syncer,
                         log=env.log, limiter=RateLimiter(100, 0, env.log, clock=lambda: env.clock[0]),
-                        authenticate=auth)
+                        conversations=env.conversations, authenticate=auth)
     return TestClient(create_app(services))
 
 

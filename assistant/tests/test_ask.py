@@ -24,6 +24,54 @@ def test_answered_with_citations_sources_and_a_log_row(stocked):
     assert result.debug["ranked_docs"][0] == "SOP-ENG-0001" and result.debug["cited_docs"] == ["SOP-ENG-0001"]
 
 
+def test_a_threaded_question_sends_prior_turns_as_real_chat_turns_before_the_current_one(stocked):
+    cid = stocked.conversations.create(stocked.user, "How long is the burn-in stability run?")
+    history = [{"question": "How long is the burn-in stability run?", "answer": "24 hours [S1]."},
+              {"question": "And for the older model?", "answer": "NOT_FOUND: not covered."}]
+    result = stocked.assistant.ask("What about records retention?", stocked.user, history=history,
+                                   conversation_id=cid)
+    messages = stocked.llm.calls[-1]
+    assert [m["role"] for m in messages] == ["system", "user", "assistant", "user", "assistant", "user"]
+    assert messages[1]["content"] == history[0]["question"] and messages[2]["content"] == history[0]["answer"]
+    assert messages[3]["content"] == history[1]["question"] and messages[4]["content"] == history[1]["answer"]
+    assert messages[-1]["content"].endswith("QUESTION\nWhat about records retention?")   # the actual retrieval prompt
+    assert result.debug["history_turns"] == 2
+
+
+def test_a_threaded_answer_is_logged_against_its_conversation_and_echoes_the_id_back(stocked):
+    cid = stocked.conversations.create(stocked.user, "How long is the burn-in stability run?")
+    r = stocked.assistant.ask("How long is the burn-in stability run?", stocked.user, conversation_id=cid).response
+    assert r["conversationId"] == cid
+    row = stocked.db.one("SELECT conversation_id FROM query_log WHERE id = ?", (r["id"],))
+    assert row["conversation_id"] == cid
+
+
+def test_a_one_off_question_is_unaffected_by_the_new_parameters(stocked):
+    with_defaults = stocked.assistant.ask("How long is the burn-in stability run?", stocked.user).response
+    explicit_none = stocked.assistant.ask("How long is the burn-in stability run?", stocked.user, history=None,
+                                          conversation_id=None).response
+    for r in (with_defaults, explicit_none):
+        assert r["conversationId"] is None
+    assert stocked.llm.calls[-1][1]["role"] == "user"                       # straight from system to this question
+    assert len(stocked.llm.calls[-1]) == 2
+
+
+def test_history_grows_the_estimated_prompt_token_count(stocked):
+    bare = stocked.assistant.ask("How long is the burn-in stability run?", stocked.user)
+    threaded = stocked.assistant.ask("How long is the burn-in stability run?", stocked.user,
+                                     history=[{"question": "x" * 400, "answer": "y" * 400}])
+    assert threaded.debug["prompt_tokens_est"] > bare.debug["prompt_tokens_est"]
+
+
+def test_an_unavailable_llm_still_logs_the_conversation_id(stocked):
+    cid = stocked.conversations.create(stocked.user, "burn-in stability run")
+    stocked.llm.fail = True
+    r = stocked.assistant.ask("burn-in stability run", stocked.user, conversation_id=cid).response
+    assert r["state"] == "unavailable" and r["conversationId"] == cid
+    row = stocked.db.one("SELECT conversation_id FROM query_log WHERE id = ?", (r["id"],))
+    assert row["conversation_id"] == cid
+
+
 def test_not_found_keeps_the_text_and_still_lists_the_closest_sources(stocked):
     stocked.llm.reply = "NOT_FOUND: the sources cover burn-in tests but not leave entitlements."
     r = ask(stocked, "How many days of annual leave do new hires get?").response

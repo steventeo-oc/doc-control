@@ -105,6 +105,9 @@ class Settings:
     log_retention_days: int = 365
     redact_secrets: bool = True
     examples: tuple = ()
+    # Saved conversations, Phase 1 (AI_Assistant_Conversations_PlanBack.md F3): exchanges kept in the prompt for a
+    # threaded question. Retrieval is unaffected either way -- Phase 1 doesn't rewrite follow-ups before searching.
+    conversation_history_turns: int = 6
 
     @classmethod
     def from_env(cls, env=None):
@@ -158,6 +161,8 @@ class Settings:
             log_retention_days=_int(env, "ASSISTANT_LOG_RETENTION_DAYS", defaults.log_retention_days),
             redact_secrets=_bool(env, "ASSISTANT_REDACT_SECRETS", defaults.redact_secrets),
             examples=_list(env, "ASSISTANT_EXAMPLES", sep="|"),
+            conversation_history_turns=_int(env, "ASSISTANT_CONVERSATION_HISTORY_TURNS",
+                                            defaults.conversation_history_turns),
         )
         settings.validate()
         return settings
@@ -176,3 +181,5 @@ class Settings:
             raise ValueError("ASSISTANT_MAX_CONCURRENT must be at least 1")
         if not 0 <= self.llm_temperature <= 2:
             raise ValueError("ASSISTANT_LLM_TEMPERATURE must be between 0 and 2")
+        if self.conversation_history_turns < 0:
+            raise ValueError("ASSISTANT_CONVERSATION_HISTORY_TURNS must not be negative")

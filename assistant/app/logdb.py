@@ -10,20 +10,21 @@ import json
 import time
 
 CSV_COLUMNS = ["id", "at", "user_id", "user_name", "question", "answer", "state", "sources", "model",
-               "prompt_version", "index_snapshot", "ms", "rating", "comment"]
+               "prompt_version", "index_snapshot", "ms", "rating", "comment", "conversation_id"]
 
 
 class QueryLog:
     def __init__(self, db, clock=time.time):
         self.db, self.clock = db, clock
 
-    def write(self, user, question, answer, state, sources, model, prompt_version, index_snapshot, ms, timings):
+    def write(self, user, question, answer, state, sources, model, prompt_version, index_snapshot, ms, timings,
+              conversation_id=None):
         with self.db.tx() as conn:
             return conn.execute(
                 "INSERT INTO query_log(at, user_id, user_name, question, answer, state, sources, model, "
-                "prompt_version, index_snapshot, ms, timings) VALUES (?,?,?,?,?,?,?,?,?,?,?,?)",
+                "prompt_version, index_snapshot, ms, timings, conversation_id) VALUES (?,?,?,?,?,?,?,?,?,?,?,?,?)",
                 (self.clock(), str(user.id), user.name, question, answer, state, json.dumps(sources), model,
-                 prompt_version, index_snapshot, int(ms), json.dumps(timings))).lastrowid
+                 prompt_version, index_snapshot, int(ms), json.dumps(timings), conversation_id)).lastrowid
 
     def set_feedback(self, log_id, user, rating, comment):
         """Only the person who asked may rate. Returns False when the answer is not theirs or does not exist."""

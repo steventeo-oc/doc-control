@@ -13,8 +13,9 @@ from fastapi import APIRouter, Depends, FastAPI, HTTPException, Request, Respons
 from fastapi.responses import HTMLResponse
 from pydantic import BaseModel
 
-from .ask import Assistant, IndexBuilding
+from .ask import Assistant, IndexBuilding, reader_text
 from .auth import Identity
+from .conversations import Conversations
 from .index import Index, iso_utc
 from .logdb import QueryLog
 from .ratelimit import RateLimiter
@@ -30,11 +31,16 @@ class Services:
     syncer: Syncer
     log: QueryLog
     limiter: RateLimiter
+    conversations: Conversations
     authenticate: Callable[[Request], Identity]
 
 
 class AskBody(BaseModel):
     question: str
+
+
+class RenameBody(BaseModel):
+    title: str
 
 
 class FeedbackBody(BaseModel):
@@ -92,13 +98,15 @@ def create_app(svc, start_sync=False):
                 "maxQuestionChars": settings.max_question_chars, "documents": len(svc.index.snapshot.versions),
                 "syncedAt": iso_utc(last["finished_at"]) if last else None}
 
-    @router.post("/ask")
-    def ask(body: AskBody, identity: Identity = Depends(who)):
+    def ready_to_ask(identity, raw_question):
+        """Every check a question must pass before it reaches the model, shared by a one-off /ask and both
+        conversation endpoints -- same order as always: switched on, allowed, well-formed, then the rate limit (an
+        invalid question never costs the asker a slot)."""
         if not settings.enabled:
             raise HTTPException(404, "the assistant is not switched on")
         if not allowed(identity):
             raise HTTPException(403, "the assistant is not available to your department yet")
-        question = " ".join(body.question.split())
+        question = " ".join(raw_question.split())
         if not question:
             raise HTTPException(400, "type a question first")
         if len(question) > settings.max_question_chars:
@@ -107,10 +115,70 @@ def create_app(svc, start_sync=False):
         if not ok:
             raise HTTPException(429, "too many questions; please wait a moment",
                                 headers={"Retry-After": str(retry_after)})
+        return question
+
+    @router.post("/ask")
+    def ask(body: AskBody, identity: Identity = Depends(who)):
+        question = ready_to_ask(identity, body.question)
         try:
             return svc.assistant.ask(question, identity).response
         except IndexBuilding:
             raise HTTPException(503, "the document index is still being built; try again in a few minutes") from None
+
+    # ---- saved conversations (Phase 1) -----------------------------------------------------------------------
+    # Listing, reopening, renaming and archiving a conversation are always available -- they only touch a user's
+    # own saved history, unlike asking, which needs the service itself switched on.
+
+    @router.get("/conversations")
+    def list_conversations(identity: Identity = Depends(who)):
+        return [{"id": c["id"], "title": c["title"], "updatedAt": iso_utc(c["updated_at"]),
+                 "messageCount": c["message_count"]} for c in svc.conversations.list(identity)]
+
+    @router.post("/conversations")
+    def start_conversation(body: AskBody, identity: Identity = Depends(who)):
+        question = ready_to_ask(identity, body.question)
+        conversation_id = svc.conversations.create(identity, question)
+        try:
+            return svc.assistant.ask(question, identity, conversation_id=conversation_id).response
+        except IndexBuilding:
+            svc.conversations.discard(conversation_id)   # never got a first message: don't leave an empty thread
+            raise HTTPException(503, "the document index is still being built; try again in a few minutes") from None
+
+    @router.get("/conversations/{conversation_id}")
+    def get_conversation(conversation_id: int, identity: Identity = Depends(who)):
+        convo = svc.conversations.owned_by(identity, conversation_id)
+        if not convo:
+            raise HTTPException(404, "no such conversation")
+        return {"id": convo["id"], "title": convo["title"], "updatedAt": iso_utc(convo["updated_at"]),
+                "messages": [{"id": m["id"], "at": iso_utc(m["at"]), "question": m["question"],
+                             "answer": reader_text(m["state"], m["answer"] or ""), "state": m["state"],
+                             "sources": m["sources"], "rating": m["rating"], "comment": m["comment"]}
+                            for m in svc.conversations.messages(conversation_id)]}
+
+    @router.post("/conversations/{conversation_id}/messages")
+    def continue_conversation(conversation_id: int, body: AskBody, identity: Identity = Depends(who)):
+        if not svc.conversations.owned_by(identity, conversation_id):
+            raise HTTPException(404, "no such conversation")
+        question = ready_to_ask(identity, body.question)
+        history = svc.conversations.history(conversation_id, settings.conversation_history_turns)
+        try:
+            result = svc.assistant.ask(question, identity, history=history, conversation_id=conversation_id).response
+        except IndexBuilding:
+            raise HTTPException(503, "the document index is still being built; try again in a few minutes") from None
+        svc.conversations.touch(conversation_id)
+        return result
+
+    @router.patch("/conversations/{conversation_id}", status_code=204)
+    def rename_conversation(conversation_id: int, body: RenameBody, identity: Identity = Depends(who)):
+        if not svc.conversations.rename(identity, conversation_id, body.title):
+            raise HTTPException(404, "no such conversation")
+        return Response(status_code=204)
+
+    @router.delete("/conversations/{conversation_id}", status_code=204)
+    def delete_conversation(conversation_id: int, identity: Identity = Depends(who)):
+        if not svc.conversations.archive(identity, conversation_id):
+            raise HTTPException(404, "no such conversation")
+        return Response(status_code=204)
 
     @router.post("/feedback", status_code=204)
     def feedback(body: FeedbackBody, identity: Identity = Depends(who)):

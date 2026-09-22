@@ -8,6 +8,7 @@ from .api import Services, create_app
 from .ask import Assistant
 from .auth import no_auth
 from .config import Settings
+from .conversations import Conversations
 from .db import Database
 from .doccontrol import DocControlSource
 from .index import Index
@@ -47,7 +48,7 @@ def build_services(settings):
     return Services(settings=settings, assistant=Assistant(settings, index, embedder, reranker, llm, log_db),
                     index=index, syncer=Syncer(settings, index, build_source(settings), embedder), log=log_db,
                     limiter=RateLimiter(settings.rate_per_min, settings.rate_per_day, log_db),
-                    authenticate=build_authenticator(settings))
+                    conversations=Conversations(db), authenticate=build_authenticator(settings))
 
 
 def create():

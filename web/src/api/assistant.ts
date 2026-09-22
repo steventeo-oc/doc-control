@@ -49,11 +49,53 @@ export interface AssistantAnswer {
   ms: number;
   /** the model ran out of room and the answer stops short */
   truncated: boolean;
+  /** the saved conversation this exchange belongs to (Phase 1: every question in the UI belongs to one) */
+  conversationId: number | null;
+}
+
+/** A conversation as the sidebar lists it — not its messages, see ConversationDetail for those. */
+export interface ConversationSummary {
+  id: number;
+  title: string;
+  updatedAt: string;
+  messageCount: number;
+}
+
+/** One exchange inside a reopened conversation. Shaped to match what a live AssistantAnswer carries, so the page
+ * can render a just-answered question and a reopened one with the same component. */
+export interface ConversationMessage {
+  id: number;
+  at: string;
+  question: string;
+  answer: string;
+  state: AnswerState;
+  sources: AssistantSource[];
+  rating: 'up' | 'down' | null;
+  comment: string | null;
+}
+
+export interface ConversationDetail {
+  id: number;
+  title: string;
+  updatedAt: string;
+  messages: ConversationMessage[];
 }
 
 export const assistantApi = {
   config: () => api.get<AssistantConfig>('/assistant/config'),
+  /** A one-off question outside any saved conversation. Kept for completeness; the page itself always asks inside
+   * a conversation (conversationsApi.start/continue) so a colleague's history is never silently lost. */
   ask: (question: string) => api.post<AssistantAnswer>('/assistant/ask', { question }),
   feedback: (id: number, rating: 'up' | 'down', comment?: string) =>
     api.post<void>('/assistant/feedback', { id, rating, comment: comment?.trim() || undefined }),
+};
+
+export const conversationsApi = {
+  list: () => api.get<ConversationSummary[]>('/assistant/conversations'),
+  start: (question: string) => api.post<AssistantAnswer>('/assistant/conversations', { question }),
+  get: (id: number) => api.get<ConversationDetail>(`/assistant/conversations/${id}`),
+  continue: (id: number, question: string) =>
+    api.post<AssistantAnswer>(`/assistant/conversations/${id}/messages`, { question }),
+  rename: (id: number, title: string) => api.patch<void>(`/assistant/conversations/${id}`, { title }),
+  remove: (id: number) => api.delete(`/assistant/conversations/${id}`),
 };

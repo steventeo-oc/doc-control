@@ -14,9 +14,11 @@ import {
   Menu,
   Settings,
   ShieldCheck,
+  Sparkles,
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { assistantApi } from '../api/assistant';
 import { lookupApi, userApi, workflowApi } from '../api/resources';
 import type { Department, TaskCounts, UserSummary } from '../api/types';
 import { ApiError } from '../api/client';
@@ -74,14 +76,22 @@ type SectionItem = { label: string; to: string; badge?: number | string | null }
 /**
  * The section switcher's single source of truth — the desktop rail and the
  * mobile drawer both render from this list. `adminOnly` entries are filtered
- * by role at render time (same visibility rule as before).
+ * by role at render time (same visibility rule as before); `assistantOnly`
+ * entries only while the AI assistant is running and open to this user.
  */
-const RAIL_ITEMS: { to: string; icon: LucideIcon; label: string; adminOnly?: boolean }[] = [
+const RAIL_ITEMS: {
+  to: string;
+  icon: LucideIcon;
+  label: string;
+  adminOnly?: boolean;
+  assistantOnly?: boolean;
+}[] = [
   { to: '/dashboard', icon: LayoutDashboard, label: 'Dashboard' },
   // Sections with a fixed default view point at the same canonical URL as
   // their first sidebar item, so the sidebar's exact-match highlight works
   // when navigating via the rail (a bare path matches nothing).
   { to: '/documents?view=all', icon: FileText, label: 'Documents' },
+  { to: '/assistant', icon: Sparkles, label: 'Ask', assistantOnly: true },
   { to: '/tasks?view=approvals', icon: ListChecks, label: 'Tasks' },
   { to: '/departments', icon: Building2, label: 'Depts' },
   { to: '/activity?scope=mine', icon: Activity, label: 'Activity' },
@@ -332,9 +342,43 @@ export default function Layout() {
     },
   };
 
+  // "Ask" is shown only when the assistant service is running, switched on and open to this user. Anything else (not
+  // deployed, so nginx answers 502; switched off; a failed check) simply hides it. The last answer is remembered for
+  // the browser session so the rail does not jump when the check comes back on every page load.
+  const assistantKey = user ? `assistant-allowed:${user.id}` : null;
+  const [assistantAllowed, setAssistantAllowed] = useState(() => {
+    try {
+      return !!assistantKey && sessionStorage.getItem(assistantKey) === '1';
+    } catch {
+      return false;
+    }
+  });
+  useEffect(() => {
+    if (!assistantKey) return;
+    let cancelled = false;
+    assistantApi
+      .config()
+      .then((config) => config.enabled && config.allowed)
+      .catch(() => false)
+      .then((allowed) => {
+        if (cancelled) return;
+        setAssistantAllowed(allowed);
+        try {
+          sessionStorage.setItem(assistantKey, allowed ? '1' : '0');
+        } catch {
+          // storage unavailable (private window): the check simply runs again next time
+        }
+      });
+    return () => {
+      cancelled = true;
+    };
+  }, [assistantKey]);
+
   const activeSection = sections[section];
   const sidebarItems = activeSection?.items ?? [];
-  const visibleRailItems = RAIL_ITEMS.filter((item) => !item.adminOnly || isAdmin);
+  const visibleRailItems = RAIL_ITEMS.filter(
+    (item) => (!item.adminOnly || isAdmin) && (!item.assistantOnly || assistantAllowed),
+  );
 
   async function handleLogout() {
     await logout();

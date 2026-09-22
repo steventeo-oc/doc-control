@@ -952,6 +952,59 @@
     4. Best-effort resilience (Flag F1): all notification dispatches are safely wrapped in try/catch blocks with warning logging and recorded in `notification_log` without rolling back workflow state transitions.
     5. Upgraded `PasswordResetService` to use branded HTML templates with "Reset Password" CTA button.
     6. Verified with 144/144 tests green (including unit tests `GraphNotificationSenderTests`, `NotificationTemplateServiceTests`, `WorkflowNotificationServiceTests`, and integration tests `WorkflowEndpointTests`, `PasswordResetTests`), and rebuilt live `api` container in WSL2 Docker.
+    **AI assistant ("Ask") — spike done, plan-back approved 2026-09-21, Phase A built and gated (PASS), Phase B approved by the owner (2026-09-22), Phase C (the Ask page) built and awaiting owner review; Phase D not started**:
+    a bounded RAG spike on 25 real ENG documents (fully local: Qwen3-Embedding-4B, bge-reranker-v2-m3, the shared
+    DeepSeek V4.1 Flash SGLang server) found retrieval at 98% right-document-first with the reranker; findings in
+    `AI_Assistant_Spike.md`. `AI_Assistant_Design_PlanBack.md` is the approved design (flags F1-F12; its section 11 is the
+    build log: gate results, changes from the plan, findings). **Owner decisions (2026-09-21)**: Python sidecar (F1); credentials
+    redacted at indexing (F7); no pilot group or daily cap, open to every signed-in user with technical limits only (F9);
+    embedding and reranker containers permanent and a dedicated LLM key requested (F10); native React page (F12).
+    **Phase A**: the service `assistant/` (Python: extraction incl. Word text boxes, redaction, hybrid search + reranker,
+    neighbour chunks, three answer states, query log, HTTP API, release gate `python -m app.gate`). **Release gate on the box,
+    real models, 59 questions: PASS with prompt strict-2** (abstained 12/12, cited and right-document-first 100%, no invalid
+    citations, p95 2.7 s); the spike's wording (strict-1) fails at 92% abstention, so strict-2 is the default.
+    **Phase B**: migration V12 view `assistant_indexable_version` (approved/released, current version, not trashed) with
+    `AssistantIndexViewTests` and `AssistantCorpusVisibilityTests` (the F3 guard: every row is openable through the API by a
+    plain user of another department); the `doccontrol` source (read-only Postgres role + read-only MinIO user, created by
+    `scripts/assistant-setup.sh`, secrets into the gitignored `.env`, never printed); session auth via `/api/auth/me` with the
+    CSRF and Origin rules; an admin HTML status page at `/api/assistant/admin/status.html`; compose profiles `assistant` and
+    `mock-models` (`docker-compose.yml`), `docker-compose.ai.yml` for the box (model containers on GPUs 4 and 7, joins the LLM's
+    network; needs `ASSISTANT_LLM_BASE_URL`, `ASSISTANT_LLM_API_KEY`, `LLM_DOCKER_NETWORK`); nginx `/api/assistant/`;
+    smoke section 16; RUNBOOK section 7. 119 Python tests (3.10 and 3.12), 8 new Java tests; the full smoke (0-16) passes on the
+    rebuilt dev stack with stand-in models. **On this dev machine the assistant is switched on with the stand-ins**
+    (`DOCCONTROL_ASSISTANT_ENABLED=true` and the three `ASSISTANT_*_BASE_URL` values in `.env`, started with
+    `--profile assistant --profile mock-models`); answers there prove plumbing only. The service is not committed.
+    **Phase C** (2026-09-22): `web/src/pages/AssistantPage.tsx`, `web/src/api/assistant.ts`, `web/src/lib/answerText.ts`, route
+    `/assistant`, rail item "Ask" (after Documents, shown only while the service runs, is switched on and open to the user).
+    Every state is shown (answered with citation chips, not covered, unavailable, loading, empty index, switched off, unreachable,
+    429, expired session); replies are parsed and rendered with React elements only, never as HTML (14 parser checks:
+    `node web/scripts/check-answer-text.ts`); 48 browser checks against a stub and 11 on the real dev stack in a real browser;
+    screenshots in `screenshots/assistant/` (gitignored). Two small service changes: a not-covered reply no longer starts with the
+    `NOT_FOUND` marker in the response (the log keeps the raw reply), and `/config` gained `maxQuestionChars`. The shared client's
+    `ApiError` gained `retryAfter`. doc-control production is on the same box as the models for now and may be separated later
+    (the assistant's connections are all settings; RUNBOOK section 7). Box facts (read off the box 2026-09-22): the LLM's Docker
+    network is `deepseek-v41-flash-4x-rtx-pro-6000_default`, its container `deepseek-v41-flash-4x-rtx-pro-6000-deepseek-1`
+    listens on 8010; doc-control's web is published on 3001 (Open WebUI owns 3000). The assistant accepts any request from the
+    page's own address (Origin equals the Host nginx forwards) and `ASSISTANT_ALLOWED_ORIGINS` only adds to that, because
+    `APP_BASE_URL` defaults to localhost:3000 and a box that kept it would otherwise refuse every question. RUNBOOK section 7 has
+    the box's steps in order (the code comes from the GitHub remote by `git pull`, which still needs the owner's yes to commit and
+    push).
+    `python -m app.chat --docs <folder>` asks questions in a terminal through the service's own code path, for trying the real AI
+    on the box without deploying (RUNBOOK section 7, "Trying the real AI first"); `auth.py` and everything the gate imports must
+    stay free of web packages, because the gate runs in the box's spike environment without fastapi (a test guards it).
+    **LLM temperature pinned to 0** (`ASSISTANT_LLM_TEMPERATURE`, always sent, same reasoning as the existing
+    `reasoning_effort` pin): found when the owner's own terminal testing on the box got one Chinese reply to an English
+    question out of three materially identical tries, pointing at sampling variance rather than a prompt-rule miss
+    (`Llm.chat` previously sent no temperature, so the server's own non-zero default applied). A test proves the falsy
+    `0.0` actually reaches the wire. Not yet confirmed this fixes the language slip — needs a gate rerun on the box.
+    **Open for the owner**: Phase C review; request the dedicated LLM key; on the box find the LLM's Docker network and set
+    `LLM_DOCKER_NETWORK`; confirm at the first real sync that work-instruction names carry the product model (F5).
+    **Two API behaviours found while building, deliberately not changed** (details in plan-back section 11): a trashed
+    document is still served by id to any signed-in user, and the version endpoints do not hide the versions of an approved
+    document that has no current version yet. **Environment fact**: on this Windows host the JVM cannot open a loopback pipe,
+    so `mvn test` cannot start a Spring context here; `scripts/java-tests-wsl.sh` runs the tests in WSL against throwaway
+    containers (RUNBOOK section 6 item 7). **Smoke sections 5-6** had been failing since the 2026-09-17 draft lock and were
+    fixed on 2026-09-21 to assert the lock.
 - **Where things run (this dev machine)**: no Docker on Windows — Docker
   Engine lives inside WSL2. **Operational runbook: `RUNBOOK.md`**
   (start/stop/verify the stack, check existing data, machine-specific

@@ -6,6 +6,7 @@ import ForgotPasswordPage from './pages/ForgotPasswordPage';
 import ResetPasswordPage from './pages/ResetPasswordPage';
 import DashboardPage from './pages/DashboardPage';
 import ActivityPage from './pages/ActivityPage';
+import AssistantPage from './pages/AssistantPage';
 import DocumentsPage from './pages/DocumentsPage';
 import DocumentDetailPage from './pages/DocumentDetailPage';
 import TasksPage from './pages/TasksPage';
@@ -53,6 +54,9 @@ export default function App() {
         <Route path="documents/:id" element={<DocumentDetailPage />} />
         <Route path="tasks" element={<TasksPage />} />
         <Route path="activity" element={<ActivityPage />} />
+        {/* "Ask" (AI assistant): a separate service behind /api/assistant. The rail item shows only when the service
+            is running and open to the user; the page itself explains itself when it is opened by URL anyway. */}
+        <Route path="assistant" element={<AssistantPage />} />
         <Route path="departments" element={<DepartmentsPage />} />
         <Route path="departments/:id" element={<DepartmentDetailPage />} />
         <Route path="departments/:deptId/documents/:id" element={<DocumentDetailPage />} />

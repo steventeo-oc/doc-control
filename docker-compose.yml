@@ -88,6 +88,71 @@ services:
     container_name: doccontrol-gotenberg
     restart: unless-stopped
 
+  # ---------------------------------------------------------------------------
+  # AI assistant ("Ask") — opt-in. Without its profile none of the services below start and the stack behaves
+  # exactly as before. Design: AI_Assistant_Design_PlanBack.md. Setup and start-up: RUNBOOK.md section 7.
+  #   docker compose --profile assistant up -d --build
+  # ---------------------------------------------------------------------------
+  assistant:
+    build: ./assistant
+    container_name: doccontrol-assistant
+    profiles: ["assistant"]
+    restart: unless-stopped
+    depends_on:
+      - api
+    environment:
+      # false: nobody sees "Ask", admins still get the status page and the index keeps syncing
+      DOCCONTROL_ASSISTANT_ENABLED: ${DOCCONTROL_ASSISTANT_ENABLED:-false}
+      ASSISTANT_SOURCE: doccontrol
+      ASSISTANT_AUTH: session
+      ASSISTANT_API_URL: http://api:8080/api
+      # Extra browser origins accepted on POSTs. The page's own address always is, so this only matters behind a proxy
+      # that changes the Host header.
+      ASSISTANT_ALLOWED_ORIGINS: ${APP_BASE_URL:-http://localhost:3000}
+      # Two read-only credentials, created by scripts/assistant-setup.sh (never the api's own accounts)
+      ASSISTANT_DB_URL: postgresql://assistant_ro@postgres:5432/${POSTGRES_DB:-doccontrol}
+      ASSISTANT_DB_PASSWORD: ${ASSISTANT_DB_PASSWORD:-}
+      ASSISTANT_MINIO_ENDPOINT: http://minio:9000
+      ASSISTANT_MINIO_ACCESS_KEY: ${ASSISTANT_MINIO_ACCESS_KEY:-}
+      ASSISTANT_MINIO_SECRET_KEY: ${ASSISTANT_MINIO_SECRET_KEY:-}
+      ASSISTANT_MINIO_BUCKET: ${DOCCONTROL_STORAGE_BUCKET:-doccontrol}
+      # Model servers: empty means the service's own default, which is unreachable from a container, so a missing
+      # value shows up as "cannot reach ..." on the status page instead of silently using something else.
+      ASSISTANT_LLM_BASE_URL: ${ASSISTANT_LLM_BASE_URL:-}
+      ASSISTANT_LLM_API_KEY: ${ASSISTANT_LLM_API_KEY:-}
+      ASSISTANT_LLM_MODEL: ${ASSISTANT_LLM_MODEL:-}
+      ASSISTANT_LLM_TEMPERATURE: ${ASSISTANT_LLM_TEMPERATURE:-}
+      ASSISTANT_EMB_BASE_URL: ${ASSISTANT_EMB_BASE_URL:-}
+      ASSISTANT_RERANK_BASE_URL: ${ASSISTANT_RERANK_BASE_URL:-}
+      ASSISTANT_EXAMPLES: ${ASSISTANT_EXAMPLES:-}
+      # Tunables, all optional: empty means the service's own default (plan-back section 2.7). ASSISTANT_ALLOWED_DEPARTMENTS
+      # is a comma-separated list of department codes; empty means every signed-in user.
+      ASSISTANT_ALLOWED_DEPARTMENTS: ${ASSISTANT_ALLOWED_DEPARTMENTS:-}
+      ASSISTANT_PROMPT: ${ASSISTANT_PROMPT:-}
+      ASSISTANT_MAX_CONCURRENT: ${ASSISTANT_MAX_CONCURRENT:-}
+      ASSISTANT_RATE_PER_MIN: ${ASSISTANT_RATE_PER_MIN:-}
+      ASSISTANT_RATE_PER_DAY: ${ASSISTANT_RATE_PER_DAY:-}
+      ASSISTANT_SYNC_MINUTES: ${ASSISTANT_SYNC_MINUTES:-}
+      ASSISTANT_LOG_RETENTION_DAYS: ${ASSISTANT_LOG_RETENTION_DAYS:-}
+    volumes:
+      - assistant_data:/data
+
+  mock-models:
+    # Stand-ins for the embedding, reranker and LLM servers so the whole flow runs on a machine with no GPU (plumbing
+    # only: the answers prove nothing about quality). Start with --profile mock-models and point the three
+    # ASSISTANT_*_BASE_URL values in .env at http://mock-models:8010/v1.
+    build: ./assistant
+    container_name: doccontrol-mock-models
+    profiles: ["mock-models"]
+    restart: unless-stopped
+    command: ["python", "tools/mock_models.py", "--host", "0.0.0.0", "--port", "8010"]
+    healthcheck:
+      test: ["CMD", "python", "-c", "import urllib.request; urllib.request.urlopen('http://127.0.0.1:8010/health', timeout=3)"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
+
 volumes:
   postgres_data:
   minio_data:
+  assistant_data:

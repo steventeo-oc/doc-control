@@ -91,19 +91,21 @@ DOC="$(mut "$TMP/admin.jar" -X POST "$API/documents" \
 DOC_ID="$(field "$DOC" id)"; DOC_NUMBER="$(field "$DOC" documentNumber)"
 echo "OK — $DOC_NUMBER (id $DOC_ID), version 1 stored, current_version_id=$(field "$DOC" currentVersionId)"
 
-step "5. Upload version 2"
+step "5. A second draft is refused while one is in progress (the draft lock)"
+# Since 2026-09-17 a document holds one draft at a time: approve or discard it before uploading another.
 printf 'Rev B — smoke test content with changes.\n' > "$TMP/rev-b.txt"
-V2="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/versions" \
+code="$(mut "$TMP/admin.jar" -o /dev/null -w '%{http_code}' -X POST "$API/documents/$DOC_ID/versions" \
   -F "file=@$TMP/rev-b.txt;type=text/plain" -F "change_notes=Smoke test revision B")"
-V2_ID="$(field "$V2" id)"
-echo "OK — version $(field "$V2" versionNumber) uploaded (id $V2_ID)"
+[ "$code" = "409" ] || fail "expected 409 for a second draft while draft v1 is in progress, got $code"
+echo "OK — 409, the document is locked while its first draft is in progress"
 
-step "6. Download version 2 via the audited original path and verify the bytes round-trip"
+step "6. Download version 1 via the audited original path and verify the bytes round-trip"
 # Phase 2e: the default download of a renditionable version returns a
 # stamped PDF rendition; original=true is the audited canModify escape hatch
-api -b "$TMP/admin.jar" -o "$TMP/downloaded.txt" "$API/documents/$DOC_ID/versions/$V2_ID/download?original=true"
-grep -q "Rev B" "$TMP/downloaded.txt" || fail "downloaded content does not match"
-echo "OK — original download contains the Rev B content"
+V1_ID="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/versions" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+api -b "$TMP/admin.jar" -o "$TMP/downloaded.txt" "$API/documents/$DOC_ID/versions/$V1_ID/download?original=true"
+grep -q "Rev A" "$TMP/downloaded.txt" || fail "downloaded content does not match"
+echo "OK — original download contains the Rev A content"
 
 step "7. A department member can see their department's draft (Phase 2a member visibility)"
 code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$API/documents/$DOC_ID")"
@@ -154,19 +156,19 @@ DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
 [ "$(field "$DETAIL" status)" = "approved" ] || fail "deferred approval: expected status approved"
 [ "$(field "$DETAIL" currentVersionId)" = "$V1_ID" ] || fail "deferred approval: pointer must stay on the released version"
 [ "$(field "$DETAIL" pendingEffectiveDate)" = "$EFFECTIVE" ] || fail "pendingEffectiveDate mismatch"
-echo "OK — approved with effect from $EFFECTIVE; the public still sees version 1"
+echo "OK — approved with effect from $EFFECTIVE; the public still sees the first version"
 
 step "12. The daily sweep flips it on the effective date (admin trigger; idempotent per date)"
 mut "$TMP/admin.jar" -X POST "$API/admin/jobs/daily-sweep?date=$EFFECTIVE" > /dev/null
 DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
 [ "$(field "$DETAIL" status)" = "released" ] || fail "flip: expected status released"
-[ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "flip: pointer should now be version 3"
+[ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "flip: pointer should now be the newer version"
 EXPECT_REVIEW="$(date -d "$EFFECTIVE +12 months" +%F)"
 [ "$(field "$DETAIL" nextReviewDue)" = "$EXPECT_REVIEW" ] || fail "flip: nextReviewDue should anchor to the effective date"
 mut "$TMP/admin.jar" -X POST "$API/admin/jobs/daily-sweep?date=$EFFECTIVE" > /dev/null
 DETAIL="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID")"
 [ "$(field "$DETAIL" currentVersionId)" = "$V3_ID" ] || fail "second sweep on the same date must not change state"
-echo "OK — flipped to version 3, review due $EXPECT_REVIEW; re-running the sweep changed nothing"
+echo "OK — flipped to the newer version, review due $EXPECT_REVIEW; re-running the sweep changed nothing"
 
 step "13. Periodic review re-approval is visibly flagged and re-certifies in place"
 INST3="$(mut "$TMP/admin.jar" -X POST "$API/documents/$DOC_ID/review-approval" \
@@ -200,10 +202,10 @@ ACKS="$(api -b "$TMP/admin.jar" "$API/documents/$DOC_ID/acknowledgments")"
   || fail "outstanding should drop by exactly one after acknowledging"
 [ "$(printf '%s' "$ACKS" | python -c "import sys,json;print(len(json.load(sys.stdin)['acknowledged']))")" = "1" ] \
   || fail "acknowledged should contain exactly the one record"
-echo "OK — department member acknowledged version 3 once (idempotent); $OUT_BEFORE members outstanding before, one fewer after"
+echo "OK — department member acknowledged the newer version once (idempotent); $OUT_BEFORE members outstanding before, one fewer after"
 
 step "15. Watermarking (Phase 2e): the released document downloads as a stamped PDF rendition"
-# v3 is text/plain, so the rendition goes through the Gotenberg sidecar
+# the newer version is text/plain, so the rendition goes through the Gotenberg sidecar
 # (LibreOffice headless) and comes back stamped. The first conversion may
 # include LibreOffice's lazy start — allow more than the api() timeout.
 RENDITION_TYPE="$(curl -s -m 120 -b "$TMP/admin.jar" \
@@ -211,11 +213,106 @@ RENDITION_TYPE="$(curl -s -m 120 -b "$TMP/admin.jar" \
   "$API/documents/$DOC_ID/versions/$V3_ID/download")"
 [ "$(head -c 5 "$TMP/rendition.pdf")" = "%PDF-" ] || fail "released download is not a PDF rendition"
 case "$RENDITION_TYPE" in application/pdf*) ;; *) fail "expected an application/pdf rendition, got '$RENDITION_TYPE'";; esac
-echo "OK — v3 downloaded as a PDF rendition ($RENDITION_TYPE, $(wc -c < "$TMP/rendition.pdf") bytes, converted by the Gotenberg sidecar)"
+echo "OK — the newer version downloaded as a PDF rendition ($RENDITION_TYPE, $(wc -c < "$TMP/rendition.pdf") bytes, converted by the Gotenberg sidecar)"
 api -b "$TMP/admin.jar" -o "$TMP/original-v3.txt" \
   "$API/documents/$DOC_ID/versions/$V3_ID/download?original=true"
 grep -q "Rev C" "$TMP/original-v3.txt" || fail "original download does not match"
 echo "OK — original=true still returns the untouched Rev C bytes (audited)"
 
+step "16. AI assistant (Ask): runs only when the assistant profile is up (RUNBOOK section 7)"
+# The assistant is served by the web container's nginx under /api/assistant/, so this section talks to the web
+# port, not the api's. The admin and viewer cookies from the api login are sent along (same host, path /api).
+WEB="${WEB_URL:-http://localhost:3000}"
+ASSIST="${WEB%/}/api/assistant"
+ASSIST_DONE=""
+code="$(api -o /dev/null -w '%{http_code}' "$ASSIST/health" || true)"
+if [ "$code" != "200" ]; then
+  echo "SKIPPED — nothing answers at $ASSIST/health (HTTP $code). Start it: docker compose --profile assistant up -d"
+else
+  assistant_sync() { # trigger a sync, then wait until a newer one has finished
+    local before code finished running
+    before="$(api -b "$TMP/admin.jar" "$ASSIST/admin/status" \
+      | python -c "import sys,json;print((json.load(sys.stdin).get('lastSync') or {}).get('finishedAt'))")"
+    code=""
+    for _ in 1 2 3 4 5 6; do # a scheduled sync may be running right now: a second one is refused, so retry
+      code="$(mut "$TMP/admin.jar" -o /dev/null -w '%{http_code}' -X POST "$ASSIST/admin/sync")"
+      [ "$code" = "202" ] && break
+      sleep 2
+    done
+    [ "$code" = "202" ] || fail "assistant: could not start a sync (HTTP $code)"
+    for _ in $(seq 1 60); do
+      sleep 2
+      read -r finished running <<<"$(api -b "$TMP/admin.jar" "$ASSIST/admin/status" \
+        | python -c "import sys,json;d=json.load(sys.stdin);print((d.get('lastSync') or {}).get('finishedAt'), d['syncRunning'])")"
+      if [ "$running" = "False" ] && [ "$finished" != "$before" ]; then return 0; fi
+    done
+    fail "assistant: the sync did not finish within two minutes (see $ASSIST/admin/status.html)"
+  }
+  ask() { # ask "<question>": prints the JSON answer
+    mut "$TMP/admin.jar" -X POST "$ASSIST/ask" -H "Content-Type: application/json" -d "{\"question\":\"$1\"}"
+  }
+
+  code="$(api -o /dev/null -w '%{http_code}' "$ASSIST/config")"
+  [ "$code" = "401" ] || fail "assistant: /config without a session must be 401, got $code"
+  CONFIG="$(api -b "$TMP/admin.jar" "$ASSIST/config")"
+  echo "OK — 401 without a session; with one: $(printf '%s' "$CONFIG" | python -c "import sys,json;d=json.load(sys.stdin);print('enabled=%s allowed=%s documents=%s' % (d['enabled'], d['allowed'], d['documents']))")"
+
+  code="$(api -b "$TMP/viewer.jar" -o /dev/null -w '%{http_code}' "$ASSIST/admin/status")"
+  [ "$code" = "403" ] || fail "assistant: a plain user must get 403 on /admin/status, got $code"
+  code="$(api -b "$TMP/admin.jar" -o /dev/null -w '%{http_code}' "$ASSIST/admin/status.html")"
+  [ "$code" = "200" ] || fail "assistant: the admin status page returned HTTP $code"
+  echo "OK — the status page is for admins only"
+
+  code="$(api -b "$TMP/admin.jar" -o /dev/null -w '%{http_code}' -X POST "$ASSIST/admin/sync")"
+  [ "$code" = "403" ] || fail "assistant: a POST without the CSRF header must be 403, got $code"
+  code="$(api -b "$TMP/admin.jar" -o /dev/null -w '%{http_code}' -X POST "$ASSIST/admin/sync" \
+    -H "X-XSRF-TOKEN: $(csrf_of "$TMP/admin.jar")" -H "Origin: http://evil.example")"
+  [ "$code" = "403" ] || fail "assistant: a POST from a foreign origin must be 403, got $code"
+  echo "OK — POSTs need the CSRF token and a known Origin"
+
+  if [ "$(field "$CONFIG" enabled)" != "True" ]; then
+    echo "NOTE — the assistant is switched off (DOCCONTROL_ASSISTANT_ENABLED=false): the question checks are skipped"
+  else
+    # A document released through the real approval flow becomes answerable; once trashed it stops being cited.
+    printf 'Quokka torque wrench calibration.\nThe quokka torque wrench shall be recalibrated every 37 days against the wombat reference gauge.\nRecord each recalibration in the quokka logbook.\n' > "$TMP/quokka.txt"
+    QDOC="$(mut "$TMP/admin.jar" -X POST "$API/documents" \
+      -F "document_type_id=$SOP_TYPE_ID" -F "department_id=$DEPT_ID" \
+      -F "name=Quokka Torque Wrench Calibration $SUFFIX" -F "file=@$TMP/quokka.txt;type=text/plain")"
+    QDOC_ID="$(field "$QDOC" id)"; QNUMBER="$(field "$QDOC" documentNumber)"
+    QV1_ID="$(api -b "$TMP/admin.jar" "$API/documents/$QDOC_ID/versions" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+    QINST="$(mut "$TMP/admin.jar" -X POST "$API/documents/$QDOC_ID/versions/$QV1_ID/workflow/start" \
+      -H "Content-Type: application/json" -d "{\"assignees\":[{\"type\":\"USER\",\"userId\":$VIEWER_ID}]}" \
+      | python -c "import sys,json;print(json.load(sys.stdin)['id'])")"
+    QTASK="$(api -b "$TMP/viewer.jar" "$API/workflow-instances/$QINST/tasks" | python -c "import sys,json;print(json.load(sys.stdin)[0]['id'])")"
+    mut "$TMP/viewer.jar" -X POST "$API/workflow-tasks/$QTASK/complete" \
+      -H "Content-Type: application/json" -d '{"approved":true,"comment":"Smoke approval"}' > /dev/null
+    [ "$(field "$(api -b "$TMP/admin.jar" "$API/documents/$QDOC_ID")" status)" = "released" ] || fail "assistant: the fixture document was not released"
+    echo "OK — $QNUMBER released; syncing the assistant"
+
+    assistant_sync
+    printf '%s' "$(ask "How often must the quokka torque wrench be recalibrated?")" | python -c "
+import sys, json
+d = json.load(sys.stdin)
+assert d['state'] == 'answered', 'state was ' + d['state'] + ': ' + d['answer'][:200]
+assert any(s['documentNumber'] == '$QNUMBER' and s['cited'] for s in d['sources']), 'not cited: ' + json.dumps([s['documentNumber'] for s in d['sources']])
+print('OK — answered and cited $QNUMBER (%s ms, model %s, prompt %s)' % (d['ms'], d['model'], d['promptVersion']))
+" || fail "assistant: the released document was not answered from"
+
+    NOTFOUND="$(ask "What is the reimbursement limit for client dinners?")"
+    [ "$(field "$NOTFOUND" state)" = "not_found" ] || fail "assistant: an uncovered question must be not_found, got $(field "$NOTFOUND" state)"
+    echo "OK — a question the documents do not cover is answered as not_found"
+
+    mut "$TMP/admin.jar" -X DELETE "$API/documents/$QDOC_ID" > /dev/null
+    assistant_sync
+    printf '%s' "$(ask "How often must the quokka torque wrench be recalibrated?")" | python -c "
+import sys, json
+d = json.load(sys.stdin)
+assert all(s['documentNumber'] != '$QNUMBER' for s in d['sources']), 'the trashed document is still a source'
+print('OK — after the document was trashed and the next sync, $QNUMBER is no longer a source')
+" || fail "assistant: a trashed document is still being cited"
+    ASSIST_DONE="; assistant fixture $QNUMBER (trashed)"
+  fi
+fi
+
 step "DONE — all checks passed"
-echo "Left behind: department $DEPT_CODE, document $DOC_NUMBER (released, v3 effective, acknowledged), three users."
+echo "Left behind: department $DEPT_CODE, document $DOC_NUMBER (released, second version effective, acknowledged), three users$ASSIST_DONE."

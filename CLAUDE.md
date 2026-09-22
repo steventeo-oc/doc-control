@@ -952,7 +952,20 @@
     4. Best-effort resilience (Flag F1): all notification dispatches are safely wrapped in try/catch blocks with warning logging and recorded in `notification_log` without rolling back workflow state transitions.
     5. Upgraded `PasswordResetService` to use branded HTML templates with "Reset Password" CTA button.
     6. Verified with 144/144 tests green (including unit tests `GraphNotificationSenderTests`, `NotificationTemplateServiceTests`, `WorkflowNotificationServiceTests`, and integration tests `WorkflowEndpointTests`, `PasswordResetTests`), and rebuilt live `api` container in WSL2 Docker.
-    **AI assistant ("Ask") — spike done, plan-back approved 2026-09-21, Phase A built and gated (PASS), Phase B approved by the owner (2026-09-22), Phase C (the Ask page) built and awaiting owner review; Phase D not started**:
+    **AI assistant ("Ask") — spike done, plan-back approved 2026-09-21, Phases A-C built and gated (PASS), deployed to
+    production and switched on for every signed-in user 2026-09-22 (Phase D)**: merged via
+    [PR #1](https://github.com/steventeo-oc/doc-control/pull/1), deployed to the box (real Qwen3-Embedding-4B,
+    bge-reranker-v2-m3 and the shared DeepSeek V4.1 Flash, migration V12 applied, the two read-only credentials
+    created and confirmed, `DOCCONTROL_ASSISTANT_ENABLED=true` with no department restriction), the admin status
+    page confirmed all three model servers `ok` against production before the flip. The rail item "Ask" is
+    confirmed showing for the admin account. **Not yet confirmed**: an actual question answered from a real
+    released document end to end — production doc-control had zero released documents at deploy time (a new
+    system, documents to follow); the plumbing (sync against the real view and MinIO, all three models reachable)
+    is proven, but a live answer is not, until the first real document is released and asked about. A second
+    plan-back, `AI_Assistant_Conversations_PlanBack.md` (drafted 2026-09-22, not yet reviewed), proposes saved,
+    resumable conversations in two phases (persistence, then follow-up-aware retrieval via query rewriting) —
+    explicitly still a RAG pipeline, not an agent: no tool-calling is wired into the LLM client despite the shared
+    server supporting it.
     a bounded RAG spike on 25 real ENG documents (fully local: Qwen3-Embedding-4B, bge-reranker-v2-m3, the shared
     DeepSeek V4.1 Flash SGLang server) found retrieval at 98% right-document-first with the reranker; findings in
     `AI_Assistant_Spike.md`. `AI_Assistant_Design_PlanBack.md` is the approved design (flags F1-F12; its section 11 is the
@@ -997,8 +1010,46 @@
     question out of three materially identical tries, pointing at sampling variance rather than a prompt-rule miss
     (`Llm.chat` previously sent no temperature, so the server's own non-zero default applied). A test proves the falsy
     `0.0` actually reaches the wire. Not yet confirmed this fixes the language slip — needs a gate rerun on the box.
-    **Open for the owner**: Phase C review; request the dedicated LLM key; on the box find the LLM's Docker network and set
-    `LLM_DOCKER_NETWORK`; confirm at the first real sync that work-instruction names carry the product model (F5).
+    **Deployed to production and switched on for every signed-in user, 2026-09-22 (Phase D)**: `feat/ai-assistant`
+    merged via [PR #1](https://github.com/steventeo-oc/doc-control/pull/1); on the box, migration V12 applied, the
+    two read-only credentials created and confirmed, the real embedding/reranker containers and the LLM all
+    confirmed `ok` on the status page before the flip, `DOCCONTROL_ASSISTANT_ENABLED=true` with no department
+    restriction. Confirmed live: "Ask" shows in the rail. Not yet confirmed: an actual answer from a real released
+    document — production had none at deploy time (a new system). Two real deploy lessons recorded in
+    `AI_Assistant_Design_PlanBack.md` and RUNBOOK: a `sed` exact-line match can silently do nothing on a stray `\r`
+    (always verify the running container's actual env afterward, never trust the edit), and the Origin check must
+    always accept the page's own address regardless of `ASSISTANT_ALLOWED_ORIGINS`, since this box's real web port
+    (3001) differs from the `.env.example` default.
+    **Saved conversations, v1.1 Phase 1 — built, tested, manually verified on this dev machine, and committed
+    for deployment 2026-09-22** (`AI_Assistant_Conversations_PlanBack.md`, approved 2026-09-22 after the owner
+    asked for something like Open WebUI's history): a `conversation` table (`app/conversations.py`:
+    create/list/history/messages/rename/archive/discard), `Assistant.ask` gained optional `history`/
+    `conversation_id` (retrieval itself unchanged — only the LLM prompt gains prior turns), five new
+    `/api/assistant/conversations` endpoints, and `AssistantPage.tsx` rebuilt around a conversation sidebar —
+    every question in the page now starts or continues a conversation; the old single-shot `/ask` stays for the
+    gate and `app/chat.py` only. A real bug was found and fixed by testing against a simulated pre-existing
+    database, not just a fresh one: the new index was created in the same schema script as the rest, which
+    crashes on a database that predates the feature (the column-adding `ALTER TABLE` must run first) — this would
+    have crash-looped the live production container on next restart (the migration is automatic, so this is
+    exactly the path production's real `assistant.db` will take on its next restart after deploy). Explicitly
+    still a RAG pipeline, not an agent: no tool-calling is wired into the LLM client despite the shared server
+    supporting it. **The owner then manually tested it live on this dev machine** and found two real UI issues,
+    both fixed and re-verified the same day: (1) the sidebar had a fixed height instead of a capped one, leaving
+    a large empty box under a short conversation list — fixed (`h-*` → `max-h-*`) and verified both under-cap
+    (shrinks to fit, 402px measured) and over-cap (clamps and scrolls internally, 772px measured, 30 seeded
+    conversations); (2) the sidebar floated as its own card inset inside the page content instead of sitting
+    flush against the nav rail the way every other section's sidebar does — fixed by adding a small context-based
+    slot (`web/src/components/SectionSidebarContext.tsx`) that lets a page hand dynamic content up into Layout's
+    own chrome-level sidebar column instead of rendering its own; `AssistantPage.tsx` now uses it, verified
+    pixel-for-pixel against the Documents page's sidebar (same left edge, border, background, sticky behavior).
+    The mobile "History" drawer is untouched by either fix. Before committing: the full Python suite re-run clean
+    (171 tests, 0 failures), the TypeScript build clean, and a full `scripts/smoke.sh` (sections 0–16) re-run
+    clean against the rebuilt dev stack with the notification flag cycled per the standing habit. Phase 2 (query
+    rewriting so a follow-up's retrieval actually understands what it refers to) is designed, not built — waits
+    on Phase 1 actually being used first, per the approved rollout.
+    **Open for the owner**: confirm Ask against a real released document; deploy Phase 1 of conversations to the
+    box once pushed; request the dedicated LLM key if not already done; confirm at the first real sync that
+    work-instruction names carry the product model (F5).
     **Two API behaviours found while building, deliberately not changed** (details in plan-back section 11): a trashed
     document is still served by id to any signed-in user, and the version endpoints do not hide the versions of an approved
     document that has no current version yet. **Environment fact**: on this Windows host the JVM cannot open a loopback pipe,

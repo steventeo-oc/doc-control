@@ -3,9 +3,16 @@ export class ApiError extends Error {
     public status: number,
     message: string,
     public errors?: Record<string, string>,
+    /** Seconds from a Retry-After header (429 and 503), when the server sent one. */
+    public retryAfter?: number,
   ) {
     super(message);
   }
+}
+
+function retryAfterSeconds(res: Response): number | undefined {
+  const seconds = Number(res.headers.get('Retry-After'));
+  return Number.isFinite(seconds) && seconds > 0 ? seconds : undefined;
 }
 
 // All API calls go through the /api mount (server.servlet.context-path).
@@ -33,8 +40,11 @@ async function request<T>(path: string, init?: RequestInit): Promise<T> {
   }
   const body = await res.json().catch(() => null);
   if (!res.ok) {
-    // Errors follow RFC 9457 ProblemDetail from the backend
-    throw new ApiError(res.status, body?.detail ?? res.statusText, body?.errors);
+    // Errors follow RFC 9457 ProblemDetail from the backend; the assistant
+    // service (FastAPI) also puts a sentence in `detail`, except for its
+    // validation errors, where it is a list, so only a string is used.
+    const detail = typeof body?.detail === 'string' ? body.detail : undefined;
+    throw new ApiError(res.status, detail ?? res.statusText, body?.errors, retryAfterSeconds(res));
   }
   return body as T;
 }

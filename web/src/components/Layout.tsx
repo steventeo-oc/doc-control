@@ -94,7 +94,7 @@ const RAIL_ITEMS: {
   { to: '/documents?view=all', icon: FileText, label: 'Documents' },
   { to: '/assistant', icon: Sparkles, label: 'Ask', assistantOnly: true },
   { to: '/tasks?view=approvals', icon: ListChecks, label: 'Tasks' },
-  { to: '/departments', icon: Building2, label: 'Depts' },
+  { to: '/departments', icon: Building2, label: 'Departments' },
   { to: '/activity?scope=mine', icon: Activity, label: 'Activity' },
   { to: '/admin/types', icon: Settings, label: 'Admin', adminOnly: true },
 ];
@@ -203,7 +203,7 @@ function AccountMenu(props: {
                 <span
                   key={d.id}
                   className={cn(
-                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium border border-transparent',
+                    'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium border border-transparent',
                     d.level === 'MANAGER'
                       ? 'bg-success/10 text-success border-success/20'
                       : d.level === 'COLLABORATOR'
@@ -213,7 +213,7 @@ function AccountMenu(props: {
                   title={`${d.label} (${d.level})`}
                 >
                   <span className="font-semibold">{d.code}</span>
-                  <span className="text-[9px] opacity-80 lowercase">{d.level.toLowerCase()}</span>
+                  <span className="text-[10px] opacity-80 lowercase">{d.level.toLowerCase()}</span>
                 </span>
               ))}
             </div>

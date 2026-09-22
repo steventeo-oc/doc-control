@@ -211,12 +211,12 @@ export default function DepartmentsPage() {
       />
 
       {error && (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
           {error}
         </div>
       )}
       {notice && (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-700 dark:text-emerald-400">
           {notice}
         </div>
       )}
@@ -229,10 +229,10 @@ export default function DepartmentsPage() {
             placeholder="Search departments…"
             value={search}
             onChange={(e) => setSearch(e.target.value)}
-            className="pl-8 text-xs rounded-xl border-border/50"
+            className="pl-8 rounded-xl border-border/50"
           />
         </div>
-        <div className="text-xs text-muted-foreground">
+        <div className="text-sm text-muted-foreground">
           {departments.length} department{departments.length === 1 ? '' : 's'}
         </div>
       </div>
@@ -241,18 +241,18 @@ export default function DepartmentsPage() {
         <Table>
           <TableHeader>
             <TableRow className="border-border/40 hover:bg-transparent">
-              <TableHead className="w-28 text-xs font-semibold">Code</TableHead>
-              <TableHead className="text-xs font-semibold">Label</TableHead>
-              <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
-              <TableHead className="w-28 text-xs font-semibold">Documents</TableHead>
-              <TableHead className="w-24 text-xs font-semibold">Members</TableHead>
-              {isAdmin && <TableHead className="w-48 text-right text-xs font-semibold">Actions</TableHead>}
+              <TableHead className="w-28 font-semibold">Code</TableHead>
+              <TableHead className="font-semibold">Label</TableHead>
+              <TableHead className="w-24 font-semibold">Status</TableHead>
+              <TableHead className="w-28 font-semibold">Documents</TableHead>
+              <TableHead className="w-24 font-semibold">Members</TableHead>
+              {isAdmin && <TableHead className="w-48 text-right font-semibold">Actions</TableHead>}
             </TableRow>
           </TableHeader>
           <TableBody>
             {departments.map((d) => (
               <TableRow key={d.id} className="border-border/30 hover:bg-muted/40 transition-colors">
-                <TableCell className="font-mono text-xs font-medium">
+                <TableCell className="font-mono font-medium">
                   <Link
                     to={`/departments/${d.id}`}
                     className="text-primary hover:underline font-semibold"
@@ -260,21 +260,21 @@ export default function DepartmentsPage() {
                     {d.code}
                   </Link>
                 </TableCell>
-                <TableCell className="text-xs font-medium text-foreground">
+                <TableCell className="font-medium text-foreground">
                   {d.label}
                 </TableCell>
                 <TableCell>
                   {d.active ? (
                     <Badge
                       variant="outline"
-                      className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[11px] font-medium"
+                      className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium"
                     >
                       Active
                     </Badge>
                   ) : (
                     <Badge
                       variant="outline"
-                      className="border-border/40 bg-muted/50 text-muted-foreground text-[11px] font-medium"
+                      className="border-border/40 bg-muted/50 text-muted-foreground font-medium"
                     >
                       Inactive
                     </Badge>
@@ -296,16 +296,16 @@ export default function DepartmentsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
                         onClick={() => openRename(d)}
                       >
-                        <Pencil className="size-3 mr-1" />
+                        <Pencil className="size-3.5 mr-1" />
                         Rename
                       </Button>
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-muted-foreground hover:text-foreground"
+                        className="h-8 px-2 text-muted-foreground hover:text-foreground"
                         onClick={() => handleToggleClick(d)}
                       >
                         {d.active ? 'Deactivate' : 'Activate'}
@@ -313,10 +313,10 @@ export default function DepartmentsPage() {
                       <Button
                         variant="ghost"
                         size="sm"
-                        className="h-7 px-2 text-xs text-destructive hover:text-destructive hover:bg-destructive/10"
+                        className="h-8 px-2 text-destructive hover:text-destructive hover:bg-destructive/10"
                         onClick={() => setDeletePrompt(d)}
                       >
-                        <Trash2 className="size-3 mr-1" />
+                        <Trash2 className="size-3.5 mr-1" />
                         Delete
                       </Button>
                     </div>
@@ -350,13 +350,13 @@ export default function DepartmentsPage() {
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>Add Department</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               Create a new department lookup row. The department code will be used in document prefixes and cannot be changed later.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="space-y-3 mt-2">
             <div className="space-y-1">
-              <Label htmlFor="dept-code" className="text-xs font-semibold">
+              <Label htmlFor="dept-code" className="font-semibold">
                 Department Code
               </Label>
               <Input
@@ -366,11 +366,11 @@ export default function DepartmentsPage() {
                 required
                 value={newCode}
                 onChange={(e) => setNewCode(e.target.value.toUpperCase())}
-                className="font-mono text-xs rounded-xl"
+                className="font-mono rounded-xl"
               />
             </div>
             <div className="space-y-1">
-              <Label htmlFor="dept-label" className="text-xs font-semibold">
+              <Label htmlFor="dept-label" className="font-semibold">
                 Department Label
               </Label>
               <Input
@@ -380,7 +380,7 @@ export default function DepartmentsPage() {
                 required
                 value={newLabel}
                 onChange={(e) => setNewLabel(e.target.value)}
-                className="text-xs rounded-xl"
+                className="rounded-xl"
               />
             </div>
             <DialogFooter className="mt-4">
@@ -405,14 +405,14 @@ export default function DepartmentsPage() {
         <DialogContent className="sm:max-w-md rounded-2xl">
           <DialogHeader>
             <DialogTitle>Rename Department</DialogTitle>
-            <DialogDescription className="text-xs">
+            <DialogDescription>
               Update the descriptive label for department{' '}
               <strong className="font-mono text-foreground">{renaming?.code}</strong>.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleRenameSubmit} className="space-y-3 mt-2">
             <div className="space-y-1">
-              <Label htmlFor="rename-label" className="text-xs font-semibold">
+              <Label htmlFor="rename-label" className="font-semibold">
                 Department Label
               </Label>
               <Input
@@ -421,7 +421,7 @@ export default function DepartmentsPage() {
                 required
                 value={renameLabel}
                 onChange={(e) => setRenameLabel(e.target.value)}
-                className="text-xs rounded-xl"
+                className="rounded-xl"
               />
             </div>
             <DialogFooter className="mt-4">
@@ -451,7 +451,7 @@ export default function DepartmentsPage() {
             <AlertDialogTitle>
               Deactivate Department {deactivatePrompt?.department.code}?
             </AlertDialogTitle>
-            <AlertDialogDescription className="space-y-2 text-xs text-muted-foreground">
+            <AlertDialogDescription className="space-y-2 text-muted-foreground">
               <p>
                 {deactivatePrompt && deactivatePrompt.documents > 0
                   ? `• ${deactivatePrompt.documents} existing document(s) will keep referencing this department and remain searchable.`
@@ -487,7 +487,7 @@ export default function DepartmentsPage() {
             <AlertDialogTitle>
               Delete Department {deletePrompt?.code}?
             </AlertDialogTitle>
-            <AlertDialogDescription className="text-xs text-muted-foreground">
+            <AlertDialogDescription className="text-muted-foreground">
               This action cannot be undone. It will permanently remove department{' '}
               <strong className="text-foreground">{deletePrompt?.label}</strong>, all user memberships, and its sequence counters.
               <br />

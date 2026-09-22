@@ -633,7 +633,7 @@ export default function DepartmentDetailPage() {
                 <TableRow className="border-border/40 hover:bg-transparent">
                   <TableHead className="w-9 px-2" />
                   <TableHead
-                    className="w-36 text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    className="w-36 font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('number')}
                   >
                     <div className="flex items-center gap-1">
@@ -646,7 +646,7 @@ export default function DepartmentDetailPage() {
                     </div>
                   </TableHead>
                   <TableHead
-                    className="min-w-[220px] text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    className="min-w-[220px] font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('name')}
                   >
                     <div className="flex items-center gap-1">
@@ -659,7 +659,7 @@ export default function DepartmentDetailPage() {
                     </div>
                   </TableHead>
                   <TableHead
-                    className="w-28 text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    className="w-28 font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('status')}
                   >
                     <div className="flex items-center gap-1">
@@ -671,12 +671,12 @@ export default function DepartmentDetailPage() {
                       )}
                     </div>
                   </TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Progress</TableHead>
-                  <TableHead className="w-20 text-xs font-semibold">Tier</TableHead>
-                  <TableHead className="w-20 text-xs font-semibold">Type</TableHead>
-                  <TableHead className="w-28 text-xs font-semibold">Owner</TableHead>
+                  <TableHead className="w-28 font-semibold">Progress</TableHead>
+                  <TableHead className="w-20 font-semibold">Tier</TableHead>
+                  <TableHead className="w-20 font-semibold">Type</TableHead>
+                  <TableHead className="w-28 font-semibold">Owner</TableHead>
                   <TableHead
-                    className="w-32 text-right text-xs font-semibold cursor-pointer select-none hover:text-foreground"
+                    className="w-32 text-right font-semibold cursor-pointer select-none hover:text-foreground"
                     onClick={() => handleSort('updated')}
                   >
                     <div className="flex items-center justify-end gap-1">
@@ -713,7 +713,7 @@ export default function DepartmentDetailPage() {
                         />
                       </button>
                     </TableCell>
-                    <TableCell className="font-mono text-xs font-semibold">
+                    <TableCell className="font-mono font-semibold">
                       <Link
                         to={`/departments/${department.id}/documents/${doc.id}`}
                         className="text-primary hover:underline"
@@ -721,7 +721,7 @@ export default function DepartmentDetailPage() {
                         {doc.documentNumber}
                       </Link>
                     </TableCell>
-                    <TableCell className="text-xs font-medium text-foreground">
+                    <TableCell className="font-medium text-foreground">
                       {doc.name}
                     </TableCell>
                     <TableCell>
@@ -916,26 +916,26 @@ export default function DepartmentDetailPage() {
               <Table>
                 <TableHeader>
                   <TableRow className="border-border/40 hover:bg-transparent">
-                    <TableHead className="w-44 text-xs font-semibold">When</TableHead>
-                    <TableHead className="w-48 text-xs font-semibold">User</TableHead>
-                    <TableHead className="text-xs font-semibold">Action</TableHead>
+                    <TableHead className="w-44 font-semibold">When</TableHead>
+                    <TableHead className="w-48 font-semibold">User</TableHead>
+                    <TableHead className="font-semibold">Action</TableHead>
                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {activityData?.content.map((entry) => (
                     <TableRow key={entry.id} className="border-border/30 hover:bg-muted/40 transition-colors">
-                      <TableCell className="text-xs text-muted-foreground font-mono">
+                      <TableCell className="text-muted-foreground font-mono">
                         {new Date(entry.performedAt).toLocaleString()}
                       </TableCell>
-                      <TableCell className="text-xs font-medium text-foreground">
+                      <TableCell className="font-medium text-foreground">
                         <div>{entry.actorName}</div>
                         {entry.actorEmail && (
-                          <div className="text-[11px] text-muted-foreground font-normal">
+                          <div className="text-xs text-muted-foreground font-normal">
                             {entry.actorEmail}
                           </div>
                         )}
                       </TableCell>
-                      <TableCell className="text-xs text-foreground">
+                      <TableCell className="text-foreground">
                         <ActivitySentence entry={entry} departmentId={department.id} />
                       </TableCell>
                     </TableRow>

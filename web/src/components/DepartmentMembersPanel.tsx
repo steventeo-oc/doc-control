@@ -209,7 +209,7 @@ export default function DepartmentMembersPanel({
               placeholder="Search members..."
               value={memberSearch}
               onChange={(e) => setMemberSearch(e.target.value)}
-              className="h-8 pl-8 pr-7 text-xs rounded-xl border-border/40 bg-background"
+              className="h-8 pl-8 pr-7 rounded-xl border-border/40 bg-background"
             />
             {memberSearch && (
               <button
@@ -224,7 +224,7 @@ export default function DepartmentMembersPanel({
           <Button
             size="sm"
             variant="outline"
-            className="gap-1.5 text-xs rounded-xl shadow-xs whitespace-nowrap"
+            className="gap-1.5 rounded-xl shadow-xs whitespace-nowrap"
             onClick={openAddModal}
           >
             <Plus className="size-3.5" />
@@ -234,51 +234,51 @@ export default function DepartmentMembersPanel({
       </div>
 
       {error && (
-        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-xs font-medium text-destructive">
+        <div className="rounded-xl border border-destructive/20 bg-destructive/10 p-3 text-sm font-medium text-destructive">
           {error}
         </div>
       )}
       {notice && (
-        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-xs font-medium text-emerald-700 dark:text-emerald-400">
+        <div className="rounded-xl border border-emerald-500/20 bg-emerald-500/10 p-3 text-sm font-medium text-emerald-700 dark:text-emerald-400">
           {notice}
         </div>
       )}
 
       {members === null ? (
-        <div className="py-6 text-center text-xs text-muted-foreground">Loading members…</div>
+        <div className="py-6 text-center text-sm text-muted-foreground">Loading members…</div>
       ) : (
         <div className="rounded-xl border border-border/40 overflow-hidden">
           <Table>
             <TableHeader>
               <TableRow className="border-border/40 hover:bg-transparent">
-                <TableHead className="text-xs font-semibold">Name</TableHead>
-                <TableHead className="text-xs font-semibold">Email</TableHead>
-                <TableHead className="w-24 text-xs font-semibold">Status</TableHead>
-                <TableHead className="w-44 text-xs font-semibold">Department Role</TableHead>
-                <TableHead className="w-16 text-right text-xs font-semibold" />
+                <TableHead className="font-semibold">Name</TableHead>
+                <TableHead className="font-semibold">Email</TableHead>
+                <TableHead className="w-24 font-semibold">Status</TableHead>
+                <TableHead className="w-44 font-semibold">Department Role</TableHead>
+                <TableHead className="w-16 text-right font-semibold" />
               </TableRow>
             </TableHeader>
             <TableBody>
               {filteredMembers.map((member) => (
                 <TableRow key={member.userId} className="border-border/30 hover:bg-muted/40 transition-colors">
-                  <TableCell className="text-xs font-medium text-foreground">
+                  <TableCell className="font-medium text-foreground">
                     {member.name}
                   </TableCell>
-                  <TableCell className="text-xs text-muted-foreground">
+                  <TableCell className="text-muted-foreground">
                     {member.email}
                   </TableCell>
                   <TableCell>
                     {member.userActive ? (
                       <Badge
                         variant="outline"
-                        className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 text-[10px] font-medium"
+                        className="border-emerald-500/20 bg-emerald-500/10 text-emerald-700 dark:text-emerald-400 font-medium"
                       >
                         Active
                       </Badge>
                     ) : (
                       <Badge
                         variant="outline"
-                        className="border-border/40 bg-muted/50 text-muted-foreground text-[10px] font-medium"
+                        className="border-border/40 bg-muted/50 text-muted-foreground font-medium"
                       >
                         Inactive
                       </Badge>

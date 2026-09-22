@@ -1,4 +1,4 @@
-import { FormEvent, useCallback, useEffect, useState } from 'react';
+import { FormEvent, type ReactNode, useCallback, useEffect, useState } from 'react';
 import { NavLink, Outlet, useLocation, useNavigate } from 'react-router-dom';
 import {
   Activity,
@@ -18,6 +18,7 @@ import {
   type LucideIcon,
 } from 'lucide-react';
 import { useAuth } from '../auth/AuthContext';
+import { SectionSidebarContext } from './SectionSidebarContext';
 import { assistantApi } from '../api/assistant';
 import { lookupApi, userApi, workflowApi } from '../api/resources';
 import type { Department, TaskCounts, UserSummary } from '../api/types';
@@ -374,6 +375,10 @@ export default function Layout() {
     };
   }, [assistantKey]);
 
+  // The Assistant page's sidebar is a per-user conversation list, not a fixed set of links -- it can't be a
+  // SectionItem[], so it's supplied dynamically via useSectionSidebar instead of the sections map below.
+  const [customSidebar, setCustomSidebar] = useState<ReactNode>(null);
+
   const activeSection = sections[section];
   const sidebarItems = activeSection?.items ?? [];
   const visibleRailItems = RAIL_ITEMS.filter(
@@ -450,6 +455,7 @@ export default function Layout() {
   }
 
   return (
+    <SectionSidebarContext.Provider value={setCustomSidebar}>
     <div
       className="flex min-h-screen flex-col md:flex-row bg-background"
     >
@@ -558,9 +564,9 @@ export default function Layout() {
 
       <div className="flex min-w-0 flex-1 flex-col justify-between">
         <div className="flex min-w-0 flex-1 items-start gap-6">
-          {sidebarItems.length > 0 && (
+          {(sidebarItems.length > 0 || customSidebar) && (
             <aside className="hidden min-w-[220px] shrink-0 flex-col gap-0.5 border-r border-border p-4 md:flex self-stretch sticky top-0 max-h-[calc(100vh-49px)] overflow-y-auto z-10">
-              {sidebarItems.map((item) => {
+              {customSidebar ?? sidebarItems.map((item) => {
                 const isActive = isSubnavActive(item.to);
                 return (
                   <NavLink
@@ -717,5 +723,6 @@ export default function Layout() {
         </DialogContent>
       </Dialog>
     </div>
+    </SectionSidebarContext.Provider>
   );
 }

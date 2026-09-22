@@ -1,0 +1,7 @@
+{"id":"q1","question":"How often must torque drivers be calibrated?","answerable":true,"expected_docs":["SOP-QA-0010"],"expected_facts":["6 months"]}
+{"id":"q2","question":"What form do I use to record the wrist strap test?","answerable":true,"expected_docs":["SOP-PROD-0004"],"expected_facts":["FORM-PROD-0012"]}
+{"id":"q3","question":"What torque do the chassis cover screws need?","answerable":true,"expected_docs":["WI-ENG-0021"],"expected_facts":["0.6 Nm"]}
+{"id":"q4","question":"What does SOP-QA-0010 say about out of tolerance equipment?","answerable":true,"expected_docs":["SOP-QA-0010"],"expected_facts":["FORM-QA-0031"]}
+{"id":"q5","question":"How long are calibration certificates kept?","answerable":true,"expected_docs":["SOP-QA-0010"],"expected_facts":["5 years"]}
+{"id":"q6","question":"What is the reimbursement limit for client dinners?","answerable":false}
+{"id":"q7","question":"What is the fire evacuation assembly point?","answerable":false}

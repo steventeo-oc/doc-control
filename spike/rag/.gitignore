@@ -1,0 +1,11 @@
+# Company documents, questions and results never go into git
+.venv/
+__pycache__/
+/docs/
+/golden.jsonl
+/questions.csv
+/questions_review.md
+/idx_*/
+/results_*/
+/synth_out/
+/.testdata/

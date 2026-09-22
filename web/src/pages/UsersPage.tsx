@@ -547,22 +547,22 @@ export default function UsersPage() {
                               key={d.id}
                               className={
                                 d.level === 'MANAGER'
-                                  ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-success/10 text-success border border-success/20'
+                                  ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-success/10 text-success border border-success/20'
                                   : d.level === 'COLLABORATOR'
-                                  ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-info/10 text-info border border-info/20'
-                                  : 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[10px] font-medium bg-muted/70 text-muted-foreground border border-border/30'
+                                  ? 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-info/10 text-info border border-info/20'
+                                  : 'inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-xs font-medium bg-muted/70 text-muted-foreground border border-border/30'
                               }
                               title={`${d.label} (${d.level})`}
                             >
                               <span className="font-semibold">{d.code}</span>
-                              <span className="text-[9px] opacity-80 lowercase">
+                              <span className="text-[10px] opacity-80 lowercase">
                                 {d.level.toLowerCase()}
                               </span>
                             </span>
                           ))
                         )}
                         {extraCount > 0 && (
-                          <span className="text-[10px] text-muted-foreground font-medium">
+                          <span className="text-xs text-muted-foreground font-medium">
                             +{extraCount} more
                           </span>
                         )}

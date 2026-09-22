@@ -1,0 +1,5 @@
+id,question,answerable,expected_docs,expected_facts,notes
+q1,How often must torque drivers be calibrated?,yes,SOP-QA-0010,6 months,
+q2,What form do I use to record the wrist strap test?,yes,SOP-PROD-0004,FORM-PROD-0012,
+q3,Which two documents tell me what to do when a torque driver is out of tolerance?,yes,SOP-QA-0010;WI-ENG-0021,FORM-QA-0031,a question that needs two documents
+q4,What is the reimbursement limit for client dinners?,no,,,not covered by any SOP

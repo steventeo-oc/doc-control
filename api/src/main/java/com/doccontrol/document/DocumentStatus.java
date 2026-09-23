@@ -12,6 +12,5 @@ public enum DocumentStatus implements PersistableEnum {
     IN_REVIEW,
     APPROVED,
     RELEASED,
-    SUPERSEDED,
     OBSOLETE
 }

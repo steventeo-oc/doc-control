@@ -97,7 +97,7 @@ class AssistantCorpusVisibilityTests {
     @Test
     void documentsThePublicCannotSeeAreNotInTheView() throws Exception {
         World world = new World();
-        for (String label : List.of("draft", "in-review", "superseded", "obsolete")) {
+        for (String label : List.of("draft", "in-review", "obsolete")) {
             Integer id = world.fixtures.cases.get(label).document().getId();
             mockMvc.perform(get("/documents/{id}", id).session(world.outsider))
                     .andExpect(status().isNotFound());

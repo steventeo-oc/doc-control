@@ -12,7 +12,7 @@
   <process id="documentApproval" isExecutable="true">
     <startEvent id="start"/>
     <sequenceFlow id="f1" sourceRef="start" targetRef="review"/>
-    <userTask id="review" name="Review document version">
+    <userTask id="review" name="Review document revision">
       <bpmn:extensionElements xmlns:bpmn="http://www.omg.org/spec/BPMN/20100524/MODEL">
         <flowable:taskListener event="create" delegateExpression="${slotAssignmentListener}"/>
       </bpmn:extensionElements>

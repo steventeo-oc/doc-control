@@ -11,8 +11,8 @@ import java.util.Optional;
 
 public interface DocumentVersionRepository extends JpaRepository<DocumentVersion, Integer> {
 
-    @Query("SELECT COALESCE(MAX(v.versionNumber), 0) FROM DocumentVersion v WHERE v.document.id = :documentId")
-    int findMaxVersionNumber(@Param("documentId") Integer documentId);
+    @Query("SELECT MAX(v.versionNumber) FROM DocumentVersion v WHERE v.document.id = :documentId")
+    Integer findMaxVersionNumber(@Param("documentId") Integer documentId);
 
     List<DocumentVersion> findAllByDocumentIdOrderByVersionNumberAsc(Integer documentId);
 

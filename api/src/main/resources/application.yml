@@ -92,7 +92,7 @@ doccontrol:
     rendition-url: ${DOCCONTROL_WATERMARK_RENDITION_URL:http://gotenberg:3000}
     rendition-timeout-seconds: 30
     text:
-      current: "UNCONTROLLED IF PRINTED"
+      current: "RELEASED — UNCONTROLLED IF PRINTED"
       superseded: "SUPERSEDED — DO NOT USE"
       draft: "DRAFT — UNCONTROLLED"
       approved: "APPROVED — NOT YET IN EFFECT"

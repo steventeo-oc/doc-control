@@ -309,7 +309,7 @@ public class WorkflowNotificationJob {
                 notifyDocument(document, version, "ACK_REMINDER", member, today, null,
                         "Acknowledgment due soon: " + document.getDocumentNumber(),
                         "Please read and acknowledge " + document.getDocumentNumber()
-                                + " v" + version.getVersionNumber()
+                                + " Rev " + version.getVersionNumber()
                                 + " — the acknowledgment window closes " + closesAt + ".");
             }
         } else if (overdueDays >= acknowledgmentProperties.escalateAfterOverdueDays()) {
@@ -323,7 +323,7 @@ public class WorkflowNotificationJob {
                 notifyDocument(document, version, "ACK_OVERDUE", recipient, today,
                         "ack-overdue:version=" + version.getId(),
                         "Overdue acknowledgments: " + document.getDocumentNumber(),
-                        outstanding.size() + " department member(s) have not acknowledged v"
+                        outstanding.size() + " department member(s) have not acknowledged Rev "
                                 + version.getVersionNumber() + ": " + names
                                 + ". The window closed " + closesAt
                                 + ". Record-only — acknowledgment is still open.");
@@ -420,7 +420,7 @@ public class WorkflowNotificationJob {
                 for (User recipient : escalationTargets) {
                     notify(instance, task, "ESCALATION", recipient, today,
                             "Overdue approval: " + document.getDocumentNumber()
-                                    + " v" + instance.getDocumentVersion().getVersionNumber()
+                                    + " Rev " + instance.getDocumentVersion().getVersionNumber()
                                     + " is " + overdueDays + " business day(s) overdue",
                             "The approval task assigned to " + reviewerNames(task)
                                     + " has not been completed. Please chase or delegate.");
@@ -429,7 +429,7 @@ public class WorkflowNotificationJob {
                 for (User reviewer : reviewers) {
                     notify(instance, task, "REMINDER", reviewer, today,
                             "Approval due soon: " + document.getDocumentNumber()
-                                    + " v" + instance.getDocumentVersion().getVersionNumber(),
+                                    + " Rev " + instance.getDocumentVersion().getVersionNumber(),
                             "The approval task is due " + dueDate + ".");
                 }
             }

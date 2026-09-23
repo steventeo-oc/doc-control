@@ -5,9 +5,8 @@ current Alfresco instance (document ID scheme, L2/L3/L4 folder hierarchy) plus
 decisions made during planning: extensible type/department lists, native
 version control, and a stage-based (flexible) workflow model.
 
-**Naming note:** the document hierarchy uses **"Tier"** (Tier 1–4), not
-"Level," to avoid clashing with the manufacturing test levels (L6–L12) used
-elsewhere in the company. Keep this distinction in all table/column/API names.
+**Naming note:** the document hierarchy uses **"Level"** (Level 1–4).
+Keep this terminology consistent in all table, column, and API names.
 
 ---
 
@@ -16,11 +15,11 @@ elsewhere in the company. Keep this distinction in all table/column/API names.
 These exist so new document types or departments can be added later with a
 row insert (or a small admin screen), never a code change or redeploy.
 
-### `document_tier`
+### `document_level`
 | Column | Type | Notes |
 |---|---|---|
 | id | int, PK | |
-| tier_number | int | 1–4 today; extensible if a 5th tier is ever needed |
+| level_number | int | 1–4 today; extensible if a 5th level is ever needed |
 | label | text | e.g. "Policy", "Procedure", "Work Instruction", "Form/Record" |
 | active | boolean | soft-disable instead of deleting |
 
@@ -30,7 +29,7 @@ row insert (or a small admin screen), never a code change or redeploy.
 | id | int, PK | |
 | code | text, unique | e.g. `SOP`, `WI`, `FORM`, `DWG` — used in the document ID |
 | label | text | e.g. "Standard Operating Procedure" |
-| tier_id | int, FK → document_tier | which tier this type belongs to |
+| level_id | int, FK → document_level | which level this type belongs to |
 | active | boolean | |
 
 ### `department`

@@ -16,7 +16,7 @@ import com.doccontrol.identity.UserRoleRepository;
 import com.doccontrol.identity.RoleRepository;
 import com.doccontrol.lookup.Department;
 import com.doccontrol.lookup.DepartmentRepository;
-import com.doccontrol.lookup.DocumentTierRepository;
+import com.doccontrol.lookup.DocumentLevelRepository;
 import com.doccontrol.lookup.DocumentTypeRepository;
 import com.fasterxml.jackson.databind.JsonNode;
 import com.fasterxml.jackson.databind.ObjectMapper;
@@ -91,7 +91,7 @@ class AuditLogQueryTests {
     DocumentTypeRepository documentTypeRepository;
 
     @Autowired
-    DocumentTierRepository documentTierRepository;
+    DocumentLevelRepository documentLevelRepository;
 
     @Autowired
     AuditLogRepository auditLogRepository;
@@ -321,12 +321,12 @@ class AuditLogQueryTests {
     }
 
     private void createType(MockHttpSession adminSession, String prefix) throws Exception {
-        Integer tierId = documentTierRepository.findAll().get(0).getId();
+        Integer levelId = documentLevelRepository.findAll().get(0).getId();
         mockMvc.perform(post("/document-types")
                         .with(csrf()).session(adminSession)
                         .contentType("application/json")
                         .content("{\"code\":\"" + prefix + System.nanoTime() % 100000
-                                + "\",\"label\":\"Audit query test type\",\"tierId\":" + tierId + "}"))
+                                + "\",\"label\":\"Audit query test type\",\"levelId\":" + levelId + "}"))
                 .andExpect(status().isCreated());
     }
 

@@ -2,7 +2,7 @@ import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Link, useNavigate, useSearchParams } from 'react-router-dom';
 import { ArrowDown, ArrowUp, ArrowUpDown, Download, FileX, Loader2, Star, X } from 'lucide-react';
 import { documentApi, lookupApi } from '../api/resources';
-import type { Department, DocumentNumberPreview, DocumentSummary, DocumentTier, DocumentType, DocumentsPage as PageResult } from '../api/types';
+import type { Department, DocumentNumberPreview, DocumentSummary, DocumentLevel, DocumentType, DocumentsPage as PageResult } from '../api/types';
 import { DOCUMENT_STATUSES } from '../api/types';
 import { cn } from '../lib/utils';
 import { useAuth } from '../auth/AuthContext';
@@ -47,11 +47,11 @@ export default function DocumentsPage() {
     : 'all';
   const [page, setPage] = useState<PageResult | null>(null);
   const [types, setTypes] = useState<DocumentType[]>([]);
-  const [tiers, setTiers] = useState<DocumentTier[]>([]);
+  const [levels, setLevels] = useState<DocumentLevel[]>([]);
   const [departments, setDepartments] = useState<Department[]>([]);
   const [error, setError] = useState<string | null>(null);
 
-  const [filters, setFilters] = useState({ type: '', tier: '', department: '', status: '', q: '' });
+  const [filters, setFilters] = useState({ type: '', level: '', department: '', status: '', q: '' });
   const [searchInput, setSearchInput] = useState('');
   const [pageNumber, setPageNumber] = useState(0);
   const [pageSize, setPageSize] = useState(20);
@@ -81,7 +81,7 @@ export default function DocumentsPage() {
     documentApi
       .list({
         type: filters.type || undefined,
-        tier: filters.tier ? Number(filters.tier) : undefined,
+        level: filters.level ? Number(filters.level) : undefined,
         department: filters.department || undefined,
         status: filters.status || undefined,
         q: filters.q || undefined,
@@ -109,7 +109,7 @@ export default function DocumentsPage() {
   }, [searchParams, view]);
   useEffect(() => {
     lookupApi.types(true).then(setTypes).catch(() => undefined);
-    lookupApi.tiers(true).then(setTiers).catch(() => undefined);
+    lookupApi.levels(true).then(setLevels).catch(() => undefined);
     lookupApi.departments(true).then(setDepartments).catch(() => undefined);
   }, []);
 
@@ -260,11 +260,11 @@ export default function DocumentsPage() {
   }
 
   const hasActiveFilters = Boolean(
-    filters.type || filters.tier || filters.department || filters.status || searchInput,
+    filters.type || filters.level || filters.department || filters.status || searchInput,
   );
 
   function handleClearFilters() {
-    setFilters({ type: '', tier: '', department: '', status: '', q: '' });
+    setFilters({ type: '', level: '', department: '', status: '', q: '' });
     setSearchInput('');
     setPageNumber(0);
   }
@@ -315,7 +315,7 @@ export default function DocumentsPage() {
               <a
                 href={documentApi.exportUrl({
                   type: filters.type || undefined,
-                  tier: filters.tier ? Number(filters.tier) : undefined,
+                  level: filters.level ? Number(filters.level) : undefined,
                   department: filters.department || undefined,
                   status: filters.status || undefined,
                   q: filters.q || undefined,
@@ -342,22 +342,22 @@ export default function DocumentsPage() {
       {/* Filters */}
       <div className="flex flex-wrap items-end gap-3">
         <div className="flex flex-col gap-1.5">
-          <Label htmlFor="filter-tier">Tier</Label>
+          <Label htmlFor="filter-level">Level</Label>
           <Select
-            value={filters.tier || 'all'}
+            value={filters.level || 'all'}
             onValueChange={(value) => {
-              setFilters({ ...filters, tier: value === 'all' ? '' : value });
+              setFilters({ ...filters, level: value === 'all' ? '' : value });
               setPageNumber(0);
             }}
           >
-            <SelectTrigger id="filter-tier" className="w-40">
+            <SelectTrigger id="filter-level" className="w-40">
               <SelectValue />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="all">All tiers</SelectItem>
-              {tiers.map((t) => (
-                <SelectItem key={t.id} value={String(t.tierNumber)}>
-                  Tier {t.tierNumber} ({t.label})
+              <SelectItem value="all">All levels</SelectItem>
+              {levels.map((t) => (
+                <SelectItem key={t.id} value={String(t.levelNumber)}>
+                  Level {t.levelNumber} ({t.label})
                 </SelectItem>
               ))}
             </SelectContent>
@@ -466,7 +466,7 @@ export default function DocumentsPage() {
           <SheetHeader className="p-0">
             <SheetTitle className="text-xl font-semibold">New document</SheetTitle>
             <SheetDescription>
-              Create a new controlled document and optionally upload its initial version file.
+              Create a new controlled document and optionally upload its initial revision file.
             </SheetDescription>
           </SheetHeader>
           <form className="mt-4 flex flex-1 flex-col justify-between gap-6" onSubmit={handleCreate}>
@@ -560,7 +560,7 @@ export default function DocumentsPage() {
               </div>
               <div className="flex flex-col gap-1.5">
                 <Label htmlFor="create-file" className="cursor-pointer">
-                  File (optional — becomes version 1)
+                  File (optional — becomes revision 0)
                 </Label>
                 <Input
                   id="create-file"
@@ -643,7 +643,7 @@ export default function DocumentsPage() {
                 </div>
               </TableHead>
               <TableHead>Progress</TableHead>
-              <TableHead>Tier</TableHead>
+              <TableHead>Level</TableHead>
               <TableHead>Type</TableHead>
               <TableHead>Dept</TableHead>
               <TableHead>Owner</TableHead>
@@ -704,12 +704,12 @@ export default function DocumentsPage() {
                 <TableCell>
                   {doc.revisionStatus === 'IN_REVIEW' && (
                     <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
-                      v{doc.revisionVersionNumber} in review
+                      Rev {doc.revisionVersionNumber} in review
                     </span>
                   )}
                   {doc.revisionStatus === 'DRAFT' && (
                     <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                      v{doc.revisionVersionNumber} draft
+                      Rev {doc.revisionVersionNumber} draft
                     </span>
                   )}
                   {doc.revisionStatus === 'RE_APPROVAL' && (
@@ -722,9 +722,9 @@ export default function DocumentsPage() {
                   )}
                 </TableCell>
                 <TableCell>
-                  {doc.tierNumber ? (
-                    <Badge variant="outline" className="font-semibold text-xs whitespace-nowrap" title={doc.tierLabel ?? undefined}>
-                      Tier {doc.tierNumber}
+                  {doc.levelNumber ? (
+                    <Badge variant="outline" className="font-semibold text-xs whitespace-nowrap" title={doc.levelLabel ?? undefined}>
+                      Level {doc.levelNumber}
                     </Badge>
                   ) : (
                     <span className="text-muted-foreground/40 text-xs">—</span>

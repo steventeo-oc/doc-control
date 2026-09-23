@@ -13,7 +13,7 @@ import TasksPage from './pages/TasksPage';
 import DepartmentsPage from './pages/DepartmentsPage';
 import DepartmentDetailPage from './pages/DepartmentDetailPage';
 import AdminTypesPage from './pages/AdminTypesPage';
-import AdminTiersPage from './pages/AdminTiersPage';
+import AdminLevelsPage from './pages/AdminLevelsPage';
 import UsersPage from './pages/UsersPage';
 
 function Protected({ children }: { children: React.ReactNode }) {
@@ -61,7 +61,7 @@ export default function App() {
         <Route path="departments/:id" element={<DepartmentDetailPage />} />
         <Route path="departments/:deptId/documents/:id" element={<DocumentDetailPage />} />
         <Route path="admin/types" element={<AdminTypesPage />} />
-        <Route path="admin/tiers" element={<AdminTiersPage />} />
+        <Route path="admin/levels" element={<AdminLevelsPage />} />
         <Route path="admin/users" element={<UsersPage />} />
         {/* redirects for the pre-restructure paths (plan-back section 1) */}
         <Route path="lookups" element={<Navigate to="/admin/types" replace />} />

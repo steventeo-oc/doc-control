@@ -75,7 +75,7 @@ class LookupEndpointTests {
     DepartmentRepository departmentRepository;
 
     @Autowired
-    DocumentTierRepository documentTierRepository;
+    DocumentLevelRepository documentLevelRepository;
 
     @Autowired
     AuditLogRepository auditLogRepository;
@@ -95,7 +95,7 @@ class LookupEndpointTests {
                 .andExpect(jsonPath("$[?(@.code == 'QA')]").exists())
                 .andExpect(jsonPath("$[?(@.code == 'HR')]").exists());
 
-        mockMvc.perform(get("/document-tiers").session(session))
+        mockMvc.perform(get("/document-levels").session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(4));
 
@@ -115,19 +115,19 @@ class LookupEndpointTests {
 
         mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
-                        .content(objectMapper.writeValueAsString(Map.of("code", "X1", "label", "Nope", "tierId", 1))))
+                        .content(objectMapper.writeValueAsString(Map.of("code", "X1", "label", "Nope", "levelId", 1))))
                 .andExpect(status().isForbidden());
     }
 
     @Test
     void adminCanCreateDocumentTypeAndAuditRowIsWritten() throws Exception {
         MockHttpSession session = loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD);
-        Integer tierId = documentTierRepository.findAll().get(0).getId();
+        Integer levelId = documentLevelRepository.findAll().get(0).getId();
 
         mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
-                                Map.of("code", "TST", "label", "Test Type", "tierId", tierId))))
+                                Map.of("code", "TST", "label", "Test Type", "levelId", levelId))))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.code").value("TST"))
                 .andExpect(jsonPath("$.active").value(true));
@@ -141,7 +141,7 @@ class LookupEndpointTests {
         mockMvc.perform(post("/document-types").with(csrf()).session(session)
                         .contentType("application/json")
                         .content(objectMapper.writeValueAsString(
-                                Map.of("code", "TST", "label", "Again", "tierId", tierId))))
+                                Map.of("code", "TST", "label", "Again", "levelId", levelId))))
                 .andExpect(status().isConflict());
     }
 

@@ -124,7 +124,7 @@ export default function AcknowledgmentPanel(props: {
             <p className="text-sm text-muted-foreground">
               {status.versionNumber !== null ? (
                 <>
-                  Version {status.versionNumber}
+                  Revision {status.versionNumber}
                   {status.opensAt && <> — window {status.opensAt} to {status.closesAt}</>}
                   {status.overdue && <StatusBadge status="overdue">overdue</StatusBadge>}
                   {' '}· record-only: nothing is blocked by a missing acknowledgment.
@@ -143,7 +143,7 @@ export default function AcknowledgmentPanel(props: {
                     <div className="inline-flex items-center gap-2 rounded-lg border border-emerald-500/30 bg-emerald-500/10 px-3.5 py-2 text-sm font-medium text-emerald-700 dark:text-emerald-300">
                       <CheckCircle2 className="size-4 text-emerald-600 dark:text-emerald-400" />
                       <span>
-                        You acknowledged version {status.versionNumber} on {new Date(myAck.acknowledgedAt).toLocaleString()}
+                        You acknowledged revision {status.versionNumber} on {new Date(myAck.acknowledgedAt).toLocaleString()}
                       </span>
                     </div>
                   </div>

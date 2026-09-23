@@ -74,7 +74,7 @@ The stamping code is identical either way; only the text differs.
 
 **Resolution (recommended)**: stamp every download of a renditionable
 version, text by state — `current` (of a released document) →
-"UNCONTROLLED IF PRINTED"; `superseded` → "SUPERSEDED — DO NOT USE";
+"RELEASED — UNCONTROLLED IF PRINTED"; `superseded` → "SUPERSEDED — DO NOT USE";
 `draft` → "DRAFT — UNCONTROLLED"; `approved` (pending effective) →
 "APPROVED — NOT YET IN EFFECT". This is the standard ISO 9001
 controlled-copy matrix and costs nothing beyond the released case.
@@ -180,7 +180,7 @@ doccontrol:
     rendition-url: http://gotenberg:3000   # compose network name
     rendition-timeout-seconds: 30
     text:
-      current: "UNCONTROLLED IF PRINTED"
+      current: "RELEASED — UNCONTROLLED IF PRINTED"
       superseded: "SUPERSEDED — DO NOT USE"
       draft: "DRAFT — UNCONTROLLED"
       approved: "APPROVED — NOT YET IN EFFECT"

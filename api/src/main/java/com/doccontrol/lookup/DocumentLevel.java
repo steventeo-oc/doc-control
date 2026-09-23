@@ -12,21 +12,21 @@ import lombok.Setter;
 
 /**
  * Lookup table — extensible by data, never a hardcoded enum (CLAUDE.md
- * convention 3). Tier 1-4 today; a 5th tier would be a row insert.
+ * convention 3). Level 1-4 today; a 5th level would be a row insert.
  */
 @Entity
-@Table(name = "document_tier")
+@Table(name = "document_level")
 @Getter
 @Setter
 @NoArgsConstructor
-public class DocumentTier {
+public class DocumentLevel {
 
     @Id
     @GeneratedValue(strategy = GenerationType.IDENTITY)
     private Integer id;
 
-    @Column(name = "tier_number", nullable = false)
-    private Integer tierNumber;
+    @Column(name = "level_number", nullable = false)
+    private Integer levelNumber;
 
     @Column(nullable = false)
     private String label;

@@ -259,12 +259,12 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public DocumentsPageDto list(String typeCode, Integer tier, String departmentCode, DocumentStatus status,
+    public DocumentsPageDto list(String typeCode, Integer level, String departmentCode, DocumentStatus status,
                                  String q, Boolean reviewOverdue, Boolean trashed, Boolean archived, String owner,
                                  Boolean favorite, String sort, int page, int pageSize) {
         Sort sortSpec = parseSort(sort);
         Pageable pageable = PageRequest.of(page, Math.min(pageSize, 100), sortSpec);
-        Specification<Document> spec = buildSpecification(typeCode, tier, departmentCode, status, q,
+        Specification<Document> spec = buildSpecification(typeCode, level, departmentCode, status, q,
                 reviewOverdue, trashed, archived, owner, favorite);
         Page<Document> docPage = documentRepository.findAll(spec, pageable);
         List<DocumentSummaryDto> summaries = toSummaryDtos(docPage.getContent());
@@ -273,24 +273,24 @@ public class DocumentService {
     }
 
     @Transactional(readOnly = true)
-    public List<DocumentSummaryDto> exportRows(String typeCode, Integer tier, String departmentCode,
+    public List<DocumentSummaryDto> exportRows(String typeCode, Integer level, String departmentCode,
                                                DocumentStatus status, String q, Boolean reviewOverdue,
                                                Boolean trashed, Boolean archived, String owner,
                                                Boolean favorite, String sort) {
         Sort sortSpec = parseSort(sort);
-        Specification<Document> spec = buildSpecification(typeCode, tier, departmentCode, status, q,
+        Specification<Document> spec = buildSpecification(typeCode, level, departmentCode, status, q,
                 reviewOverdue, trashed, archived, owner, favorite);
         List<Document> documents = documentRepository.findAll(spec, sortSpec);
         return toSummaryDtos(documents);
     }
 
-    private Specification<Document> buildSpecification(String typeCode, Integer tier, String departmentCode,
+    private Specification<Document> buildSpecification(String typeCode, Integer level, String departmentCode,
                                                        DocumentStatus status, String q, Boolean reviewOverdue,
                                                        Boolean trashed, Boolean archived, String owner,
                                                        Boolean favorite) {
         List<Specification<Document>> parts = new ArrayList<>();
-        if (tier != null) {
-            parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("tier").get("tierNumber"), tier));
+        if (level != null) {
+            parts.add((root, query, cb) -> cb.equal(root.get("documentType").get("level").get("levelNumber"), level));
         }
         if (Boolean.TRUE.equals(archived)) {
             parts.add((root, query, cb) -> cb.equal(root.get("status"), DocumentStatus.OBSOLETE));
@@ -570,7 +570,7 @@ public class DocumentService {
         boolean hasReleased = documentVersionRepository.findAllByDocumentIdOrderByVersionNumberAsc(id)
                 .stream().anyMatch(v -> v.getStatus() == DocumentVersionStatus.CURRENT || v.getStatus() == DocumentVersionStatus.SUPERSEDED);
         if (hasReleased) {
-            throw new ConflictException("Cannot discard a document that has released version history.");
+            throw new ConflictException("Cannot discard a document that has released revision history.");
         }
 
         document.setDeletedAt(LocalDateTime.now());
@@ -760,8 +760,8 @@ public class DocumentService {
     private void notifyOwnerOfSupersededPending(Document document, DocumentVersion retired) {
         User owner = document.getOwner();
         String subject = "Pending approval superseded: " + document.getDocumentNumber()
-                + " v" + retired.getVersionNumber();
-        String body = "Version " + retired.getVersionNumber() + " was approved with effect from "
+                + " Rev " + retired.getVersionNumber();
+        String body = "Revision " + retired.getVersionNumber() + " was approved with effect from "
                 + retired.getEffectiveAt() + " but a newer approval outcome was recorded first, "
                 + "so it never took effect. No action needed.";
         notificationSender.send(owner, subject, body);
@@ -793,9 +793,9 @@ public class DocumentService {
                                          LocalDate notificationDate) {
         String dedupKey = "change:version=" + version.getId();
         String subject = "Document changed: " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber() + " now in effect";
+                + " Rev " + version.getVersionNumber() + " now in effect";
         String body = document.getDocumentNumber() + " \"" + document.getName()
-                + "\" — version " + version.getVersionNumber()
+                + "\" — revision " + version.getVersionNumber()
                 + " is now in effect (effective " + version.getEffectiveAt() + ")."
                 + (version.getChangeReference() == null || version.getChangeReference().isBlank()
                         ? "" : "\nChange reference: " + version.getChangeReference());
@@ -818,7 +818,7 @@ public class DocumentService {
                 entry.setChannel(notificationSender.channel());
                 notificationLogRepository.save(entry);
             } catch (Exception e) {
-                log.warn("Change notification failed for {} v{} to {}: {}",
+                log.warn("Change notification failed for {} Rev {} to {}: {}",
                         document.getDocumentNumber(), version.getVersionNumber(),
                         member.getEmail(), e.getMessage());
             }

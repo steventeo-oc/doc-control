@@ -198,7 +198,7 @@ export default function DepartmentMembersPanel({
             )}
           </h2>
           <p className="text-xs text-muted-foreground mt-0.5">
-            Manage departmental members and permission tiers.
+            Manage departmental members and permission levels.
           </p>
         </div>
         <div className="flex items-center gap-2">

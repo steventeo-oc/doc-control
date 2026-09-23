@@ -32,12 +32,12 @@ public class DocumentController {
     }
 
     private static final String CSV_HEADER =
-            "document_number,title,status,progress,tier,type,department,owner,next_review_due,review_overdue,created_at,updated_at";
+            "document_number,title,status,progress,level,type,department,owner,next_review_due,review_overdue,created_at,updated_at";
 
     @GetMapping("/documents")
     public DocumentsPageDto list(
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Integer tier,
+            @RequestParam(required = false) Integer level,
             @RequestParam(required = false) String department,
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) String q,
@@ -49,14 +49,14 @@ public class DocumentController {
             @RequestParam(required = false) String sort,
             @RequestParam(defaultValue = "0") int page,
             @RequestParam(name = "page_size", defaultValue = "20") int pageSize) {
-        return documentService.list(type, tier, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
+        return documentService.list(type, level, department, status, q, review_overdue, trashed, archived, owner, favorite, sort,
                 page, pageSize);
     }
 
     @GetMapping("/documents/export")
     public ResponseEntity<String> export(
             @RequestParam(required = false) String type,
-            @RequestParam(required = false) Integer tier,
+            @RequestParam(required = false) Integer level,
             @RequestParam(required = false) String department,
             @RequestParam(required = false) DocumentStatus status,
             @RequestParam(required = false) String q,
@@ -66,7 +66,7 @@ public class DocumentController {
             @RequestParam(required = false) String owner,
             @RequestParam(required = false) Boolean favorite,
             @RequestParam(required = false) String sort) {
-        List<DocumentSummaryDto> rows = documentService.exportRows(type, tier, department, status, q,
+        List<DocumentSummaryDto> rows = documentService.exportRows(type, level, department, status, q,
                 review_overdue, trashed, archived, owner, favorite, sort);
 
         StringBuilder csv = new StringBuilder("\uFEFF").append(CSV_HEADER).append("\r\n");
@@ -80,14 +80,14 @@ public class DocumentController {
                 progress = "re-approval";
             }
 
-            String tierStr = row.tierNumber() == null ? "" : "Tier " + row.tierNumber()
-                    + (row.tierLabel() != null && !row.tierLabel().isBlank() ? " (" + row.tierLabel() + ")" : "");
+            String levelStr = row.levelNumber() == null ? "" : "Level " + row.levelNumber()
+                    + (row.levelLabel() != null && !row.levelLabel().isBlank() ? " (" + row.levelLabel() + ")" : "");
 
             csv.append(csvField(row.documentNumber())).append(',')
                     .append(csvField(row.name())).append(',')
                     .append(csvField(row.status())).append(',')
                     .append(csvField(progress)).append(',')
-                    .append(csvField(tierStr)).append(',')
+                    .append(csvField(levelStr)).append(',')
                     .append(csvField(row.documentTypeCode())).append(',')
                     .append(csvField(row.departmentCode())).append(',')
                     .append(csvField(row.ownerName())).append(',')

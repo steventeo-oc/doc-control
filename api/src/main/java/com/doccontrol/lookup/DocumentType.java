@@ -35,8 +35,8 @@ public class DocumentType {
     private String label;
 
     @ManyToOne(fetch = FetchType.LAZY, optional = false)
-    @JoinColumn(name = "tier_id", nullable = false)
-    private DocumentTier tier;
+    @JoinColumn(name = "level_id", nullable = false)
+    private DocumentLevel level;
 
     @Column(nullable = false)
     private boolean active = true;

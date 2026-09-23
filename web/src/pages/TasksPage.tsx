@@ -258,7 +258,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
         comment.trim() || null,
         effectiveDate ? effectiveDate : null
       );
-      setNotice(`Approved ${reviewTask.documentNumber} v${reviewTask.versionNumber}.`);
+      setNotice(`Approved ${reviewTask.documentNumber} Rev ${reviewTask.versionNumber}.`);
       setReviewTask(null);
       load();
       onUpdated();
@@ -276,7 +276,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
     try {
       await workflowApi.complete(rejectTask.id, false, rejectReason.trim() || null, null);
       setNotice(
-        `Rejected ${rejectTask.documentNumber} v${rejectTask.versionNumber} — the approval process has been ended.`
+        `Rejected ${rejectTask.documentNumber} Rev ${rejectTask.versionNumber} — the approval process has been ended.`
       );
       setRejectTask(null);
       setReviewTask(null);
@@ -445,7 +445,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
               <TableRow className="border-border/40 hover:bg-transparent">
                 <TableHead>Task</TableHead>
                 <TableHead className="min-w-[200px]">Document</TableHead>
-                <TableHead>Version</TableHead>
+                <TableHead>Revision</TableHead>
                 <TableHead>Assignment</TableHead>
                 <TableHead>Due Date</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -490,7 +490,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col">
-                      <span className="font-semibold text-xs">v{task.versionNumber}</span>
+                      <span className="font-semibold text-xs">Rev {task.versionNumber}</span>
                       {task.changeNotes && (
                         <span
                           className="text-[11px] text-muted-foreground italic line-clamp-1 max-w-[140px]"
@@ -578,7 +578,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
             <div className="flex flex-col gap-0.5 min-w-0 pr-4">
               <div className="flex items-center gap-2">
                 <DialogTitle className="text-sm font-semibold truncate">
-                  Complete Review — {reviewTask?.documentNumber} v{reviewTask?.versionNumber}
+                  Complete Review — {reviewTask?.documentNumber} Rev {reviewTask?.versionNumber}
                 </DialogTitle>
                 {reviewTask?.reapproval && (
                   <StatusBadge status="reapproval">re-approval</StatusBadge>
@@ -628,7 +628,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
                 <div className="flex items-center justify-between px-3.5 py-2 bg-muted/25 border-b border-border/30 text-xs">
                   <span className="font-semibold text-foreground flex items-center gap-1.5">
                     <FileText className="size-3.5 text-primary" />
-                    Interactive Document Preview (v{reviewTask.versionNumber})
+                    Interactive Document Preview (Rev {reviewTask.versionNumber})
                   </span>
                   <button
                     type="button"
@@ -654,7 +654,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
 
             {reviewTask?.changeNotes && (
               <div className="rounded-xl bg-muted/40 p-3 text-xs text-muted-foreground border border-border/30">
-                <span className="font-semibold text-foreground block mb-1">Version Change Notes:</span>
+                <span className="font-semibold text-foreground block mb-1">Revision Change Notes:</span>
                 {reviewTask.changeNotes}
               </div>
             )}
@@ -735,7 +735,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2 text-destructive">
               <AlertTriangle className="size-5 text-destructive shrink-0" />
-              <span>Confirm Rejection of {rejectTask?.documentNumber} v{rejectTask?.versionNumber}</span>
+              <span>Confirm Rejection of {rejectTask?.documentNumber} Rev {rejectTask?.versionNumber}</span>
             </AlertDialogTitle>
             <AlertDialogDescription className="text-left text-xs space-y-2 text-muted-foreground">
               <p>
@@ -790,7 +790,7 @@ function MyApprovals({ onUpdated }: { onUpdated: () => void }) {
               <span>Delegate Review Task</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              Reassign {delegateTask?.documentNumber} v{delegateTask?.versionNumber} to another eligible reviewer.
+              Reassign {delegateTask?.documentNumber} Rev {delegateTask?.versionNumber} to another eligible reviewer.
             </DialogDescription>
           </DialogHeader>
 
@@ -927,7 +927,7 @@ function PendingMyAcknowledgment({ onUpdated }: { onUpdated: () => void }) {
     setError(null);
     try {
       await acknowledgmentApi.acknowledge(ackModalDoc.documentId);
-      setNotice(`Recorded your acknowledgment for ${ackModalDoc.documentNumber} v${ackModalDoc.versionNumber}.`);
+      setNotice(`Recorded your acknowledgment for ${ackModalDoc.documentNumber} Rev ${ackModalDoc.versionNumber}.`);
       setAckModalDoc(null);
       load();
       onUpdated();
@@ -1052,7 +1052,7 @@ function PendingMyAcknowledgment({ onUpdated }: { onUpdated: () => void }) {
               <TableRow className="border-border/40 hover:bg-transparent">
                 <TableHead className="min-w-[200px]">Document</TableHead>
                 <TableHead>Department</TableHead>
-                <TableHead>Version</TableHead>
+                <TableHead>Revision</TableHead>
                 <TableHead>Effective Date</TableHead>
                 <TableHead>Window Closes</TableHead>
                 <TableHead className="text-right">Actions</TableHead>
@@ -1087,7 +1087,7 @@ function PendingMyAcknowledgment({ onUpdated }: { onUpdated: () => void }) {
                   <TableCell>
                     <StatusBadge status="dept">{entry.departmentCode}</StatusBadge>
                   </TableCell>
-                  <TableCell className="font-semibold text-xs">v{entry.versionNumber}</TableCell>
+                  <TableCell className="font-semibold text-xs">Rev {entry.versionNumber}</TableCell>
                   <TableCell className="text-muted-foreground text-xs">
                     {entry.effectiveAt ? new Date(entry.effectiveAt).toLocaleDateString() : '—'}
                   </TableCell>
@@ -1148,7 +1148,7 @@ function PendingMyAcknowledgment({ onUpdated }: { onUpdated: () => void }) {
               <span>Acknowledge Controlled Document</span>
             </DialogTitle>
             <DialogDescription className="text-xs text-muted-foreground">
-              {ackModalDoc?.documentNumber} v{ackModalDoc?.versionNumber} — {ackModalDoc?.name}
+              {ackModalDoc?.documentNumber} Rev {ackModalDoc?.versionNumber} — {ackModalDoc?.name}
             </DialogDescription>
           </DialogHeader>
 
@@ -1254,7 +1254,7 @@ function StartedByMe({ onUpdated }: { onUpdated: () => void }) {
     setError(null);
     try {
       await workflowApi.cancelWorkflow(cancelRow.documentId);
-      setNotice(`Cancelled workflow for ${cancelRow.documentNumber} v${cancelRow.versionNumber}. Document returned to draft.`);
+      setNotice(`Cancelled workflow for ${cancelRow.documentNumber} Rev ${cancelRow.versionNumber}. Document returned to draft.`);
       setCancelRow(null);
       load();
       onUpdated();
@@ -1413,7 +1413,7 @@ function StartedByMe({ onUpdated }: { onUpdated: () => void }) {
             <TableHeader>
               <TableRow className="border-border/40 hover:bg-transparent">
                 <TableHead className="min-w-[200px]">Document</TableHead>
-                <TableHead>Version</TableHead>
+                <TableHead>Revision</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Started</TableHead>
                 <TableHead>Reviewers & Feedback</TableHead>
@@ -1444,7 +1444,7 @@ function StartedByMe({ onUpdated }: { onUpdated: () => void }) {
                       )}
                     </div>
                   </TableCell>
-                  <TableCell className="font-semibold text-xs">v{row.versionNumber}</TableCell>
+                  <TableCell className="font-semibold text-xs">Rev {row.versionNumber}</TableCell>
                   <TableCell>
                     <StartedStatusBadge status={row.status} />
                   </TableCell>
@@ -1513,10 +1513,10 @@ function StartedByMe({ onUpdated }: { onUpdated: () => void }) {
             <AlertDialogDescription className="text-left text-sm space-y-2">
               <p>
                 Are you sure you want to cancel the approval workflow for{' '}
-                <strong>{cancelRow?.documentNumber} v{cancelRow?.versionNumber}</strong>?
+                <strong>{cancelRow?.documentNumber} Rev {cancelRow?.versionNumber}</strong>?
               </p>
               <p className="text-muted-foreground text-xs">
-                This will immediately terminate all pending reviewer tasks. The document version will return to draft status so revisions can be made.
+                This will immediately terminate all pending reviewer tasks. The document revision will return to draft status so revisions can be made.
               </p>
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1594,7 +1594,7 @@ function DelegatedByMe({ onUpdated }: { onUpdated: () => void }) {
     try {
       await workflowApi.recall(recallTask.taskId);
       setNotice(
-        `Successfully recalled task for ${recallTask.documentNumber} v${recallTask.versionNumber}. It is now back in your My Approvals queue.`
+        `Successfully recalled task for ${recallTask.documentNumber} Rev ${recallTask.versionNumber}. It is now back in your My Approvals queue.`
       );
       setRecallTask(null);
       load();
@@ -1739,7 +1739,7 @@ function DelegatedByMe({ onUpdated }: { onUpdated: () => void }) {
             <TableHeader>
               <TableRow className="border-border/40 hover:bg-transparent">
                 <TableHead className="min-w-[200px]">Document</TableHead>
-                <TableHead>Version</TableHead>
+                <TableHead>Revision</TableHead>
                 <TableHead>Delegated To</TableHead>
                 <TableHead>Instructions / Message</TableHead>
                 <TableHead>Status</TableHead>
@@ -1772,7 +1772,7 @@ function DelegatedByMe({ onUpdated }: { onUpdated: () => void }) {
                     </div>
                   </TableCell>
                   <TableCell className="font-semibold text-xs">
-                    v{task.versionNumber ?? 1}
+                    Rev {task.versionNumber ?? 0}
                   </TableCell>
                   <TableCell>
                     <div className="flex flex-col text-xs">
@@ -1847,7 +1847,7 @@ function DelegatedByMe({ onUpdated }: { onUpdated: () => void }) {
             <AlertDialogDescription className="text-left text-sm space-y-2">
               <p>
                 Are you sure you want to recall the review task for{' '}
-                <strong>{recallTask?.documentNumber} v{recallTask?.versionNumber}</strong>?
+                <strong>{recallTask?.documentNumber} Rev {recallTask?.versionNumber}</strong>?
               </p>
               <p className="text-muted-foreground text-xs">
                 The task will be removed from <strong>{recallTask?.delegatedToName}</strong>'s queue and reassigned back to your <em>My Approvals</em> list. They will receive a notification of this recall.

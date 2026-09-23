@@ -77,9 +77,9 @@ public class SecurityConfig {
                 // confirmations — same surface as the writes they precede
                 auth.requestMatchers(org.springframework.http.HttpMethod.GET,
                         "/departments/*/usage", "/document-types/*/usage",
-                        "/document-tiers/*/usage").hasRole("ADMIN");
+                        "/document-levels/*/usage").hasRole("ADMIN");
                 auth.requestMatchers(org.springframework.http.HttpMethod.GET,
-                        "/document-tiers", "/document-tiers/**",
+                        "/document-levels", "/document-levels/**",
                         "/document-types", "/document-types/**",
                         "/departments", "/departments/**").authenticated();
                 // department member management (levels plan-back F5 & Manager self-service):
@@ -94,7 +94,7 @@ public class SecurityConfig {
                 auth.requestMatchers(org.springframework.http.HttpMethod.DELETE,
                         "/departments/*/members/*").authenticated();
                 // remaining writes on lookup resources are admin-only
-                auth.requestMatchers("/document-tiers/**", "/document-types/**", "/departments/**")
+                auth.requestMatchers("/document-levels/**", "/document-types/**", "/departments/**")
                     .hasRole("ADMIN");
                 // password change is self-service: the owner (or an admin,
                 // enforced in UserService) may hit it, unlike the rest of

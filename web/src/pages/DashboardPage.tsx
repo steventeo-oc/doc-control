@@ -536,7 +536,7 @@ export default function DashboardPage() {
 
                       <div className="flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
                         {deptCode && <Badge variant="outline" className="text-[11px] py-0 px-1.5">{deptCode}</Badge>}
-                        <Badge variant="outline" className="text-[11px] py-0 px-1.5">v{verNum}</Badge>
+                        <Badge variant="outline" className="text-[11px] py-0 px-1.5">Rev {verNum}</Badge>
                         {isReapproval && (
                           <Badge className="bg-purple-100 text-purple-700 dark:bg-purple-900/30 dark:text-purple-300 border-transparent text-[11px] py-0 px-1.5">
                             re-approval
@@ -596,7 +596,7 @@ export default function DashboardPage() {
               <div>
                 <CardTitle className="text-base font-semibold">My Controlled Documents</CardTitle>
                 <CardDescription className="text-xs">
-                  Recently authored or owned documents with classification tiers
+                  Recently authored or owned documents with classification levels
                 </CardDescription>
               </div>
             </div>
@@ -643,13 +643,13 @@ export default function DashboardPage() {
                     </div>
 
                     <div className="flex flex-wrap items-center gap-2 text-xs">
-                      {doc.tierNumber ? (
+                      {doc.levelNumber ? (
                         <Badge
                           variant="outline"
                           className="font-semibold text-[11px] py-0 px-1.5 whitespace-nowrap bg-background"
-                          title={doc.tierLabel ?? undefined}
+                          title={doc.levelLabel ?? undefined}
                         >
-                          Tier {doc.tierNumber}
+                          Level {doc.levelNumber}
                         </Badge>
                       ) : null}
 
@@ -667,11 +667,11 @@ export default function DashboardPage() {
 
                       {doc.revisionStatus === 'IN_REVIEW' ? (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0 text-[11px] font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
-                          v{doc.revisionVersionNumber} in review
+                          Rev {doc.revisionVersionNumber} in review
                         </span>
                       ) : doc.revisionStatus === 'DRAFT' ? (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0 text-[11px] font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                          v{doc.revisionVersionNumber} draft
+                          Rev {doc.revisionVersionNumber} draft
                         </span>
                       ) : doc.revisionStatus === 'RE_APPROVAL' ? (
                         <span className="inline-flex items-center rounded-md px-1.5 py-0 text-[11px] font-semibold bg-purple-500/15 text-purple-700 dark:text-purple-400 border border-purple-500/30 whitespace-nowrap">

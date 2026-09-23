@@ -60,7 +60,7 @@ import {
  * section switchers in the middle (Admin only for admins, same as before),
  * and the account menu anchored to the bottom. The per-section sidebar
  * (Documents' All/Mine/Trash, Tasks' three panes, Departments'
- * memberships, Activity's scope filter, and Admin's Types/Tiers/Users per
+ * memberships, Activity's scope filter, and Admin's Types/Levels/Users per
  * F3) renders as a second column immediately right of the rail. The
  * Dashboard has no sidebar and renders full-width, as before.
  *
@@ -331,13 +331,13 @@ export default function Layout() {
       ],
     },
     // F3: Admin previously had no sidebar at all — the only way between
-    // Types/Tiers/Users was editing the URL. Same shape as the other four
+    // Types/Levels/Users was editing the URL. Same shape as the other four
     // sections, no special-casing.
     admin: {
       label: 'Admin',
       items: [
         { label: 'Types', to: '/admin/types' },
-        { label: 'Tiers', to: '/admin/tiers' },
+        { label: 'Levels', to: '/admin/levels' },
         { label: 'Users', to: '/admin/users' },
       ],
     },

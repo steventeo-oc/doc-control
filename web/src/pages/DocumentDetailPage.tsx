@@ -295,7 +295,7 @@ export default function DocumentDetailPage() {
           (data.get('changeNotes') as string) || null,
           (data.get('changeReference') as string) || null,
         ),
-      'New version uploaded.',
+      'New revision uploaded.',
     );
     setUploadNotes('');
   }
@@ -372,7 +372,7 @@ export default function DocumentDetailPage() {
     setError(null);
     try {
       await documentApi.discardDraftVersion(documentId, discardVersion.id);
-      setNotice(`Draft version ${discardVersion.versionNumber} discarded.`);
+      setNotice(`Draft revision ${discardVersion.versionNumber} discarded.`);
       setDiscardVersion(null);
       load();
     } catch (err) {
@@ -388,7 +388,7 @@ export default function DocumentDetailPage() {
     setError(null);
     try {
       await documentApi.restoreVersion(documentId, restoreVersion.id, restoreReason.trim() || undefined);
-      setNotice(`Restored version ${restoreVersion.versionNumber} as new draft.`);
+      setNotice(`Restored revision ${restoreVersion.versionNumber} as new draft.`);
       setRestoreVersion(null);
       setRestoreReason('');
       load();
@@ -440,7 +440,7 @@ export default function DocumentDetailPage() {
     event.preventDefault();
     const draft = latestDraftVersion();
     if (!draft) {
-      setError('No draft version to send for approval.');
+      setError('No draft revision to send for approval.');
       return;
     }
     if (!isAssigneesValid) {
@@ -449,7 +449,7 @@ export default function DocumentDetailPage() {
     }
     run(
       () => workflowApi.startApproval(documentId, draft.id, buildAssignees()),
-      `Approval started for v${draft.versionNumber} — reviewers will see it under My tasks.`,
+      `Approval started for Rev ${draft.versionNumber} — reviewers will see it under My tasks.`,
     );
   }
 
@@ -513,7 +513,7 @@ export default function DocumentDetailPage() {
       if (action === 'review_clock_reset') return 'Periodic Review Completed';
     }
     if (entityType === 'document_version') {
-      if (action === 'created') return 'New Version Uploaded';
+      if (action === 'created') return 'New Revision Uploaded';
       if (action === 'original_downloaded') return 'Original File Downloaded';
     }
     if (entityType === 'workflow_instance') {
@@ -535,7 +535,7 @@ export default function DocumentDetailPage() {
       <div className="mt-1 flex flex-wrap items-center gap-2 text-xs text-muted-foreground">
         {d.version_number && (
           <span className="rounded bg-muted px-2 py-0.5 font-medium text-foreground">
-            v{d.version_number}
+            Rev {d.version_number}
           </span>
         )}
         {d.from_name && d.to_name && (
@@ -617,9 +617,9 @@ export default function DocumentDetailPage() {
         <div className="mt-1 flex items-center gap-3">
           <h1 className="text-xl font-semibold tracking-tight text-foreground">{doc.documentNumber}</h1>
           <StatusBadge status={doc.status as StatusBadgeKind}>{doc.status}</StatusBadge>
-          {doc.tierNumber && (
-            <Badge variant="outline" className="font-semibold text-xs" title={doc.tierLabel ?? undefined}>
-              Tier {doc.tierNumber}{doc.tierLabel ? `: ${doc.tierLabel}` : ''}
+          {doc.levelNumber && (
+            <Badge variant="outline" className="font-semibold text-xs" title={doc.levelLabel ?? undefined}>
+              Level {doc.levelNumber}{doc.levelLabel ? `: ${doc.levelLabel}` : ''}
             </Badge>
           )}
           {activeWorkflow ? (
@@ -630,7 +630,7 @@ export default function DocumentDetailPage() {
           ) : draft ? (
             <span className="inline-flex items-center gap-1 rounded-md bg-slate-500/15 px-2 py-0.5 text-xs font-semibold text-slate-700 dark:text-slate-300 border border-slate-500/30">
               <Lock className="size-3" />
-              Locked (Draft v{draft.versionNumber} in progress)
+              Locked (Draft Rev {draft.versionNumber} in progress)
             </span>
           ) : null}
           {doc.deletedAt && <StatusBadge status="superseded">trashed</StatusBadge>}
@@ -686,7 +686,7 @@ export default function DocumentDetailPage() {
             )}
           >
             <Layers className="size-4" />
-            Versions ({versions.length})
+            Revisions ({versions.length})
           </button>
           <button
             type="button"
@@ -743,7 +743,7 @@ export default function DocumentDetailPage() {
         <div className="flex flex-col gap-4">
           {doc.deletedAt && (
             <div className="mt-4 rounded-md bg-amber-500/10 border border-amber-500/20 px-4 py-3 text-sm text-amber-800 dark:text-amber-300 flex flex-wrap items-center justify-between gap-2">
-              <span>This document is currently in the trash. Restore it to upload new versions or start approvals.</span>
+              <span>This document is currently in the trash. Restore it to upload new revisions or start approvals.</span>
               {canManage && (
                 <Button type="button" variant="outline" size="sm" onClick={handleRestore}>
                   Restore from trash
@@ -774,14 +774,14 @@ export default function DocumentDetailPage() {
                   <dd className="mt-0.5 text-sm font-medium">{doc.name}</dd>
                 </div>
                 <div className="py-1">
-                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Tier</dt>
+                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Level</dt>
                   <dd className="mt-0.5 text-sm flex items-center gap-2">
-                    {doc.tierNumber ? (
+                    {doc.levelNumber ? (
                       <>
                         <Badge variant="outline" className="font-semibold text-xs">
-                          Tier {doc.tierNumber}
+                          Level {doc.levelNumber}
                         </Badge>
-                        <span className="text-muted-foreground">{doc.tierLabel}</span>
+                        <span className="text-muted-foreground">{doc.levelLabel}</span>
                       </>
                     ) : (
                       '—'
@@ -801,7 +801,7 @@ export default function DocumentDetailPage() {
                   <dd className="mt-0.5 text-sm">{doc.ownerName}</dd>
                 </div>
                 <div className="py-1">
-                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Current version</dt>
+                  <dt className="text-[11px] uppercase tracking-wider text-muted-foreground">Current revision</dt>
                   <dd className="mt-0.5 text-sm">
                     {doc.currentVersionId
                       ? versions.find((v) => v.id === doc.currentVersionId)?.versionNumber ?? doc.currentVersionId
@@ -860,7 +860,7 @@ export default function DocumentDetailPage() {
               <div className="mb-2 flex items-center justify-between text-xs text-muted-foreground">
                 <span className="flex items-center gap-1.5 font-medium text-amber-700 dark:text-amber-400">
                   <FileText className="size-3.5" />
-                  Showing unreleased draft v{draft.versionNumber}
+                  Showing unreleased draft Rev {draft.versionNumber}
                 </span>
               </div>
               <DocumentPreviewViewer
@@ -874,7 +874,7 @@ export default function DocumentDetailPage() {
             </div>
           ) : (
             <Card className="p-6 text-center text-sm text-muted-foreground border-dashed">
-              No versions uploaded yet to preview.
+              No revisions uploaded yet to preview.
             </Card>
           )}
 
@@ -981,16 +981,16 @@ export default function DocumentDetailPage() {
         <div className="mt-4 flex flex-col gap-4">
           <Card>
             <CardHeader className="pb-3">
-              <CardTitle className="text-base font-semibold">Version History</CardTitle>
+              <CardTitle className="text-base font-semibold">Revision History</CardTitle>
             </CardHeader>
             <CardContent>
               {versions.length === 0 ? (
-                <EmptyState icon={FileX} message="No versions uploaded yet." />
+                <EmptyState icon={FileX} message="No revisions uploaded yet." />
               ) : (
                 <Table>
                   <TableHeader>
                     <TableRow>
-                      <TableHead>#</TableHead>
+                      <TableHead>Rev</TableHead>
                       <TableHead>File</TableHead>
                       <TableHead>Status</TableHead>
                       <TableHead>Effective</TableHead>
@@ -1065,7 +1065,7 @@ export default function DocumentDetailPage() {
                                 variant="ghost"
                                 size="sm"
                                 className="text-destructive hover:bg-destructive/10"
-                                title="Discard this unapproved draft version"
+                                title="Discard this unapproved draft revision"
                                 onClick={() => setDiscardVersion(version)}
                               >
                                 Discard
@@ -1083,11 +1083,11 @@ export default function DocumentDetailPage() {
                                     ? 'Cannot restore while another draft is in progress. Discard or release current draft first.'
                                     : activeWorkflow
                                     ? 'Cannot restore while an approval workflow is active.'
-                                    : `Restore version ${version.versionNumber} as a new draft`
+                                    : `Restore revision ${version.versionNumber} as a new draft`
                                 }
                                 onClick={() => {
                                   setRestoreVersion(version);
-                                  setRestoreReason(`Reverting to version ${version.versionNumber}`);
+                                  setRestoreReason(`Reverting to revision ${version.versionNumber}`);
                                 }}
                               >
                                 <RotateCcw className="size-3.5" />
@@ -1107,21 +1107,21 @@ export default function DocumentDetailPage() {
           {canModify && !doc.deletedAt && doc.status !== 'obsolete' && (
             <Card>
               <CardHeader>
-                <CardTitle className="text-base font-semibold">Upload new version</CardTitle>
+                <CardTitle className="text-base font-semibold">Upload new revision</CardTitle>
               </CardHeader>
               <CardContent>
                 {draft ? (
                   <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
                     <Lock className="size-5 shrink-0" />
                     <span>
-                      Document is locked: Draft v{draft.versionNumber} is already in progress (uploaded by {draft.uploadedByName}). Complete approval or discard the existing draft before uploading another revision.
+                      Document is locked: Draft Rev {draft.versionNumber} is already in progress (uploaded by {draft.uploadedByName}). Complete approval or discard the existing draft before uploading another revision.
                     </span>
                   </div>
                 ) : Boolean(activeWorkflow) ? (
                   <div className="flex items-center gap-3 rounded-md border border-amber-500/30 bg-amber-500/10 p-3 text-sm text-amber-800 dark:text-amber-300">
                     <AlertCircle className="size-5 shrink-0" />
                     <span>
-                      Uploads are paused while an approval is in progress. Complete or cancel the active review before uploading a new version.
+                      Uploads are paused while an approval is in progress. Complete or cancel the active review before uploading a new revision.
                     </span>
                   </div>
                 ) : (
@@ -1230,7 +1230,7 @@ export default function DocumentDetailPage() {
                       <div className="flex items-center justify-between">
                         <span className="text-xs font-semibold text-foreground flex items-center gap-1.5">
                           <Eye className="size-3.5 text-primary" />
-                          Document Preview (v{targetV.versionNumber})
+                          Document Preview (Rev {targetV.versionNumber})
                         </span>
                         <Button
                           type="button"
@@ -1321,7 +1321,7 @@ export default function DocumentDetailPage() {
                     Approval in Progress
                     {activeWorkflow && (
                       <span className="text-xs font-normal text-muted-foreground ml-1">
-                        for {activeWorkflow.reapproval ? 'periodic review re-approval' : `v${activeWorkflow.versionNumber}`}
+                        for {activeWorkflow.reapproval ? 'periodic review re-approval' : `Rev ${activeWorkflow.versionNumber}`}
                       </span>
                     )}
                   </CardTitle>
@@ -1354,7 +1354,7 @@ export default function DocumentDetailPage() {
                       }}
                     >
                       <Eye className="size-3.5" />
-                      Preview {activeWorkflow.reapproval ? 'Document' : `Draft v${activeWorkflow.versionNumber}`}
+                      Preview {activeWorkflow.reapproval ? 'Document' : `Draft Rev ${activeWorkflow.versionNumber}`}
                     </Button>
                   )}
                   {canModify && activeWorkflow && (
@@ -1617,7 +1617,7 @@ export default function DocumentDetailPage() {
               <CardHeader className="flex flex-row items-center justify-between pb-3">
                 <CardTitle className="text-base font-semibold">
                   {draft
-                    ? `Approval for v${draft.versionNumber}`
+                    ? `Approval for Rev ${draft.versionNumber}`
                     : doc.status === 'released'
                     ? 'Periodic Review Re-approval'
                     : 'Approval'}
@@ -1639,14 +1639,14 @@ export default function DocumentDetailPage() {
                     }
                   >
                     <Eye className="size-3.5" />
-                    Preview Draft v{draft.versionNumber}
+                    Preview Draft Rev {draft.versionNumber}
                   </Button>
                 )}
               </CardHeader>
               <CardContent className="flex flex-col gap-4">
                 {!draft && doc.status === 'draft' ? (
                   <p className="text-sm text-muted-foreground">
-                    Upload an initial file version in the Versions tab before starting an approval workflow.
+                    Upload an initial file revision in the Revisions tab before starting an approval workflow.
                   </p>
                 ) : (
                   <form
@@ -1656,7 +1656,7 @@ export default function DocumentDetailPage() {
                     <div className="flex flex-col gap-1">
                       <span className="text-sm font-medium">Reviewers & Approval Chain</span>
                       <span className="text-xs text-muted-foreground">
-                        Assign one or more individuals or roles. All assigned reviewers must approve before the version is released.
+                        Assign one or more individuals or roles. All assigned reviewers must approve before the revision is released.
                       </span>
                     </div>
 
@@ -1774,7 +1774,7 @@ export default function DocumentDetailPage() {
                       <div>
                         {draft ? (
                           <Button type="submit" disabled={!isAssigneesValid}>
-                            Send v{draft.versionNumber} for approval
+                            Send Rev {draft.versionNumber} for approval
                           </Button>
                         ) : (
                           <div className="flex items-center gap-3">
@@ -1782,7 +1782,7 @@ export default function DocumentDetailPage() {
                               Start periodic review re-approval
                             </Button>
                             <span className="text-xs text-muted-foreground">
-                              Re-approves released version; review clock resets.
+                              Re-approves released revision; review clock resets.
                             </span>
                           </div>
                         )}
@@ -1869,10 +1869,10 @@ export default function DocumentDetailPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Discard Draft Version {discardVersion?.versionNumber}?</AlertDialogTitle>
+            <AlertDialogTitle>Discard Draft Revision {discardVersion?.versionNumber}?</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to discard draft version {discardVersion?.versionNumber} ({discardVersion?.fileName})?
-              This action cannot be undone and will permanently remove this unapproved version.
+              Are you sure you want to discard draft revision {discardVersion?.versionNumber} ({discardVersion?.fileName})?
+              This action cannot be undone and will permanently remove this unapproved revision.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
@@ -1900,9 +1900,9 @@ export default function DocumentDetailPage() {
       >
         <AlertDialogContent>
           <AlertDialogHeader>
-            <AlertDialogTitle>Restore Version {restoreVersion?.versionNumber} as Draft</AlertDialogTitle>
+            <AlertDialogTitle>Restore Revision {restoreVersion?.versionNumber} as Draft</AlertDialogTitle>
             <AlertDialogDescription>
-              This will copy the file from version {restoreVersion?.versionNumber} ({restoreVersion?.fileName}) into a new draft version.
+              This will copy the file from revision {restoreVersion?.versionNumber} ({restoreVersion?.fileName}) into a new draft revision.
               You can then make further changes or submit it for review.
             </AlertDialogDescription>
           </AlertDialogHeader>
@@ -1940,7 +1940,7 @@ export default function DocumentDetailPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Retire Document (Mark Obsolete)</AlertDialogTitle>
             <AlertDialogDescription>
-              Retiring this document will mark it as obsolete. It will be moved to the Archived repository and removed from active listings. Existing versions, acknowledgment records, and audit history will be preserved.
+              Retiring this document will mark it as obsolete. It will be moved to the Archived repository and removed from active listings. Existing revisions, acknowledgment records, and audit history will be preserved.
             </AlertDialogDescription>
           </AlertDialogHeader>
           <div className="flex flex-col gap-2 py-2">

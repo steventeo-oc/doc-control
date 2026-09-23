@@ -9,9 +9,9 @@ export interface Department {
   memberCount?: number | null;
 }
 
-export interface DocumentTier {
+export interface DocumentLevel {
   id: number;
-  tierNumber: number;
+  levelNumber: number;
   label: string;
   active: boolean;
 }
@@ -20,7 +20,7 @@ export interface DocumentType {
   id: number;
   code: string;
   label: string;
-  tierId: number;
+  levelId: number;
   active: boolean;
 }
 
@@ -30,8 +30,8 @@ export interface DocumentSummary {
   name: string;
   status: string;
   documentTypeCode: string;
-  tierNumber?: number | null;
-  tierLabel?: string | null;
+  levelNumber?: number | null;
+  levelLabel?: string | null;
   departmentCode: string;
   ownerUserId: number;
   ownerName: string;
@@ -59,8 +59,8 @@ export interface DocumentDetail {
   status: string;
   documentTypeId: number;
   documentTypeCode: string;
-  tierNumber?: number | null;
-  tierLabel?: string | null;
+  levelNumber?: number | null;
+  levelLabel?: string | null;
   departmentId: number;
   departmentCode: string;
   sequenceNumber: number;

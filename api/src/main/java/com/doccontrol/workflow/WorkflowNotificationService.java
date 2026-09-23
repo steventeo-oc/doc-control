@@ -103,12 +103,12 @@ public class WorkflowNotificationService {
                 }
 
                 String subject = "Action Required: " + actionType + " for "
-                        + document.getDocumentNumber() + " v" + version.getVersionNumber();
+                        + document.getDocumentNumber() + " Rev " + version.getVersionNumber();
 
                 Map<String, String> details = new LinkedHashMap<>();
                 details.put("Document", document.getDocumentNumber());
                 details.put("Title", document.getName());
-                details.put("Version", "v" + version.getVersionNumber() + (isReapproval ? " (Periodic Review)" : " (Draft)"));
+                details.put("Revision", "Rev " + version.getVersionNumber() + (isReapproval ? " (Periodic Review)" : " (Draft)"));
                 if (document.getDepartment() != null) {
                     details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
                 }
@@ -119,7 +119,7 @@ public class WorkflowNotificationService {
                 }
 
                 String leadParagraph = startedBy.getName() + " has submitted " + document.getDocumentNumber()
-                        + " (\"" + document.getName() + "\") v" + version.getVersionNumber()
+                        + " (\"" + document.getName() + "\") Rev " + version.getVersionNumber()
                         + " for " + actionType.toLowerCase() + " and assigned you as a reviewer.";
 
                 EmailContent content = templateService.render(
@@ -156,24 +156,24 @@ public class WorkflowNotificationService {
             recipients.add(instance.getStartedBy());
         }
 
-        String subject = "Approved: " + document.getDocumentNumber() + " v"
+        String subject = "Approved: " + document.getDocumentNumber() + " Rev "
                 + version.getVersionNumber() + " - " + document.getName();
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Document", document.getDocumentNumber());
         details.put("Title", document.getName());
-        details.put("Version", "v" + version.getVersionNumber());
+        details.put("Revision", "Rev " + version.getVersionNumber());
         details.put("Status", deferred ? "Approved (Effective " + effectiveDate + ")" : "Released & In Effect");
         if (document.getDepartment() != null) {
             details.put("Department", document.getDepartment().getCode());
         }
 
         String leadParagraph = deferred
-                ? "The approval workflow for " + document.getDocumentNumber() + " v" + version.getVersionNumber()
-                  + " is complete. All reviewers have approved the version, and it is scheduled to become effective on "
+                ? "The approval workflow for " + document.getDocumentNumber() + " Rev " + version.getVersionNumber()
+                  + " is complete. All reviewers have approved the revision, and it is scheduled to become effective on "
                   + effectiveDate + "."
-                : "The approval workflow for " + document.getDocumentNumber() + " v" + version.getVersionNumber()
-                  + " is complete. All reviewers have approved, and the version is now released and in effect.";
+                : "The approval workflow for " + document.getDocumentNumber() + " Rev " + version.getVersionNumber()
+                  + " is complete. All reviewers have approved, and the revision is now released and in effect.";
 
         for (User recipient : recipients) {
             EmailContent content = templateService.render(
@@ -209,18 +209,18 @@ public class WorkflowNotificationService {
         }
 
         String subject = "Changes Requested / Rejected: " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber() + " - " + document.getName();
+                + " Rev " + version.getVersionNumber() + " - " + document.getName();
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Document", document.getDocumentNumber());
         details.put("Title", document.getName());
-        details.put("Version", "v" + version.getVersionNumber());
+        details.put("Revision", "Rev " + version.getVersionNumber());
         details.put("Rejected By", rejectedBy.getName() + " (" + rejectedBy.getEmail() + ")");
         if (document.getDepartment() != null) {
             details.put("Department", document.getDepartment().getCode());
         }
 
-        String leadParagraph = "The approval workflow for " + document.getDocumentNumber() + " v"
+        String leadParagraph = "The approval workflow for " + document.getDocumentNumber() + " Rev "
                 + version.getVersionNumber() + " was rejected by " + rejectedBy.getName()
                 + ". The workflow has been stopped. Please review the feedback below to revise the draft.";
 
@@ -256,16 +256,16 @@ public class WorkflowNotificationService {
         }
 
         String subject = "Workflow Cancelled: " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber() + " - " + document.getName();
+                + " Rev " + version.getVersionNumber() + " - " + document.getName();
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Document", document.getDocumentNumber());
         details.put("Title", document.getName());
-        details.put("Version", "v" + version.getVersionNumber());
+        details.put("Revision", "Rev " + version.getVersionNumber());
         details.put("Cancelled By", cancelledBy.getName());
 
         String leadParagraph = "The approval review workflow for " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber() + " has been cancelled by " + cancelledBy.getName()
+                + " Rev " + version.getVersionNumber() + " has been cancelled by " + cancelledBy.getName()
                 + ". Your pending review task has been dismissed and no further action is required.";
 
         for (User reviewer : pendingReviewers) {
@@ -293,19 +293,19 @@ public class WorkflowNotificationService {
     public void notifyDelegation(User target, User delegator, Document document,
                                  DocumentVersion version, String message) {
         String subject = "Approval Task Delegated: " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber();
+                + " Rev " + version.getVersionNumber();
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Document", document.getDocumentNumber());
         details.put("Title", document.getName());
-        details.put("Version", "v" + version.getVersionNumber());
+        details.put("Revision", "Rev " + version.getVersionNumber());
         details.put("Delegated By", delegator.getName() + " (" + delegator.getEmail() + ")");
         if (document.getDepartment() != null) {
             details.put("Department", document.getDepartment().getCode());
         }
 
         String leadParagraph = delegator.getName() + " has delegated an approval review task to you for "
-                + document.getDocumentNumber() + " (\"" + document.getName() + "\") v"
+                + document.getDocumentNumber() + " (\"" + document.getName() + "\") Rev "
                 + version.getVersionNumber() + ".";
 
         EmailContent content = templateService.render(
@@ -331,16 +331,16 @@ public class WorkflowNotificationService {
     public void notifyDelegationRecalled(User formerAssignee, User delegator, Document document,
                                         DocumentVersion version) {
         String subject = "Task Delegation Recalled: " + document.getDocumentNumber()
-                + " v" + version.getVersionNumber();
+                + " Rev " + version.getVersionNumber();
 
         Map<String, String> details = new LinkedHashMap<>();
         details.put("Document", document.getDocumentNumber());
         details.put("Title", document.getName());
-        details.put("Version", "v" + version.getVersionNumber());
+        details.put("Revision", "Rev " + version.getVersionNumber());
         details.put("Recalled By", delegator.getName());
 
         String leadParagraph = delegator.getName() + " has recalled the review task for "
-                + document.getDocumentNumber() + " v" + version.getVersionNumber()
+                + document.getDocumentNumber() + " Rev " + version.getVersionNumber()
                 + " back to themselves. No further action is required from you.";
 
         EmailContent content = templateService.render(

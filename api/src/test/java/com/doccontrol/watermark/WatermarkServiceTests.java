@@ -41,7 +41,7 @@ class WatermarkServiceTests {
     private static final WatermarkProperties PROPS = new WatermarkProperties(
             true, "http://gotenberg:3000", 30,
             new WatermarkProperties.MarkTexts(
-                    "UNCONTROLLED IF PRINTED", "SUPERSEDED — DO NOT USE",
+                    "RELEASED — UNCONTROLLED IF PRINTED", "SUPERSEDED — DO NOT USE",
                     "DRAFT — UNCONTROLLED", "APPROVED — NOT YET IN EFFECT"));
 
     private RenditionClient renditionClient;
@@ -66,7 +66,7 @@ class WatermarkServiceTests {
         try (PDDocument doc = Loader.loadPDF(out.pdf())) {
             assertThat(doc.getNumberOfPages()).isEqualTo(2);
             assertThat(normalizedText(doc))
-                    .contains("UNCONTROLLED IF PRINTED")
+                    .contains("RELEASED — UNCONTROLLED IF PRINTED")
                     .contains("Procedure body line");
         }
         assertThat(changedPixels(original, out.pdf())).isGreaterThan(500);
@@ -75,7 +75,7 @@ class WatermarkServiceTests {
 
     @Test
     void markTextFollowsTheVersionStatusMatrix() throws Exception {
-        assertMark(DocumentVersionStatus.CURRENT, "UNCONTROLLED IF PRINTED");
+        assertMark(DocumentVersionStatus.CURRENT, "RELEASED — UNCONTROLLED IF PRINTED");
         assertMark(DocumentVersionStatus.SUPERSEDED, "SUPERSEDED — DO NOT USE");
         assertMark(DocumentVersionStatus.DRAFT, "DRAFT — UNCONTROLLED");
         assertMark(DocumentVersionStatus.APPROVED, "APPROVED — NOT YET IN EFFECT");
@@ -111,7 +111,7 @@ class WatermarkServiceTests {
         assertThat(out.fileName()).isEqualTo("sop.pdf");
         try (PDDocument doc = Loader.loadPDF(out.pdf())) {
             assertThat(normalizedText(doc))
-                    .contains("UNCONTROLLED IF PRINTED")
+                    .contains("RELEASED — UNCONTROLLED IF PRINTED")
                     .contains("converted body");
         }
     }

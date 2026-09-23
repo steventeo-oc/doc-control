@@ -16,59 +16,59 @@ import java.net.URI;
 import java.util.List;
 
 /**
- * Tiers now have the same admin CRUD pattern as types and departments
+ * Levels now have the same admin CRUD pattern as types and departments
  * (lookup admin plan-back F5). Reads are open to any authenticated user;
  * writes are admin-only (enforced in SecurityConfig). The list default
  * deliberately flips to active-only to match the other two lookups —
  * includeInactive=true is the admin shape.
  */
 @RestController
-@RequestMapping("/document-tiers")
-public class DocumentTierController {
+@RequestMapping("/document-levels")
+public class DocumentLevelController {
 
-    private final DocumentTierRepository documentTierRepository;
-    private final DocumentTierService documentTierService;
+    private final DocumentLevelRepository documentLevelRepository;
+    private final DocumentLevelService documentLevelService;
 
-    public DocumentTierController(DocumentTierRepository documentTierRepository,
-                                  DocumentTierService documentTierService) {
-        this.documentTierRepository = documentTierRepository;
-        this.documentTierService = documentTierService;
+    public DocumentLevelController(DocumentLevelRepository documentLevelRepository,
+                                  DocumentLevelService documentLevelService) {
+        this.documentLevelRepository = documentLevelRepository;
+        this.documentLevelService = documentLevelService;
     }
 
     @GetMapping
-    public List<DocumentTierDto> list(
+    public List<DocumentLevelDto> list(
             @RequestParam(value = "includeInactive", required = false, defaultValue = "false")
             boolean includeInactive) {
         return (includeInactive
-                ? documentTierRepository.findAllByOrderByTierNumberAsc()
-                : documentTierRepository.findAllByActiveTrueOrderByTierNumberAsc())
+                ? documentLevelRepository.findAllByOrderByLevelNumberAsc()
+                : documentLevelRepository.findAllByActiveTrueOrderByLevelNumberAsc())
                 .stream()
-                .map(DocumentTierDto::from)
+                .map(DocumentLevelDto::from)
                 .toList();
     }
 
     @GetMapping("/{id}/usage")
-    public DocumentTierUsageDto usage(@PathVariable Integer id) {
-        return documentTierService.usage(id);
+    public DocumentLevelUsageDto usage(@PathVariable Integer id) {
+        return documentLevelService.usage(id);
     }
 
     @PostMapping
-    public ResponseEntity<DocumentTierDto> create(@Valid @RequestBody CreateDocumentTierRequest request) {
-        DocumentTierDto created = documentTierService.create(request);
+    public ResponseEntity<DocumentLevelDto> create(@Valid @RequestBody CreateDocumentLevelRequest request) {
+        DocumentLevelDto created = documentLevelService.create(request);
         return ResponseEntity
-                .created(URI.create("/document-tiers/" + created.id()))
+                .created(URI.create("/document-levels/" + created.id()))
                 .body(created);
     }
 
     @PatchMapping("/{id}")
-    public DocumentTierDto update(@PathVariable Integer id,
-                                  @Valid @RequestBody UpdateDocumentTierRequest request) {
-        return documentTierService.update(id, request);
+    public DocumentLevelDto update(@PathVariable Integer id,
+                                  @Valid @RequestBody UpdateDocumentLevelRequest request) {
+        return documentLevelService.update(id, request);
     }
 
     @DeleteMapping("/{id}")
     public ResponseEntity<Void> delete(@PathVariable Integer id) {
-        documentTierService.delete(id);
+        documentLevelService.delete(id);
         return ResponseEntity.noContent().build();
     }
 }

@@ -200,81 +200,81 @@ class LookupAdminTests {
     }
 
     @Test
-    void tierCrudLifecycle() throws Exception {
-        int tierNumber = 9000 + (int) (System.nanoTime() % 1000);
-        MvcResult created = mockMvc.perform(post("/document-tiers")
+    void levelCrudLifecycle() throws Exception {
+        int levelNumber = 9000 + (int) (System.nanoTime() % 1000);
+        MvcResult created = mockMvc.perform(post("/document-levels")
                         .with(csrf()).session(adminSession())
                         .contentType("application/json")
-                        .content("{\"tierNumber\":" + tierNumber + ",\"label\":\"Tier CRUD test\"}"))
+                        .content("{\"levelNumber\":" + levelNumber + ",\"label\":\"Level CRUD test\"}"))
                 .andExpect(status().isCreated())
                 .andExpect(jsonPath("$.active").value(true))
                 .andReturn();
-        Integer tierId = objectMapper.readValue(created.getResponse().getContentAsString(),
-                com.doccontrol.lookup.DocumentTierDto.class).id();
+        Integer levelId = objectMapper.readValue(created.getResponse().getContentAsString(),
+                com.doccontrol.lookup.DocumentLevelDto.class).id();
 
-        // duplicate tierNumber rejected
-        mockMvc.perform(post("/document-tiers")
+        // duplicate levelNumber rejected
+        mockMvc.perform(post("/document-levels")
                         .with(csrf()).session(adminSession())
                         .contentType("application/json")
-                        .content("{\"tierNumber\":" + tierNumber + ",\"label\":\"Duplicate\"}"))
+                        .content("{\"levelNumber\":" + levelNumber + ",\"label\":\"Duplicate\"}"))
                 .andExpect(status().isConflict());
 
-        // default list is active-only; the new tier is active and present
-        mockMvc.perform(get("/document-tiers").session(adminSession()))
-                .andExpect(jsonPath("$[?(@.id == " + tierId + ")]").isNotEmpty());
+        // default list is active-only; the new level is active and present
+        mockMvc.perform(get("/document-levels").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + levelId + ")]").isNotEmpty());
 
         // deactivate: vanishes from the default, present with includeInactive
-        mockMvc.perform(patch("/document-tiers/{id}", tierId).with(csrf()).session(adminSession())
+        mockMvc.perform(patch("/document-levels/{id}", levelId).with(csrf()).session(adminSession())
                         .contentType("application/json").content("{\"active\": false}"))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.active").value(false));
-        mockMvc.perform(get("/document-tiers").session(adminSession()))
-                .andExpect(jsonPath("$[?(@.id == " + tierId + ")]").isEmpty());
-        mockMvc.perform(get("/document-tiers").param("includeInactive", "true").session(adminSession()))
-                .andExpect(jsonPath("$[?(@.id == " + tierId + ")].active").value(false));
+        mockMvc.perform(get("/document-levels").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + levelId + ")]").isEmpty());
+        mockMvc.perform(get("/document-levels").param("includeInactive", "true").session(adminSession()))
+                .andExpect(jsonPath("$[?(@.id == " + levelId + ")].active").value(false));
 
         // usage with no types, then a clean delete
-        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+        mockMvc.perform(get("/document-levels/{id}/usage", levelId).session(adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentTypes").value(0));
-        mockMvc.perform(delete("/document-tiers/{id}", tierId).with(csrf()).session(adminSession()))
+        mockMvc.perform(delete("/document-levels/{id}", levelId).with(csrf()).session(adminSession()))
                 .andExpect(status().isNoContent());
         assertThat(auditLogRepository.findAll())
-                .anyMatch(entry -> "document_tier".equals(entry.getEntityType())
-                        && tierId.equals(entry.getEntityId())
+                .anyMatch(entry -> "document_level".equals(entry.getEntityType())
+                        && levelId.equals(entry.getEntityId())
                         && "deleted".equals(entry.getAction()));
     }
 
     @Test
-    void tierDeleteBlockedByReferencingTypes() throws Exception {
-        Integer tierId = documentTierRepository.findAllByOrderByTierNumberAsc().get(0).getId();
-        createType("TBK", tierId);
+    void levelDeleteBlockedByReferencingTypes() throws Exception {
+        Integer levelId = documentLevelRepository.findAllByOrderByLevelNumberAsc().get(0).getId();
+        createType("TBK", levelId);
 
-        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+        mockMvc.perform(get("/document-levels/{id}/usage", levelId).session(adminSession()))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.documentTypes").value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
-        mockMvc.perform(delete("/document-tiers/{id}", tierId).with(csrf()).session(adminSession()))
+        mockMvc.perform(delete("/document-levels/{id}", levelId).with(csrf()).session(adminSession()))
                 .andExpect(status().isConflict())
                 .andExpect(jsonPath("detail").value(org.hamcrest.Matchers.containsString(
-                        "reference document tier")))
+                        "reference document level")))
                 .andExpect(jsonPath("blocking.documentTypes")
                         .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
 
         // nothing cascades: the referencing type keeps working (D5)
-        mockMvc.perform(get("/document-tiers/{id}/usage", tierId).session(adminSession()))
+        mockMvc.perform(get("/document-levels/{id}/usage", levelId).session(adminSession()))
                 .andExpect(jsonPath("$.documentTypes")
                         .value(org.hamcrest.Matchers.greaterThanOrEqualTo(1)));
     }
 
     @Test
-    void tierWritesAreAdminOnly() throws Exception {
-        User member = createUserInDepartment(createDepartment("TWR"), "tieruser");
-        mockMvc.perform(post("/document-tiers")
-                        .with(csrf()).session(loginAs(member.getEmail(), "pw-tieruser"))
+    void levelWritesAreAdminOnly() throws Exception {
+        User member = createUserInDepartment(createDepartment("TWR"), "leveluser");
+        mockMvc.perform(post("/document-levels")
+                        .with(csrf()).session(loginAs(member.getEmail(), "pw-leveluser"))
                         .contentType("application/json")
-                        .content("{\"tierNumber\":9500,\"label\":\"Not allowed\"}"))
+                        .content("{\"levelNumber\":9500,\"label\":\"Not allowed\"}"))
                 .andExpect(status().isForbidden());
-        mockMvc.perform(get("/document-tiers").session(loginAs(member.getEmail(), "pw-tieruser")))
+        mockMvc.perform(get("/document-levels").session(loginAs(member.getEmail(), "pw-leveluser")))
                 .andExpect(status().isOk());
     }
 
@@ -285,7 +285,7 @@ class LookupAdminTests {
     @Autowired
     com.doccontrol.lookup.DocumentTypeRepository typeRepository;
     @Autowired
-    com.doccontrol.lookup.DocumentTierRepository documentTierRepository;
+    com.doccontrol.lookup.DocumentLevelRepository documentLevelRepository;
 
     private Department departmentRepositoryById(Integer id) {
         return departmentRepository.findById(id).orElseThrow();
@@ -308,15 +308,15 @@ class LookupAdminTests {
     }
 
     private Integer createType(String prefix) throws Exception {
-        return createType(prefix, documentTierRepository.findAllByOrderByTierNumberAsc().get(0).getId());
+        return createType(prefix, documentLevelRepository.findAllByOrderByLevelNumberAsc().get(0).getId());
     }
 
-    private Integer createType(String prefix, Integer tierId) throws Exception {
+    private Integer createType(String prefix, Integer levelId) throws Exception {
         MvcResult result = mockMvc.perform(post("/document-types")
                         .with(csrf()).session(adminSession())
                         .contentType("application/json")
                         .content("{\"code\":\"" + prefix + System.nanoTime() % 100000
-                                + "\",\"label\":\"Lookup admin test type\",\"tierId\":" + tierId + "}"))
+                                + "\",\"label\":\"Lookup admin test type\",\"levelId\":" + levelId + "}"))
                 .andExpect(status().isCreated())
                 .andReturn();
         return objectMapper.readValue(result.getResponse().getContentAsString(),

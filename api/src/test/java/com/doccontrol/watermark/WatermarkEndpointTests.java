@@ -144,7 +144,7 @@ class WatermarkEndpointTests {
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(new String(body, 0, 5)).isEqualTo("%PDF-");
         assertThat(pdfText(body))
-                .contains("UNCONTROLLED IF PRINTED")
+                .contains("RELEASED — UNCONTROLLED IF PRINTED")
                 .contains("Released content");
         // PDF originals stamp directly — the rendition sidecar is not involved
         verifyNoInteractions(renditionClient);
@@ -168,7 +168,7 @@ class WatermarkEndpointTests {
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "application/pdf"))
                 .andReturn().getResponse().getContentAsByteArray();
         assertThat(pdfText(body))
-                .contains("UNCONTROLLED IF PRINTED")
+                .contains("RELEASED — UNCONTROLLED IF PRINTED")
                 .contains("converted body");
         verify(renditionClient).convertToPdf(eq("sop.docx"), eq("application/msword"), any());
     }

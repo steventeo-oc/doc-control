@@ -29,7 +29,7 @@ what makes new document types/departments a data change, not a code change.
 
 | Method | Path | Description | Sprint |
 |---|---|---|---|
-| GET | `/document-tiers` | List tiers (Tier 1–4) | 1 |
+| GET | `/document-levels` | List levels (Level 1–4) | 1 |
 | GET | `/document-types` | List active document types (SOP, WI, FORM...) | 1 |
 | POST | `/document-types` | Create a new type — admin only | 1 |
 | PATCH | `/document-types/{id}` | Update label / deactivate a type | 1 |

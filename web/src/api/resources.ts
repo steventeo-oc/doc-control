@@ -1,9 +1,9 @@
 import { api } from './client';
-import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, DelegatedTask, Department, DepartmentCandidateUser, DepartmentMember, DocumentDetail, DocumentNumberPreview, DocumentTier, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, TaskCounts, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
+import type { AcknowledgmentAccess, AcknowledgmentRecord, AcknowledgmentStatus, ActivityScope, AuditLogPage, DelegatedTask, Department, DepartmentCandidateUser, DepartmentMember, DocumentDetail, DocumentNumberPreview, DocumentLevel, DocumentType, DocumentVersion, DocumentsPage, MembershipLevel, PendingAcknowledgment, ReviewerCandidate, RoleRow, StartedInstance, TaskCounts, UserRow, UserSummary, WorkflowInstance, WorkflowTask } from './types';
 
 export interface DocumentFilters {
   type?: string;
-  tier?: number;
+  level?: number;
   department?: string;
   status?: string;
   q?: string;
@@ -36,23 +36,23 @@ export const lookupApi = {
   // The admin/filter shape passes includeInactive so deactivated rows stay
   // visible (reactivation + searching documents that reference them);
   // creation dropdowns use the active-only default and/or filter locally.
-  tiers: (includeInactive = false) =>
-    api.get<DocumentTier[]>(`/document-tiers${includeInactive ? '?includeInactive=true' : ''}`),
+  levels: (includeInactive = false) =>
+    api.get<DocumentLevel[]>(`/document-levels${includeInactive ? '?includeInactive=true' : ''}`),
   types: (includeInactive = false) =>
     api.get<DocumentType[]>(`/document-types${includeInactive ? '?includeInactive=true' : ''}`),
   departments: (includeInactive = false) =>
     api.get<Department[]>(`/departments${includeInactive ? '?includeInactive=true' : ''}`),
   usageDepartment: (id: number) => api.get<{ documents: number; users: number }>(`/departments/${id}/usage`),
   usageType: (id: number) => api.get<{ documents: number }>(`/document-types/${id}/usage`),
-  usageTier: (id: number) => api.get<{ documentTypes: number }>(`/document-tiers/${id}/usage`),
-  createTier: (tierNumber: number, label: string) =>
-    api.post<DocumentTier>('/document-tiers', { tierNumber, label }),
-  updateTier: (id: number, patch: { label?: string; active?: boolean }) =>
-    api.patch<DocumentTier>(`/document-tiers/${id}`, patch),
-  deleteTier: (id: number) => api.delete(`/document-tiers/${id}`),
-  createType: (code: string, label: string, tierId: number) =>
-    api.post<DocumentType>('/document-types', { code, label, tierId }),
-  updateType: (id: number, patch: { label?: string; tierId?: number; active?: boolean }) =>
+  usageLevel: (id: number) => api.get<{ documentTypes: number }>(`/document-levels/${id}/usage`),
+  createLevel: (levelNumber: number, label: string) =>
+    api.post<DocumentLevel>('/document-levels', { levelNumber, label }),
+  updateLevel: (id: number, patch: { label?: string; active?: boolean }) =>
+    api.patch<DocumentLevel>(`/document-levels/${id}`, patch),
+  deleteLevel: (id: number) => api.delete(`/document-levels/${id}`),
+  createType: (code: string, label: string, levelId: number) =>
+    api.post<DocumentType>('/document-types', { code, label, levelId }),
+  updateType: (id: number, patch: { label?: string; levelId?: number; active?: boolean }) =>
     api.patch<DocumentType>(`/document-types/${id}`, patch),
   deleteType: (id: number) => api.delete(`/document-types/${id}`),
   createDepartment: (code: string, label: string) =>
@@ -86,7 +86,7 @@ export const documentApi = {
   list: (filters: DocumentFilters) => {
     const params = new URLSearchParams();
     if (filters.type) params.set('type', filters.type);
-    if (filters.tier) params.set('tier', String(filters.tier));
+    if (filters.level) params.set('level', String(filters.level));
     if (filters.department) params.set('department', filters.department);
     if (filters.status) params.set('status', filters.status);
     if (filters.q) params.set('q', filters.q);
@@ -102,7 +102,7 @@ export const documentApi = {
   exportUrl: (filters: DocumentFilters) => {
     const params = new URLSearchParams();
     if (filters.type) params.set('type', filters.type);
-    if (filters.tier) params.set('tier', String(filters.tier));
+    if (filters.level) params.set('level', String(filters.level));
     if (filters.department) params.set('department', filters.department);
     if (filters.status) params.set('status', filters.status);
     if (filters.q) params.set('q', filters.q);

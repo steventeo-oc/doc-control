@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { Layers, Loader2, Pencil, Plus, Trash2, Power } from 'lucide-react';
 import { lookupApi } from '../api/resources';
-import type { DocumentTier } from '../api/types';
+import type { DocumentLevel } from '../api/types';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/ui/badge';
@@ -36,20 +36,20 @@ import {
   TableRow,
 } from '../components/ui/table';
 
-export default function AdminTiersPage() {
-  const [tiers, setTiers] = useState<DocumentTier[]>([]);
+export default function AdminLevelsPage() {
+  const [levels, setLevels] = useState<DocumentLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Add Dialog
   const [addOpen, setAddOpen] = useState(false);
-  const [newTierNumber, setNewTierNumber] = useState('');
+  const [newLevelNumber, setNewLevelNumber] = useState('');
   const [newLabel, setNewLabel] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Dialog
-  const [editingTier, setEditingTier] = useState<DocumentTier | null>(null);
+  const [editingLevel, setEditingLevel] = useState<DocumentLevel | null>(null);
   const [editLabel, setEditLabel] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
 
@@ -72,9 +72,9 @@ export default function AdminTiersPage() {
   const load = useCallback(() => {
     setLoading(true);
     lookupApi
-      .tiers(true)
+      .levels(true)
       .then((data) => {
-        setTiers(data.slice().sort((a, b) => a.tierNumber - b.tierNumber));
+        setLevels(data.slice().sort((a, b) => a.levelNumber - b.levelNumber));
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -96,15 +96,15 @@ export default function AdminTiersPage() {
 
   function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (!newTierNumber || !newLabel.trim()) return;
+    if (!newLevelNumber || !newLabel.trim()) return;
     setSubmitting(true);
     setError(null);
     lookupApi
-      .createTier(Number(newTierNumber), newLabel.trim())
+      .createLevel(Number(newLevelNumber), newLabel.trim())
       .then(() => {
-        setNotice(`Tier ${newTierNumber} created.`);
+        setNotice(`Level ${newLevelNumber} created.`);
         setAddOpen(false);
-        setNewTierNumber('');
+        setNewLevelNumber('');
         setNewLabel('');
         load();
       })
@@ -114,87 +114,87 @@ export default function AdminTiersPage() {
 
   function handleEditSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!editingTier || !editLabel.trim()) return;
+    if (!editingLevel || !editLabel.trim()) return;
     setEditSubmitting(true);
     setError(null);
     lookupApi
-      .updateTier(editingTier.id, { label: editLabel.trim() })
+      .updateLevel(editingLevel.id, { label: editLabel.trim() })
       .then(() => {
-        setNotice(`Tier ${editingTier.tierNumber} updated.`);
-        setEditingTier(null);
+        setNotice(`Level ${editingLevel.levelNumber} updated.`);
+        setEditingLevel(null);
         load();
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setEditSubmitting(false));
   }
 
-  async function promptToggleTier(tier: DocumentTier) {
-    if (!tier.active) {
+  async function promptToggleLevel(level: DocumentLevel) {
+    if (!level.active) {
       await runAction(
-        () => lookupApi.updateTier(tier.id, { active: true }),
-        `Tier ${tier.tierNumber} activated.`,
+        () => lookupApi.updateLevel(level.id, { active: true }),
+        `Level ${level.levelNumber} activated.`,
       );
       return;
     }
 
     try {
-      const { documentTypes } = await lookupApi.usageTier(tier.id);
+      const { documentTypes } = await lookupApi.usageLevel(level.id);
       const usageDetail =
         documentTypes > 0
-          ? `${documentTypes} document type(s) currently reference this tier and will continue to work.`
-          : 'No document types currently reference this tier.';
+          ? `${documentTypes} document type(s) currently reference this level and will continue to work.`
+          : 'No document types currently reference this level.';
 
       setConfirmDialog({
         open: true,
-        title: `Deactivate Tier ${tier.tierNumber}?`,
-        description: `${usageDetail} Are you sure you want to deactivate Tier ${tier.tierNumber} (${tier.label})?`,
+        title: `Deactivate Level ${level.levelNumber}?`,
+        description: `${usageDetail} Are you sure you want to deactivate Level ${level.levelNumber} (${level.label})?`,
         actionLabel: 'Deactivate',
         variant: 'destructive',
         onConfirm: async () => {
           await runAction(
-            () => lookupApi.updateTier(tier.id, { active: false }),
-            `Tier ${tier.tierNumber} deactivated.`,
+            () => lookupApi.updateLevel(level.id, { active: false }),
+            `Level ${level.levelNumber} deactivated.`,
           );
         },
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check tier usage.');
+      setError(err instanceof Error ? err.message : 'Failed to check level usage.');
     }
   }
 
-  async function promptDeleteTier(tier: DocumentTier) {
+  async function promptDeleteLevel(level: DocumentLevel) {
     try {
-      const { documentTypes } = await lookupApi.usageTier(tier.id);
+      const { documentTypes } = await lookupApi.usageLevel(level.id);
       if (documentTypes > 0) {
         setError(
-          `Cannot delete Tier ${tier.tierNumber}: it is referenced by ${documentTypes} document type(s). Deactivate it instead.`,
+          `Cannot delete Level ${level.levelNumber}: it is referenced by ${documentTypes} document type(s). Deactivate it instead.`,
         );
         return;
       }
 
       setConfirmDialog({
         open: true,
-        title: `Delete Tier ${tier.tierNumber}?`,
-        description: `This will permanently remove Tier ${tier.tierNumber} (${tier.label}). This action cannot be undone.`,
+        title: `Delete Level ${level.levelNumber}?`,
+        description: `This will permanently remove Level ${level.levelNumber} (${level.label}). This action cannot be undone.`,
         actionLabel: 'Delete',
         variant: 'destructive',
         onConfirm: async () => {
-          await runAction(() => lookupApi.deleteTier(tier.id), `Tier ${tier.tierNumber} deleted.`);
+          await runAction(() => lookupApi.deleteLevel(level.id), `Level ${level.levelNumber} deleted.`);
         },
       });
     } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to check tier usage.');
+      setError(err instanceof Error ? err.message : 'Failed to check level usage.');
     }
   }
 
   return (
     <>
       <PageHeader
-        title="Document Tiers"
+        title="Document Levels"
         actions={
           <Button onClick={() => setAddOpen(true)} size="sm">
             <Plus className="mr-1.5 size-4" />
-            Add Tier
+            Add Level
           </Button>
         }
       />
@@ -204,7 +204,7 @@ export default function AdminTiersPage() {
           Document hierarchy levels governing review depth and approval requirements.
         </p>
         <Badge variant="secondary" className="shrink-0">
-          {tiers.length} {tiers.length === 1 ? 'tier' : 'tiers'}
+          {levels.length} {levels.length === 1 ? 'level' : 'levels'}
         </Badge>
       </div>
 
@@ -224,37 +224,37 @@ export default function AdminTiersPage() {
           <Table>
             <TableHeader>
               <TableRow>
-                <TableHead className="w-[120px]">Tier</TableHead>
+                <TableHead className="w-[120px]">Level</TableHead>
                 <TableHead>Label</TableHead>
                 <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead className="w-[180px] text-right">Actions</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
-              {loading && tiers.length === 0 && (
+              {loading && levels.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="py-12 text-center">
                     <Loader2 className="mx-auto size-5 animate-spin text-muted-foreground" />
                   </TableCell>
                 </TableRow>
               )}
-              {!loading && tiers.length === 0 && (
+              {!loading && levels.length === 0 && (
                 <TableRow>
                   <TableCell colSpan={4} className="py-8">
-                    <EmptyState icon={Layers} message="No document tiers defined yet." />
+                    <EmptyState icon={Layers} message="No document levels defined yet." />
                   </TableCell>
                 </TableRow>
               )}
-              {tiers.map((tier) => (
-                <TableRow key={tier.id}>
+              {levels.map((level) => (
+                <TableRow key={level.id}>
                   <TableCell>
                     <Badge variant="outline" className="font-semibold">
-                      Tier {tier.tierNumber}
+                      Level {level.levelNumber}
                     </Badge>
                   </TableCell>
-                  <TableCell className="font-medium text-foreground">{tier.label}</TableCell>
+                  <TableCell className="font-medium text-foreground">{level.label}</TableCell>
                   <TableCell>
-                    {tier.active ? (
+                    {level.active ? (
                       <Badge className="bg-success/15 text-success border-transparent">Active</Badge>
                     ) : (
                       <Badge variant="secondary" className="text-muted-foreground">
@@ -268,10 +268,10 @@ export default function AdminTiersPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-2"
-                        title="Edit tier label"
+                        title="Edit level label"
                         onClick={() => {
-                          setEditingTier(tier);
-                          setEditLabel(tier.label);
+                          setEditingLevel(level);
+                          setEditLabel(level.label);
                         }}
                       >
                         <Pencil className="size-3.5" />
@@ -282,12 +282,12 @@ export default function AdminTiersPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-2"
-                        title={tier.active ? 'Deactivate tier' : 'Activate tier'}
-                        onClick={() => promptToggleTier(tier)}
+                        title={level.active ? 'Deactivate level' : 'Activate level'}
+                        onClick={() => promptToggleLevel(level)}
                       >
                         <Power className="size-3.5" />
                         <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">
-                          {tier.active ? 'Deactivate' : 'Activate'}
+                          {level.active ? 'Deactivate' : 'Activate'}
                         </span>
                       </Button>
 
@@ -295,8 +295,8 @@ export default function AdminTiersPage() {
                         variant="ghost"
                         size="sm"
                         className="h-8 px-2 text-destructive hover:bg-destructive/10 hover:text-destructive"
-                        title="Delete tier"
-                        onClick={() => promptDeleteTier(tier)}
+                        title="Delete level"
+                        onClick={() => promptDeleteLevel(level)}
                       >
                         <Trash2 className="size-3.5" />
                         <span className="sr-only sm:not-sr-only sm:ml-1 text-xs">Delete</span>
@@ -310,32 +310,32 @@ export default function AdminTiersPage() {
         </CardContent>
       </Card>
 
-      {/* Add Tier Dialog */}
+      {/* Add Level Dialog */}
       <Dialog open={addOpen} onOpenChange={setAddOpen}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Add Document Tier</DialogTitle>
+            <DialogTitle>Add Document Level</DialogTitle>
             <DialogDescription>
               Define a new document hierarchy level.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleCreate} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tier-number">Tier number</Label>
+              <Label htmlFor="level-number">Level number</Label>
               <Input
-                id="tier-number"
+                id="level-number"
                 type="number"
                 min={1}
                 required
                 placeholder="e.g. 1"
-                value={newTierNumber}
-                onChange={(e) => setNewTierNumber(e.target.value)}
+                value={newLevelNumber}
+                onChange={(e) => setNewLevelNumber(e.target.value)}
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="tier-label">Label</Label>
+              <Label htmlFor="level-label">Label</Label>
               <Input
-                id="tier-label"
+                id="level-label"
                 required
                 maxLength={255}
                 placeholder="e.g. Level 1 — Strategic & Policy"
@@ -348,27 +348,27 @@ export default function AdminTiersPage() {
                 Cancel
               </Button>
               <Button type="submit" disabled={submitting}>
-                {submitting ? 'Creating…' : 'Add Tier'}
+                {submitting ? 'Creating…' : 'Add Level'}
               </Button>
             </DialogFooter>
           </form>
         </DialogContent>
       </Dialog>
 
-      {/* Edit Tier Dialog */}
-      <Dialog open={!!editingTier} onOpenChange={(open) => !open && setEditingTier(null)}>
+      {/* Edit Level Dialog */}
+      <Dialog open={!!editingLevel} onOpenChange={(open) => !open && setEditingLevel(null)}>
         <DialogContent className="sm:max-w-md">
           <DialogHeader>
-            <DialogTitle>Edit Tier {editingTier?.tierNumber}</DialogTitle>
+            <DialogTitle>Edit Level {editingLevel?.levelNumber}</DialogTitle>
             <DialogDescription>
-              Update the label description for Tier {editingTier?.tierNumber}.
+              Update the label description for Level {editingLevel?.levelNumber}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-tier-label">Label</Label>
+              <Label htmlFor="edit-level-label">Label</Label>
               <Input
-                id="edit-tier-label"
+                id="edit-level-label"
                 required
                 maxLength={255}
                 value={editLabel}
@@ -376,7 +376,7 @@ export default function AdminTiersPage() {
               />
             </div>
             <DialogFooter className="gap-2 sm:gap-0">
-              <Button type="button" variant="outline" onClick={() => setEditingTier(null)}>
+              <Button type="button" variant="outline" onClick={() => setEditingLevel(null)}>
                 Cancel
               </Button>
               <Button type="submit" disabled={editSubmitting}>

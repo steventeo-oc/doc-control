@@ -113,7 +113,7 @@ export function DocumentPreviewViewer({
             <FileText className="size-4 text-primary shrink-0" />
             <span className="font-semibold truncate">
               {documentNumber}
-              {versionNumber !== undefined && ` v${versionNumber}`}
+              {versionNumber !== undefined && ` Rev ${versionNumber}`}
             </span>
             {title && (
               <span className="text-muted-foreground truncate hidden sm:inline">
@@ -203,7 +203,7 @@ export function DocumentPreviewViewer({
             <div className="max-w-md">
               <p className="text-sm font-semibold text-foreground">In-Browser Preview Not Available</p>
               <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                This document version is stored in a format that cannot be directly previewed in the browser. In-browser preview is supported for PDF, Word, Excel, PowerPoint, and text files. Please download the file to inspect its contents.
+                This document revision is stored in a format that cannot be directly previewed in the browser. In-browser preview is supported for PDF, Word, Excel, PowerPoint, and text files. Please download the file to inspect its contents.
               </p>
             </div>
             <div className="flex items-center gap-2 pt-2">
@@ -338,7 +338,7 @@ export default function DocumentPreviewModal({
                 <span>{documentNumber}</span>
                 {versionNumber !== undefined && (
                   <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-muted/60 text-muted-foreground border border-border/30">
-                    v{versionNumber}
+                    Rev {versionNumber}
                   </span>
                 )}
               </DialogTitle>
@@ -452,7 +452,7 @@ export default function DocumentPreviewModal({
               <div className="max-w-md">
                 <p className="text-sm font-semibold text-foreground">In-Browser Preview Not Available</p>
                 <p className="text-xs text-muted-foreground mt-1.5 leading-relaxed">
-                  This document version ({documentNumber}{versionNumber !== undefined ? ` v${versionNumber}` : ''}) is stored as a controlled file attachment. In-browser preview is supported for PDF, Word, Excel, PowerPoint, and text files. Please download the file to inspect its contents.
+                  This document revision ({documentNumber}{versionNumber !== undefined ? ` Rev ${versionNumber}` : ''}) is stored as a controlled file attachment. In-browser preview is supported for PDF, Word, Excel, PowerPoint, and text files. Please download the file to inspect its contents.
                 </p>
               </div>
               <div className="flex items-center gap-2 pt-2">

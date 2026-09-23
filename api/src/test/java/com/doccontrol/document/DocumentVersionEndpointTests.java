@@ -125,7 +125,7 @@ class DocumentVersionEndpointTests {
                         .param("change_notes", "initial upload")
                         .session(session).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.versionNumber").value(1))
+                .andExpect(jsonPath("$.versionNumber").value(0))
                 .andExpect(jsonPath("$.status").value("draft"))
                 .andExpect(jsonPath("$.fileName").value("procedure.txt"))
                 .andReturn();
@@ -137,7 +137,7 @@ class DocumentVersionEndpointTests {
                         .param("change_notes", "second revision")
                         .session(session).with(csrf()))
                 .andExpect(status().isConflict())
-                .andExpect(jsonPath("$.detail", containsString("Document is locked: draft v1 is already in progress")));
+                .andExpect(jsonPath("$.detail", containsString("Document is locked: draft Rev 0 is already in progress")));
 
         // release v1 so a new revision can be created
         Document doc = documentRepository.findById(docId).orElseThrow();
@@ -152,12 +152,12 @@ class DocumentVersionEndpointTests {
                         .param("change_notes", "second revision")
                         .session(session).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.versionNumber").value(2));
+                .andExpect(jsonPath("$.versionNumber").value(1));
 
         mockMvc.perform(get("/documents/{id}/versions", docId).session(session))
                 .andExpect(status().isOk())
                 .andExpect(jsonPath("$.length()").value(2))
-                .andExpect(jsonPath("$[0].versionNumber").value(1))
+                .andExpect(jsonPath("$[0].versionNumber").value(0))
                 .andExpect(jsonPath("$[1].changeNotes").value("second revision"));
 
         // download round-trip with original=true (the audited owner escape
@@ -207,10 +207,10 @@ class DocumentVersionEndpointTests {
 
         mockMvc.perform(get("/documents/{id}/versions", document.id()).session(session))
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].versionNumber").value(1))
+                .andExpect(jsonPath("$[0].versionNumber").value(0))
                 .andExpect(jsonPath("$[0].status").value("draft"));
 
-        // releasing (via an approval) is what makes version 1 current
+        // releasing (via an approval) is what makes version 0 current
         Integer version1Id = objectMapper.readValue(mockMvc
                 .perform(get("/documents/{id}/versions", document.id()).session(session))
                 .andReturn().getResponse().getContentAsString(), DocumentVersionDto[].class)[0].id();
@@ -226,7 +226,7 @@ class DocumentVersionEndpointTests {
         WorkflowInstanceDto instance = objectMapper.readValue(
                 started.getResponse().getContentAsString(), WorkflowInstanceDto.class);
 
-        // the assigned reviewer (an admin here) approves — version 1 becomes current
+        // the assigned reviewer (an admin here) approves — version 0 becomes current
         mockMvc.perform(post("/workflow-tasks/{taskId}/complete",
                         instance.tasks().get(0).id()).with(csrf())
                         .session(loginAs(BOOTSTRAP_EMAIL, BOOTSTRAP_PASSWORD))
@@ -236,7 +236,7 @@ class DocumentVersionEndpointTests {
 
         mockMvc.perform(get("/documents/{id}/versions", document.id()).session(session))
                 .andExpect(jsonPath("$.length()").value(1))
-                .andExpect(jsonPath("$[0].versionNumber").value(1))
+                .andExpect(jsonPath("$[0].versionNumber").value(0))
                 .andExpect(jsonPath("$[0].status").value("current"));
         mockMvc.perform(get("/documents/{id}", document.id()).session(session))
                 .andExpect(jsonPath("$.currentVersionId").isNotEmpty());
@@ -353,7 +353,7 @@ class DocumentVersionEndpointTests {
                         .param("change_notes", "draft revision")
                         .session(ownerSession).with(csrf()))
                 .andExpect(status().isOk())
-                .andExpect(jsonPath("$.versionNumber").value(2))
+                .andExpect(jsonPath("$.versionNumber").value(1))
                 .andReturn();
         Integer v2Id = objectMapper.readValue(v2.getResponse().getContentAsString(), DocumentVersionDto.class).id();
 

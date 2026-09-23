@@ -1,7 +1,7 @@
 import { FormEvent, useCallback, useEffect, useState } from 'react';
 import { FileType2, Loader2, Pencil, Plus, Power, Search, Trash2, X } from 'lucide-react';
 import { lookupApi } from '../api/resources';
-import type { DocumentTier, DocumentType } from '../api/types';
+import type { DocumentLevel, DocumentType } from '../api/types';
 import { EmptyState } from '../components/EmptyState';
 import { PageHeader } from '../components/PageHeader';
 import { Badge } from '../components/ui/badge';
@@ -45,26 +45,26 @@ import {
 
 export default function AdminTypesPage() {
   const [types, setTypes] = useState<DocumentType[]>([]);
-  const [tiers, setTiers] = useState<DocumentTier[]>([]);
+  const [levels, setLevels] = useState<DocumentLevel[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
   const [notice, setNotice] = useState<string | null>(null);
 
   // Search and Filter
   const [search, setSearch] = useState('');
-  const [tierFilter, setTierFilter] = useState('ALL');
+  const [levelFilter, setLevelFilter] = useState('ALL');
 
   // Add Dialog
   const [addOpen, setAddOpen] = useState(false);
   const [newCode, setNewCode] = useState('');
   const [newLabel, setNewLabel] = useState('');
-  const [newTierId, setNewTierId] = useState('');
+  const [newLevelId, setNewLevelId] = useState('');
   const [submitting, setSubmitting] = useState(false);
 
   // Edit Dialog
   const [editingType, setEditingType] = useState<DocumentType | null>(null);
   const [editLabel, setEditLabel] = useState('');
-  const [editTierId, setEditTierId] = useState('');
+  const [editLevelId, setEditLevelId] = useState('');
   const [editSubmitting, setEditSubmitting] = useState(false);
 
   // Confirm Action Dialog
@@ -85,10 +85,10 @@ export default function AdminTypesPage() {
 
   const load = useCallback(() => {
     setLoading(true);
-    Promise.all([lookupApi.types(true), lookupApi.tiers(true)])
-      .then(([typesData, tiersData]) => {
+    Promise.all([lookupApi.types(true), lookupApi.levels(true)])
+      .then(([typesData, levelsData]) => {
         setTypes(typesData.slice().sort((a, b) => a.code.localeCompare(b.code)));
-        setTiers(tiersData.slice().sort((a, b) => a.tierNumber - b.tierNumber));
+        setLevels(levelsData.slice().sort((a, b) => a.levelNumber - b.levelNumber));
       })
       .catch((err: Error) => setError(err.message))
       .finally(() => setLoading(false));
@@ -110,17 +110,17 @@ export default function AdminTypesPage() {
 
   function handleCreate(e: FormEvent) {
     e.preventDefault();
-    if (!newCode.trim() || !newLabel.trim() || !newTierId) return;
+    if (!newCode.trim() || !newLabel.trim() || !newLevelId) return;
     setSubmitting(true);
     setError(null);
     lookupApi
-      .createType(newCode.trim().toUpperCase(), newLabel.trim(), Number(newTierId))
+      .createType(newCode.trim().toUpperCase(), newLabel.trim(), Number(newLevelId))
       .then(() => {
         setNotice(`Document type ${newCode.trim().toUpperCase()} created.`);
         setAddOpen(false);
         setNewCode('');
         setNewLabel('');
-        setNewTierId('');
+        setNewLevelId('');
         load();
       })
       .catch((err: Error) => setError(err.message))
@@ -129,13 +129,13 @@ export default function AdminTypesPage() {
 
   function handleEditSubmit(e: FormEvent) {
     e.preventDefault();
-    if (!editingType || !editLabel.trim() || !editTierId) return;
+    if (!editingType || !editLabel.trim() || !editLevelId) return;
     setEditSubmitting(true);
     setError(null);
     lookupApi
       .updateType(editingType.id, {
         label: editLabel.trim(),
-        tierId: Number(editTierId),
+        levelId: Number(editLevelId),
       })
       .then(() => {
         setNotice(`Document type ${editingType.code} updated.`);
@@ -206,7 +206,7 @@ export default function AdminTypesPage() {
   }
 
   const filteredTypes = types.filter((type) => {
-    if (tierFilter !== 'ALL' && String(type.tierId) !== tierFilter) {
+    if (levelFilter !== 'ALL' && String(type.levelId) !== levelFilter) {
       return false;
     }
     if (search.trim()) {
@@ -218,7 +218,7 @@ export default function AdminTypesPage() {
     return true;
   });
 
-  const hasActiveFilters = search.trim() !== '' || tierFilter !== 'ALL';
+  const hasActiveFilters = search.trim() !== '' || levelFilter !== 'ALL';
 
   return (
     <>
@@ -234,7 +234,7 @@ export default function AdminTypesPage() {
 
       <div className="mb-4 flex items-center gap-2">
         <p className="text-sm text-muted-foreground">
-          Controlled document classifications, prefixes, and tier assignments.
+          Controlled document classifications, prefixes, and level assignments.
         </p>
         <Badge variant="secondary" className="shrink-0">
           {filteredTypes.length} of {types.length} {types.length === 1 ? 'type' : 'types'}
@@ -275,15 +275,15 @@ export default function AdminTypesPage() {
             )}
           </div>
 
-          <Select value={tierFilter} onValueChange={setTierFilter}>
+          <Select value={levelFilter} onValueChange={setLevelFilter}>
             <SelectTrigger className="w-[180px]">
-              <SelectValue placeholder="All tiers" />
+              <SelectValue placeholder="All levels" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="ALL">All tiers</SelectItem>
-              {tiers.map((t) => (
+              <SelectItem value="ALL">All levels</SelectItem>
+              {levels.map((t) => (
                 <SelectItem key={t.id} value={String(t.id)}>
-                  Tier {t.tierNumber} — {t.label}
+                  Level {t.levelNumber} — {t.label}
                 </SelectItem>
               ))}
             </SelectContent>
@@ -295,7 +295,7 @@ export default function AdminTypesPage() {
               size="sm"
               onClick={() => {
                 setSearch('');
-                setTierFilter('ALL');
+                setLevelFilter('ALL');
               }}
             >
               <X className="mr-1 size-3.5" />
@@ -313,7 +313,7 @@ export default function AdminTypesPage() {
               <TableRow>
                 <TableHead className="w-[120px]">Code</TableHead>
                 <TableHead>Label</TableHead>
-                <TableHead className="w-[200px]">Tier</TableHead>
+                <TableHead className="w-[200px]">Level</TableHead>
                 <TableHead className="w-[120px]">Status</TableHead>
                 <TableHead className="w-[180px] text-right">Actions</TableHead>
               </TableRow>
@@ -340,7 +340,7 @@ export default function AdminTypesPage() {
                             className="h-auto p-0"
                             onClick={() => {
                               setSearch('');
-                              setTierFilter('ALL');
+                              setLevelFilter('ALL');
                             }}
                           >
                             Reset filters
@@ -352,7 +352,7 @@ export default function AdminTypesPage() {
                 </TableRow>
               )}
               {filteredTypes.map((type) => {
-                const tier = tiers.find((t) => t.id === type.tierId);
+                const level = levels.find((t) => t.id === type.levelId);
                 return (
                   <TableRow key={type.id}>
                     <TableCell>
@@ -362,13 +362,13 @@ export default function AdminTypesPage() {
                     </TableCell>
                     <TableCell className="font-medium text-foreground">{type.label}</TableCell>
                     <TableCell>
-                      {tier ? (
+                      {level ? (
                         <div className="flex items-center gap-1.5">
                           <span className="text-xs font-semibold text-muted-foreground">
-                            Tier {tier.tierNumber}
+                            Level {level.levelNumber}
                           </span>
                           <span className="text-xs text-muted-foreground truncate max-w-[140px]">
-                            {tier.label}
+                            {level.label}
                           </span>
                         </div>
                       ) : (
@@ -394,7 +394,7 @@ export default function AdminTypesPage() {
                           onClick={() => {
                             setEditingType(type);
                             setEditLabel(type.label);
-                            setEditTierId(String(type.tierId));
+                            setEditLevelId(String(type.levelId));
                           }}
                         >
                           <Pencil className="size-3.5" />
@@ -468,17 +468,17 @@ export default function AdminTypesPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="type-tier">Tier</Label>
-              <Select value={newTierId} onValueChange={setNewTierId} required>
-                <SelectTrigger id="type-tier">
-                  <SelectValue placeholder="Choose tier…" />
+              <Label htmlFor="type-level">Level</Label>
+              <Select value={newLevelId} onValueChange={setNewLevelId} required>
+                <SelectTrigger id="type-level">
+                  <SelectValue placeholder="Choose level…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tiers
+                  {levels
                     .filter((t) => t.active)
                     .map((t) => (
                       <SelectItem key={t.id} value={String(t.id)}>
-                        Tier {t.tierNumber} — {t.label}
+                        Level {t.levelNumber} — {t.label}
                       </SelectItem>
                     ))}
                 </SelectContent>
@@ -502,7 +502,7 @@ export default function AdminTypesPage() {
           <DialogHeader>
             <DialogTitle>Edit Document Type {editingType?.code}</DialogTitle>
             <DialogDescription>
-              Update the description or assigned tier for {editingType?.code}.
+              Update the description or assigned level for {editingType?.code}.
             </DialogDescription>
           </DialogHeader>
           <form onSubmit={handleEditSubmit} className="flex flex-col gap-4">
@@ -517,17 +517,17 @@ export default function AdminTypesPage() {
               />
             </div>
             <div className="flex flex-col gap-1.5">
-              <Label htmlFor="edit-type-tier">Tier</Label>
-              <Select value={editTierId} onValueChange={setEditTierId} required>
-                <SelectTrigger id="edit-type-tier">
-                  <SelectValue placeholder="Choose tier…" />
+              <Label htmlFor="edit-type-level">Level</Label>
+              <Select value={editLevelId} onValueChange={setEditLevelId} required>
+                <SelectTrigger id="edit-type-level">
+                  <SelectValue placeholder="Choose level…" />
                 </SelectTrigger>
                 <SelectContent>
-                  {tiers
+                  {levels
                     .filter((t) => t.active)
                     .map((t) => (
                       <SelectItem key={t.id} value={String(t.id)}>
-                        Tier {t.tierNumber} — {t.label}
+                        Level {t.levelNumber} — {t.label}
                       </SelectItem>
                     ))}
                 </SelectContent>

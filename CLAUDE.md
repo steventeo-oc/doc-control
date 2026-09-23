@@ -56,7 +56,7 @@
   **implemented 2026-09-11 exactly per the approved plan-back**
   (`Phase2e_Watermarking_Design_PlanBack.md`): downloads of renditionable
   versions return a stamped PDF rendition — mark text by version status
-  (current → "UNCONTROLLED IF PRINTED", plus SUPERSEDED / DRAFT / APPROVED
+  (current → "RELEASED — UNCONTROLLED IF PRINTED", plus SUPERSEDED / DRAFT / APPROVED
   marks), applied per request and never stored. PDF originals stamp
   directly via PDFBox 3.x; office types convert in the **Gotenberg
   sidecar** (`gotenberg/gotenberg:8-libreoffice`, added to compose,

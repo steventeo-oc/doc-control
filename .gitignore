@@ -38,6 +38,9 @@ replay_pid*
 *.iml
 .vscode/
 
+# WorkBuddy AI project data (notes, memory)
+.workbuddy-ai/
+
 # OS
 Thumbs.db
 .DS_Store

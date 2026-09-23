@@ -7,5 +7,5 @@ import jakarta.validation.constraints.Size;
 public record CreateDocumentTypeRequest(
         @NotBlank @Size(max = 32) String code,
         @NotBlank @Size(max = 255) String label,
-        @NotNull Integer tierId) {
+        @NotNull Integer levelId) {
 }

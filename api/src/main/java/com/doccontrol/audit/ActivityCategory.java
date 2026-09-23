@@ -5,7 +5,7 @@ import java.util.List;
 /**
  * The four human-relevant activity categories (activity plan-back F3),
  * mapped from the entity types actually written. Lookup-config rows
- * (document_type, document_tier) belong to no category: they surface only
+ * (document_type, document_level) belong to no category: they surface only
  * in the all-categories view and the admin CSV export.
  */
 public enum ActivityCategory {

@@ -23,7 +23,7 @@ import type {
   Department,
   DocumentNumberPreview,
   DocumentSummary,
-  DocumentTier,
+  DocumentLevel,
   DocumentType,
   DocumentsPage as PageResult,
 } from '../api/types';
@@ -81,8 +81,8 @@ export default function DepartmentDetailPage() {
   const [docSearch, setDocSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState('ALL');
   const [typeFilter, setTypeFilter] = useState('ALL');
-  const [tierFilter, setTierFilter] = useState('ALL');
-  const [tiers, setTiers] = useState<DocumentTier[]>([]);
+  const [levelFilter, setLevelFilter] = useState('ALL');
+  const [levels, setLevels] = useState<DocumentLevel[]>([]);
   const [sortField, setSortField] = useState<'number' | 'name' | 'status' | 'updated'>('updated');
   const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc');
   const [page, setPage] = useState(0);
@@ -131,10 +131,10 @@ export default function DepartmentDetailPage() {
     loadDepartment();
   }, [loadDepartment]);
 
-  // Load Document Types and Tiers
+  // Load Document Types and Levels
   useEffect(() => {
     lookupApi.types(true).then(setTypes).catch(() => undefined);
-    lookupApi.tiers(true).then(setTiers).catch(() => undefined);
+    lookupApi.levels(true).then(setLevels).catch(() => undefined);
   }, []);
 
   // Calculate Next Document Number Preview
@@ -168,7 +168,7 @@ export default function DepartmentDetailPage() {
     documentApi
       .list({
         department: department.code,
-        tier: tierFilter !== 'ALL' ? Number(tierFilter) : undefined,
+        level: levelFilter !== 'ALL' ? Number(levelFilter) : undefined,
         type: typeFilter !== 'ALL' ? typeFilter : undefined,
         status: statusFilter !== 'ALL' ? statusFilter : undefined,
         q: docSearch.trim() || undefined,
@@ -179,7 +179,7 @@ export default function DepartmentDetailPage() {
       .then(setDocs)
       .catch(() => setDocs(null))
       .finally(() => setLoadingDocs(false));
-  }, [department, docSearch, statusFilter, typeFilter, tierFilter, sortField, sortOrder, page, pageSize]);
+  }, [department, docSearch, statusFilter, typeFilter, levelFilter, sortField, sortOrder, page, pageSize]);
 
   useEffect(() => {
     loadDocuments();
@@ -216,14 +216,14 @@ export default function DepartmentDetailPage() {
 
   // Clear Filters Handler
   const hasActiveFilters = Boolean(
-    docSearch.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL' || tierFilter !== 'ALL'
+    docSearch.trim() || statusFilter !== 'ALL' || typeFilter !== 'ALL' || levelFilter !== 'ALL'
   );
 
   function handleClearFilters() {
     setDocSearch('');
     setStatusFilter('ALL');
     setTypeFilter('ALL');
-    setTierFilter('ALL');
+    setLevelFilter('ALL');
     setPage(0);
   }
 
@@ -270,8 +270,8 @@ export default function DepartmentDetailPage() {
     setPage(0);
   }
 
-  function handleTierChange(val: string) {
-    setTierFilter(val);
+  function handleLevelChange(val: string) {
+    setLevelFilter(val);
     setPage(0);
   }
 
@@ -566,17 +566,17 @@ export default function DepartmentDetailPage() {
                   className="pl-8 text-xs h-8 rounded-lg border-border/40"
                 />
               </div>
-              <Select value={tierFilter} onValueChange={handleTierChange}>
+              <Select value={levelFilter} onValueChange={handleLevelChange}>
                 <SelectTrigger className="h-8 w-28 text-xs rounded-lg border-border/40">
-                  <SelectValue placeholder="Tier" />
+                  <SelectValue placeholder="Level" />
                 </SelectTrigger>
                 <SelectContent className="rounded-xl border-border/40 shadow-xl">
                   <SelectItem value="ALL" className="text-xs">
-                    All Tiers
+                    All Levels
                   </SelectItem>
-                  {tiers.map((t) => (
-                    <SelectItem key={t.id} value={String(t.tierNumber)} className="text-xs">
-                      Tier {t.tierNumber} ({t.label})
+                  {levels.map((t) => (
+                    <SelectItem key={t.id} value={String(t.levelNumber)} className="text-xs">
+                      Level {t.levelNumber} ({t.label})
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -672,7 +672,7 @@ export default function DepartmentDetailPage() {
                     </div>
                   </TableHead>
                   <TableHead className="w-28 font-semibold">Progress</TableHead>
-                  <TableHead className="w-20 font-semibold">Tier</TableHead>
+                  <TableHead className="w-20 font-semibold">Level</TableHead>
                   <TableHead className="w-20 font-semibold">Type</TableHead>
                   <TableHead className="w-28 font-semibold">Owner</TableHead>
                   <TableHead
@@ -732,12 +732,12 @@ export default function DepartmentDetailPage() {
                     <TableCell>
                       {doc.revisionStatus === 'IN_REVIEW' && (
                         <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-blue-500/15 text-blue-700 dark:text-blue-400 border border-blue-500/30 whitespace-nowrap">
-                          v{doc.revisionVersionNumber} in review
+                          Rev {doc.revisionVersionNumber} in review
                         </span>
                       )}
                       {doc.revisionStatus === 'DRAFT' && (
                         <span className="inline-flex items-center rounded-md px-2 py-0.5 text-xs font-semibold bg-amber-500/15 text-amber-700 dark:text-amber-400 border border-amber-500/30 whitespace-nowrap">
-                          v{doc.revisionVersionNumber} draft
+                          Rev {doc.revisionVersionNumber} draft
                         </span>
                       )}
                       {doc.revisionStatus === 'RE_APPROVAL' && (
@@ -750,9 +750,9 @@ export default function DepartmentDetailPage() {
                       )}
                     </TableCell>
                     <TableCell>
-                      {doc.tierNumber ? (
-                        <Badge variant="outline" className="text-[11px] font-semibold whitespace-nowrap" title={doc.tierLabel ?? undefined}>
-                          Tier {doc.tierNumber}
+                      {doc.levelNumber ? (
+                        <Badge variant="outline" className="text-[11px] font-semibold whitespace-nowrap" title={doc.levelLabel ?? undefined}>
+                          Level {doc.levelNumber}
                         </Badge>
                       ) : (
                         <span className="text-xs text-muted-foreground">—</span>

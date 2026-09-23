@@ -15,18 +15,18 @@ import java.util.Map;
 public class DocumentTypeService {
 
     private final DocumentTypeRepository documentTypeRepository;
-    private final DocumentTierRepository documentTierRepository;
+    private final DocumentLevelRepository documentLevelRepository;
     private final DocumentRepository documentRepository;
     private final DocumentSequenceCounterRepository documentSequenceCounterRepository;
     private final AuditService auditService;
 
     public DocumentTypeService(DocumentTypeRepository documentTypeRepository,
-                               DocumentTierRepository documentTierRepository,
+                               DocumentLevelRepository documentLevelRepository,
                                DocumentRepository documentRepository,
                                DocumentSequenceCounterRepository documentSequenceCounterRepository,
                                AuditService auditService) {
         this.documentTypeRepository = documentTypeRepository;
-        this.documentTierRepository = documentTierRepository;
+        this.documentLevelRepository = documentLevelRepository;
         this.documentRepository = documentRepository;
         this.documentSequenceCounterRepository = documentSequenceCounterRepository;
         this.auditService = auditService;
@@ -34,8 +34,8 @@ public class DocumentTypeService {
 
     @Transactional
     public DocumentTypeDto create(CreateDocumentTypeRequest request) {
-        DocumentTier tier = documentTierRepository.findById(request.tierId())
-                .orElseThrow(() -> new NotFoundException("Document tier " + request.tierId() + " not found."));
+        DocumentLevel level = documentLevelRepository.findById(request.levelId())
+                .orElseThrow(() -> new NotFoundException("Document level " + request.levelId() + " not found."));
 
         if (documentTypeRepository.existsByCode(request.code())) {
             throw new ConflictException("Document type code '" + request.code() + "' already exists.");
@@ -44,12 +44,12 @@ public class DocumentTypeService {
         DocumentType type = new DocumentType();
         type.setCode(request.code());
         type.setLabel(request.label());
-        type.setTier(tier);
+        type.setLevel(level);
         type.setActive(true);
         documentTypeRepository.save(type);
 
         auditService.record("document_type", type.getId(), "created",
-                Map.of("code", type.getCode(), "label", type.getLabel(), "tier_id", tier.getId()));
+                Map.of("code", type.getCode(), "label", type.getLabel(), "level_id", level.getId()));
 
         return DocumentTypeDto.from(type);
     }
@@ -66,12 +66,12 @@ public class DocumentTypeService {
             after.put("label", request.label());
             type.setLabel(request.label());
         }
-        if (request.tierId() != null && !request.tierId().equals(type.getTier().getId())) {
-            DocumentTier tier = documentTierRepository.findById(request.tierId())
-                    .orElseThrow(() -> new NotFoundException("Document tier " + request.tierId() + " not found."));
-            before.put("tier_id", type.getTier().getId());
-            after.put("tier_id", tier.getId());
-            type.setTier(tier);
+        if (request.levelId() != null && !request.levelId().equals(type.getLevel().getId())) {
+            DocumentLevel level = documentLevelRepository.findById(request.levelId())
+                    .orElseThrow(() -> new NotFoundException("Document level " + request.levelId() + " not found."));
+            before.put("level_id", type.getLevel().getId());
+            after.put("level_id", level.getId());
+            type.setLevel(level);
         }
         if (request.active() != null && request.active() != type.isActive()) {
             before.put("active", type.isActive());

@@ -68,7 +68,7 @@ history live in `document_version`, not here.
 | department_id | int, FK → department | |
 | sequence_number | int | the numeric part of the ID |
 | name | text | descriptive name (replaces the unused "Title" field seen in current system — this becomes the one authoritative name field) |
-| status | enum | `draft`, `in_review`, `approved`, `released`, `superseded`, `obsolete` |
+| status | enum | `draft`, `in_review`, `approved`, `released`, `obsolete` |
 | current_version_id | int, FK → document_version, nullable | points to the live version |
 | owner_user_id | int, FK → user | who owns/maintains this document |
 | created_at | timestamp | |

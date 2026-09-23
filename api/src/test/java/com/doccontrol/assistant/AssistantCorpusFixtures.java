@@ -20,7 +20,7 @@ import java.util.Map;
  * One document per lifecycle state, shared by the two assistant contract tests. Promotions and deferred
  * approvals go through the same {@link DocumentService} calls the approval engine and the daily job use, so the
  * fixtures follow the pointer rules the application really applies; the states with no service entry point
- * (draft, in review, superseded, obsolete, trashed) are set directly on the entity.
+ * (draft, in review, obsolete, trashed) are set directly on the entity.
  *
  * Every document number starts with {@link #prefix}, so a test can ignore rows it did not create.
  */
@@ -98,8 +98,7 @@ final class AssistantCorpusFixtures {
         version(inReview, 1, DocumentVersionStatus.DRAFT);
         cases.put("in-review", new Case(inReview, null));
 
-        // retired: these keep a pointer, so it is the status that has to exclude them
-        cases.put("superseded", retired("superseded", DocumentStatus.SUPERSEDED));
+        // retired: this keeps a pointer, so it is the status that has to exclude it
         cases.put("obsolete", retired("obsolete", DocumentStatus.OBSOLETE));
 
         // trashed while released

@@ -49,8 +49,7 @@ public class DocumentService {
     /**
      * Statuses visible to every authenticated user under the provisional
      * visibility rule (CLAUDE.md schema decisions). Everything else — draft,
-     * in_review, and by conservative extension superseded/obsolete — is
-     * restricted to owner and admins. "Assigned reviewers" join in Sprint 3
+     * in_review, and obsolete — is restricted to owner and admins. "Assigned reviewers" join in Sprint 3
      * when workflow tasks exist.
      */
     private static final List<DocumentStatus> PUBLIC_STATUSES =

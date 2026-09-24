@@ -22,14 +22,13 @@ spring:
 
   servlet:
     multipart:
-      # DECIDED (owner, 2026-09-14): large CAD/DWG drawings are in scope, so
-      # the ceiling is 100MB max-file-size / 110MB max-request-size — the
-      # go-live checklist item is resolved without measuring the old
-      # Alfresco archive. Memory is not the constraint — Spring spools
-      # uploads to temp files and the MinIO SDK streams them — so the limit
-      # is abuse/disk hygiene.
-      max-file-size: 100MB
-      max-request-size: 110MB
+      # DECIDED (owner, 2026-09-14, bumped to 250MB 2026-09-24): large CAD/DWG
+      # drawings and photo-heavy SOPs/WIs are in scope, so the ceiling is
+      # 250MB max-file-size / 275MB max-request-size. Memory is not the constraint
+      # — Spring spools uploads to temp files and the MinIO SDK streams them — so
+      # the limit is abuse/disk hygiene.
+      max-file-size: 250MB
+      max-request-size: 275MB
 
 doccontrol:
   auth:
@@ -90,7 +89,7 @@ doccontrol:
     # pending owner confirmation whether real SOPs need them.
     enabled: true
     rendition-url: ${DOCCONTROL_WATERMARK_RENDITION_URL:http://gotenberg:3000}
-    rendition-timeout-seconds: 30
+    rendition-timeout-seconds: 60
     text:
       current: "RELEASED — UNCONTROLLED IF PRINTED"
       superseded: "SUPERSEDED — DO NOT USE"

@@ -141,7 +141,7 @@
   `.env` (never in tracked files; `wsl -u root` still avoids needing it).
 - **In progress / next**: nothing mid-flight. 2026-09-14 session (after
   the nav restructure): two go-live checklist items resolved — the
-  upload limit decided by the owner at **100MB/110MB** now in
+  upload limit decided by the owner at **250MB/275MB** (bumped 2026-09-24) now in
   `application.yml`, and **scheduled sweep runs write the same
   trigger-level `daily_sweep` audit row as manual runs** (System user,
   `triggered_by: scheduled`; 106 tests green). The **Dashboard landing
@@ -1364,7 +1364,7 @@ deployment, even if they don't block Sprint 1 development itself:
 - [ ] **Storage config is a deployment-time step** — *(upload limit
   RESOLVED 2026-09-14: the owner decided large CAD/DWG drawings are in
   scope without measuring the old archive; `application.yml` now sets
-  100MB max-file-size / 110MB max-request-size.)* Remaining: override
+  250MB max-file-size / 275MB max-request-size.)* Remaining: override
   MinIO credentials at deployment (`MINIO_ROOT_*` for the container,
   `DOCCONTROL_STORAGE_ACCESS_KEY/SECRET_KEY` for the api) and **create a
   dedicated MinIO user** for the api with read/write on the `doccontrol`

@@ -7,8 +7,12 @@ import com.doccontrol.common.domain.PersistentEnums;
 import com.doccontrol.common.web.ConflictException;
 import com.doccontrol.common.web.ForbiddenException;
 import com.doccontrol.common.web.NotFoundException;
+import com.doccontrol.config.AppProperties;
 import com.doccontrol.config.ReviewProperties;
 import com.doccontrol.notification.NotificationSender;
+import com.doccontrol.notification.NotificationTemplateService;
+import com.doccontrol.notification.NotificationTemplateService.BadgeStyle;
+import com.doccontrol.notification.NotificationTemplateService.EmailContent;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.lookup.Department;
@@ -71,6 +75,8 @@ public class DocumentService {
     private final com.doccontrol.audit.AuditLogRepository auditLogRepository;
     private final UserDocumentFavoriteRepository userDocumentFavoriteRepository;
     private final com.doccontrol.workflow.WorkflowInstanceRepository workflowInstanceRepository;
+    private final NotificationTemplateService templateService;
+    private final AppProperties appProperties;
 
     public DocumentService(DocumentRepository documentRepository,
                            DocumentVersionRepository documentVersionRepository,
@@ -87,7 +93,9 @@ public class DocumentService {
                            NotificationLogRepository notificationLogRepository,
                            com.doccontrol.audit.AuditLogRepository auditLogRepository,
                            UserDocumentFavoriteRepository userDocumentFavoriteRepository,
-                           com.doccontrol.workflow.WorkflowInstanceRepository workflowInstanceRepository) {
+                           com.doccontrol.workflow.WorkflowInstanceRepository workflowInstanceRepository,
+                           NotificationTemplateService templateService,
+                           AppProperties appProperties) {
         this.documentRepository = documentRepository;
         this.documentVersionRepository = documentVersionRepository;
         this.documentTypeRepository = documentTypeRepository;
@@ -104,6 +112,8 @@ public class DocumentService {
         this.auditLogRepository = auditLogRepository;
         this.userDocumentFavoriteRepository = userDocumentFavoriteRepository;
         this.workflowInstanceRepository = workflowInstanceRepository;
+        this.templateService = templateService;
+        this.appProperties = appProperties;
     }
 
     private List<String> reviewerRoleNames() {
@@ -703,7 +713,7 @@ public class DocumentService {
                                 "version_number", stale.getVersionNumber(),
                                 "effective_at", String.valueOf(stale.getEffectiveAt())),
                         document.getDepartment());
-                notifyOwnerOfSupersededPending(document, stale);
+                notifyOwnerOfObsoletePending(document, stale);
             }
         }
 
@@ -756,24 +766,50 @@ public class DocumentService {
                 "effective_at", effectiveDate.toString()), document.getDepartment());
     }
 
-    private void notifyOwnerOfSupersededPending(Document document, DocumentVersion retired) {
+    private void notifyOwnerOfObsoletePending(Document document, DocumentVersion retired) {
         User owner = document.getOwner();
-        String subject = "Pending approval superseded: " + document.getDocumentNumber()
+        String subject = "Pending approval rendered obsolete: " + document.getDocumentNumber()
                 + " Rev " + retired.getVersionNumber();
-        String body = "Revision " + retired.getVersionNumber() + " was approved with effect from "
+
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("Document", document.getDocumentNumber());
+        details.put("Title", document.getName());
+        details.put("Obsolete Revision", "Rev " + retired.getVersionNumber());
+        if (retired.getEffectiveAt() != null) {
+            details.put("Originally Scheduled For", retired.getEffectiveAt().toString());
+        }
+        if (document.getDepartment() != null) {
+            details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+        }
+
+        String leadParagraph = "Revision " + retired.getVersionNumber() + " was approved with effect from "
                 + retired.getEffectiveAt() + " but a newer approval outcome was recorded first, "
-                + "so it never took effect. No action needed.";
-        notificationSender.send(owner, subject, body);
+                + "rendering this pending revision obsolete before it took effect. No action needed.";
+
+        EmailContent content = templateService.render(
+                owner != null ? owner.getName() : null,
+                "Obsolete",
+                BadgeStyle.SLATE,
+                "Pending Approval Rendered Obsolete",
+                leadParagraph,
+                details,
+                null,
+                null,
+                "View Document in DocControl",
+                appProperties.baseUrl() + "/documents/" + document.getId()
+        );
+
+        notificationSender.sendHtml(owner, subject, content.textBody(), content.htmlBody());
 
         NotificationLog entry = new NotificationLog();
-        entry.setKind("PENDING_SUPERSEDED");
+        entry.setKind("PENDING_OBSOLETE");
         entry.setDocument(document);
         entry.setDocumentVersion(retired);
-        entry.setDedupKey("pending-superseded:version=" + retired.getId());
+        entry.setDedupKey("pending-obsolete:version=" + retired.getId());
         entry.setRecipient(owner);
         entry.setSubject(subject);
         entry.setNotificationDate(java.time.LocalDate.now());
-        entry.setChannel("log");
+        entry.setChannel(notificationSender.channel());
         notificationLogRepository.save(entry);
     }
 
@@ -793,18 +829,45 @@ public class DocumentService {
         String dedupKey = "change:version=" + version.getId();
         String subject = "Document changed: " + document.getDocumentNumber()
                 + " Rev " + version.getVersionNumber() + " now in effect";
-        String body = document.getDocumentNumber() + " \"" + document.getName()
-                + "\" — revision " + version.getVersionNumber()
-                + " is now in effect (effective " + version.getEffectiveAt() + ")."
-                + (version.getChangeReference() == null || version.getChangeReference().isBlank()
-                        ? "" : "\nChange reference: " + version.getChangeReference());
+
+        Map<String, String> details = new LinkedHashMap<>();
+        details.put("Document", document.getDocumentNumber());
+        details.put("Title", document.getName());
+        details.put("Revision", "Rev " + version.getVersionNumber());
+        if (version.getEffectiveAt() != null) {
+            details.put("Effective Date", version.getEffectiveAt().toString());
+        }
+        if (document.getDepartment() != null) {
+            details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+        }
+        if (version.getChangeReference() != null && !version.getChangeReference().isBlank()) {
+            details.put("Change reference", version.getChangeReference());
+        }
+
+        String leadParagraph = document.getDocumentNumber() + " (\"" + document.getName()
+                + "\") — revision " + version.getVersionNumber()
+                + " is now in effect (effective " + version.getEffectiveAt() + ").";
+
         for (User member : userRepository.findActiveByDepartmentId(document.getDepartment().getId())) {
             if (notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
                     "DOCUMENT_CHANGED", dedupKey, member.getId())) {
                 continue;
             }
             try {
-                notificationSender.send(member, subject, body);
+                EmailContent content = templateService.render(
+                        member.getName(),
+                        "Now In Effect",
+                        BadgeStyle.BLUE,
+                        "Document Revision In Effect",
+                        leadParagraph,
+                        details,
+                        null,
+                        null,
+                        "View Document in DocControl",
+                        appProperties.baseUrl() + "/documents/" + document.getId()
+                );
+
+                notificationSender.sendHtml(member, subject, content.textBody(), content.htmlBody());
 
                 NotificationLog entry = new NotificationLog();
                 entry.setKind("DOCUMENT_CHANGED");

@@ -6,6 +6,7 @@ import com.doccontrol.audit.NotificationLog;
 import com.doccontrol.audit.NotificationLogRepository;
 import com.doccontrol.audit.SystemActor;
 import com.doccontrol.config.AcknowledgmentProperties;
+import com.doccontrol.config.AppProperties;
 import com.doccontrol.config.ReviewProperties;
 import com.doccontrol.config.WorkflowProperties;
 import com.doccontrol.document.Document;
@@ -18,6 +19,9 @@ import com.doccontrol.document.DocumentVersionStatus;
 import com.doccontrol.identity.User;
 import com.doccontrol.identity.UserRepository;
 import com.doccontrol.notification.NotificationSender;
+import com.doccontrol.notification.NotificationTemplateService;
+import com.doccontrol.notification.NotificationTemplateService.BadgeStyle;
+import com.doccontrol.notification.NotificationTemplateService.EmailContent;
 import org.flowable.engine.TaskService;
 import org.flowable.task.api.Task;
 import org.slf4j.Logger;
@@ -31,6 +35,7 @@ import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.time.ZoneId;
 import java.util.ArrayList;
+import java.util.LinkedHashMap;
 import java.util.List;
 import java.util.Map;
 
@@ -84,6 +89,8 @@ public class WorkflowNotificationJob {
     private final AcknowledgmentService acknowledgmentService;
     private final TransactionTemplate transactionTemplate;
     private final AuditService auditService;
+    private final NotificationTemplateService templateService;
+    private final AppProperties appProperties;
 
     public WorkflowNotificationJob(TaskService taskService,
                                    WorkflowInstanceRepository instanceRepository,
@@ -99,7 +106,9 @@ public class WorkflowNotificationJob {
                                    SystemActor systemActor,
                                    AcknowledgmentService acknowledgmentService,
                                    TransactionTemplate transactionTemplate,
-                                   AuditService auditService) {
+                                   AuditService auditService,
+                                   NotificationTemplateService templateService,
+                                   AppProperties appProperties) {
         this.taskService = taskService;
         this.instanceRepository = instanceRepository;
         this.userRepository = userRepository;
@@ -115,6 +124,8 @@ public class WorkflowNotificationJob {
         this.acknowledgmentService = acknowledgmentService;
         this.transactionTemplate = transactionTemplate;
         this.auditService = auditService;
+        this.templateService = templateService;
+        this.appProperties = appProperties;
     }
 
     @Scheduled(cron = "${doccontrol.workflow.reminder-cron:0 0 7 * * *}")
@@ -254,16 +265,69 @@ public class WorkflowNotificationJob {
             String dedupKey = "review-overdue:doc=" + document.getId() + ":due=" + due;
             List<User> targets = new ArrayList<>(List.of(document.getOwner()));
             targets.addAll(userRepository.findActiveAdmins());
+            String subject = "Overdue review: " + document.getDocumentNumber();
+            String leadParagraph = "The periodic review for " + document.getDocumentNumber()
+                    + " (\"" + document.getName() + "\") was due " + due
+                    + " and is now " + overdueDays + " business day(s) overdue. Clear it by completing a review re-approval.";
+
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("Document", document.getDocumentNumber());
+            details.put("Title", document.getName());
+            if (document.getCurrentVersion() != null) {
+                details.put("Current Revision", "Rev " + document.getCurrentVersion().getVersionNumber());
+            }
+            if (document.getDepartment() != null) {
+                details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+            }
+            details.put("Review Due Date", due.toString());
+            details.put("Overdue", overdueDays + " business day(s)");
+
             for (User recipient : targets) {
+                EmailContent content = templateService.render(
+                        recipient.getName(),
+                        "Review Overdue",
+                        BadgeStyle.RED,
+                        "Periodic Document Review Overdue",
+                        leadParagraph,
+                        details,
+                        null,
+                        null,
+                        "View Document in DocControl",
+                        appProperties.baseUrl() + "/documents/" + document.getId()
+                );
                 notifyDocument(document, null, "REVIEW_OVERDUE", recipient, today, dedupKey,
-                        "Overdue review: " + document.getDocumentNumber(),
-                        "The periodic review was due " + due + " and is now " + overdueDays
-                                + " business day(s) overdue. Clear it by completing a review re-approval.");
+                        subject, content);
             }
         } else if (overdueDays == 0 && untilDue <= reviewProperties.reminderBeforeDays()) {
+            String subject = "Review due soon: " + document.getDocumentNumber();
+            String leadParagraph = "The periodic review for " + document.getDocumentNumber()
+                    + " (\"" + document.getName() + "\") is due " + due + ".";
+
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("Document", document.getDocumentNumber());
+            details.put("Title", document.getName());
+            if (document.getCurrentVersion() != null) {
+                details.put("Current Revision", "Rev " + document.getCurrentVersion().getVersionNumber());
+            }
+            if (document.getDepartment() != null) {
+                details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+            }
+            details.put("Review Due Date", due.toString());
+
+            EmailContent content = templateService.render(
+                    document.getOwner() != null ? document.getOwner().getName() : null,
+                    "Review Due",
+                    BadgeStyle.AMBER,
+                    "Periodic Document Review Due Soon",
+                    leadParagraph,
+                    details,
+                    null,
+                    null,
+                    "View Document in DocControl",
+                    appProperties.baseUrl() + "/documents/" + document.getId()
+            );
             notifyDocument(document, null, "REVIEW_DUE", document.getOwner(), today, null,
-                    "Review due soon: " + document.getDocumentNumber(),
-                    "The periodic review is due " + due + ".");
+                    subject, content);
         }
     }
 
@@ -305,12 +369,35 @@ public class WorkflowNotificationJob {
         int overdueDays = BusinessDays.overdueBusinessDays(closesAt, today);
 
         if (overdueDays == 0 && untilClose <= acknowledgmentProperties.reminderBeforeDays()) {
+            String subject = "Acknowledgment due soon: " + document.getDocumentNumber();
+            String leadParagraph = "Please read and acknowledge " + document.getDocumentNumber()
+                    + " (\"" + document.getName() + "\") Rev " + version.getVersionNumber()
+                    + " — the acknowledgment window closes " + closesAt + ".";
+
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("Document", document.getDocumentNumber());
+            details.put("Title", document.getName());
+            details.put("Revision", "Rev " + version.getVersionNumber());
+            if (document.getDepartment() != null) {
+                details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+            }
+            details.put("Window Closes", closesAt.toString());
+
             for (User member : outstanding) {
+                EmailContent content = templateService.render(
+                        member.getName(),
+                        "Acknowledgment Due",
+                        BadgeStyle.CYAN,
+                        "Read & Acknowledge Document",
+                        leadParagraph,
+                        details,
+                        null,
+                        null,
+                        "Acknowledge in DocControl",
+                        appProperties.baseUrl() + "/tasks?view=acknowledgments"
+                );
                 notifyDocument(document, version, "ACK_REMINDER", member, today, null,
-                        "Acknowledgment due soon: " + document.getDocumentNumber(),
-                        "Please read and acknowledge " + document.getDocumentNumber()
-                                + " Rev " + version.getVersionNumber()
-                                + " — the acknowledgment window closes " + closesAt + ".");
+                        subject, content);
             }
         } else if (overdueDays >= acknowledgmentProperties.escalateAfterOverdueDays()) {
             String names = outstanding.stream()
@@ -319,14 +406,38 @@ public class WorkflowNotificationJob {
                     .orElse("");
             List<User> targets = new ArrayList<>(List.of(document.getOwner()));
             targets.addAll(userRepository.findActiveAdmins());
+            String subject = "Overdue acknowledgments: " + document.getDocumentNumber();
+            String leadParagraph = outstanding.size() + " department member(s) have not acknowledged Rev "
+                    + version.getVersionNumber() + ": " + names
+                    + ". The window closed " + closesAt
+                    + ". Record-only — acknowledgment is still open.";
+
+            Map<String, String> details = new LinkedHashMap<>();
+            details.put("Document", document.getDocumentNumber());
+            details.put("Title", document.getName());
+            details.put("Revision", "Rev " + version.getVersionNumber());
+            if (document.getDepartment() != null) {
+                details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+            }
+            details.put("Window Closed", closesAt.toString());
+            details.put("Pending Members", names);
+
             for (User recipient : targets) {
+                EmailContent content = templateService.render(
+                        recipient.getName(),
+                        "Overdue Notice",
+                        BadgeStyle.AMBER,
+                        "Document Acknowledgments Overdue",
+                        leadParagraph,
+                        details,
+                        null,
+                        null,
+                        "View Document in DocControl",
+                        appProperties.baseUrl() + "/documents/" + document.getId()
+                );
                 notifyDocument(document, version, "ACK_OVERDUE", recipient, today,
                         "ack-overdue:version=" + version.getId(),
-                        "Overdue acknowledgments: " + document.getDocumentNumber(),
-                        outstanding.size() + " department member(s) have not acknowledged Rev "
-                                + version.getVersionNumber() + ": " + names
-                                + ". The window closed " + closesAt
-                                + ". Record-only — acknowledgment is still open.");
+                        subject, content);
             }
         }
     }
@@ -366,7 +477,7 @@ public class WorkflowNotificationJob {
      */
     private void notifyDocument(Document document, DocumentVersion version, String kind, User recipient,
                                 LocalDate notificationDate, String dedupKey,
-                                String subject, String body) {
+                                String subject, EmailContent content) {
         boolean alreadySent;
         if (dedupKey != null) {
             alreadySent = notificationLogRepository.existsByKindAndDedupKeyAndRecipientId(
@@ -381,7 +492,7 @@ public class WorkflowNotificationJob {
         if (alreadySent) {
             return;
         }
-        notificationSender.send(recipient, subject, body);
+        notificationSender.sendHtml(recipient, subject, content.textBody(), content.htmlBody());
 
         NotificationLog entry = new NotificationLog();
         entry.setKind(kind);
@@ -417,20 +528,69 @@ public class WorkflowNotificationJob {
             if (overdueDays >= properties.escalateAfterOverdueDays()) {
                 List<User> escalationTargets = new ArrayList<>(List.of(document.getOwner()));
                 escalationTargets.addAll(userRepository.findActiveAdmins());
+                String subject = "Overdue approval: " + document.getDocumentNumber()
+                        + " Rev " + instance.getDocumentVersion().getVersionNumber()
+                        + " is " + overdueDays + " business day(s) overdue";
+                String leadParagraph = "The approval task assigned to " + reviewerNames(task)
+                        + " has not been completed. Please chase or delegate.";
+
+                Map<String, String> details = new LinkedHashMap<>();
+                details.put("Document", document.getDocumentNumber());
+                details.put("Title", document.getName());
+                details.put("Revision", "Rev " + instance.getDocumentVersion().getVersionNumber());
+                if (document.getDepartment() != null) {
+                    details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+                }
+                details.put("Assigned Reviewer", reviewerNames(task));
+                details.put("Due Date", dueDate.toString());
+                details.put("Overdue", overdueDays + " business day(s)");
+
                 for (User recipient : escalationTargets) {
-                    notify(instance, task, "ESCALATION", recipient, today,
-                            "Overdue approval: " + document.getDocumentNumber()
-                                    + " Rev " + instance.getDocumentVersion().getVersionNumber()
-                                    + " is " + overdueDays + " business day(s) overdue",
-                            "The approval task assigned to " + reviewerNames(task)
-                                    + " has not been completed. Please chase or delegate.");
+                    EmailContent content = templateService.render(
+                            recipient.getName(),
+                            "Overdue",
+                            BadgeStyle.RED,
+                            "Approval Task Overdue",
+                            leadParagraph,
+                            details,
+                            null,
+                            null,
+                            "Manage Tasks in DocControl",
+                            appProperties.baseUrl() + "/tasks"
+                    );
+                    notify(instance, task, "ESCALATION", recipient, today, subject, content);
                 }
             } else if (overdueDays == 0 && untilDue <= properties.reminderBeforeDays()) {
+                String subject = "Approval due soon: " + document.getDocumentNumber()
+                        + " Rev " + instance.getDocumentVersion().getVersionNumber();
+                String leadParagraph = "The approval review task for " + document.getDocumentNumber()
+                        + " (\"" + document.getName() + "\") Rev "
+                        + instance.getDocumentVersion().getVersionNumber()
+                        + " is due " + dueDate + ". Please review and complete your task.";
+
+                Map<String, String> details = new LinkedHashMap<>();
+                details.put("Document", document.getDocumentNumber());
+                details.put("Title", document.getName());
+                details.put("Revision", "Rev " + instance.getDocumentVersion().getVersionNumber());
+                if (document.getDepartment() != null) {
+                    details.put("Department", document.getDepartment().getCode() + " - " + document.getDepartment().getLabel());
+                }
+                details.put("Due Date", dueDate.toString());
+
                 for (User reviewer : reviewers) {
-                    notify(instance, task, "REMINDER", reviewer, today,
-                            "Approval due soon: " + document.getDocumentNumber()
-                                    + " Rev " + instance.getDocumentVersion().getVersionNumber(),
-                            "The approval task is due " + dueDate + ".");
+                    EmailContent content = templateService.render(
+                            reviewer.getName(),
+                            "Due Soon",
+                            BadgeStyle.AMBER,
+                            "Approval Task Due Soon",
+                            leadParagraph,
+                            details,
+                            null,
+                            null,
+                            "Review Task in DocControl",
+                            appProperties.baseUrl() + "/tasks"
+                    );
+                    notify(instance, task, "REMINDER", reviewer, today, subject, content);
                 }
             }
         }
@@ -455,7 +615,7 @@ public class WorkflowNotificationJob {
     }
 
     private void notify(WorkflowInstance instance, Task task, String kind, User recipient,
-                        LocalDate notificationDate, String subject, String body) {
+                        LocalDate notificationDate, String subject, EmailContent content) {
         boolean alreadySent = kind.equals("ESCALATION")
                 ? notificationLogRepository.existsByKindAndFlowableTaskIdAndRecipientId(
                         kind, task.getId(), recipient.getId())
@@ -464,7 +624,7 @@ public class WorkflowNotificationJob {
         if (alreadySent) {
             return;
         }
-        notificationSender.send(recipient, subject, body);
+        notificationSender.sendHtml(recipient, subject, content.textBody(), content.htmlBody());
 
         NotificationLog entry = new NotificationLog();
         entry.setKind(kind);

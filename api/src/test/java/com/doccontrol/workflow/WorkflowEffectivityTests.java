@@ -184,11 +184,12 @@ class WorkflowEffectivityTests {
 
         Integer ownerId = userId("effowner3@doccontrol.test");
         List<NotificationLog> notices = notificationLogRepository.findAll().stream()
-                .filter(entry -> "PENDING_SUPERSEDED".equals(entry.getKind()))
+                .filter(entry -> "PENDING_OBSOLETE".equals(entry.getKind()))
                 .filter(entry -> ownerId.equals(entry.getRecipient().getId()))
                 .toList();
         assertThat(notices).hasSize(1);
         assertThat(notices.get(0).getDocumentVersion().getId()).isEqualTo(v2Id);
+        assertThat(notices.get(0).getSubject()).contains("Pending approval rendered obsolete");
     }
 
     @Test
@@ -257,7 +258,7 @@ class WorkflowEffectivityTests {
         var item2 = objectMapper.readTree(res2.getResponse().getContentAsString()).path("content").get(0);
         assertThat(item2.path("status").asText()).isEqualTo("released");
         assertThat(item2.path("revisionStatus").asText()).isEqualTo("DRAFT");
-        assertThat(item2.path("revisionVersionNumber").asInt()).isEqualTo(2);
+        assertThat(item2.path("revisionVersionNumber").asInt()).isEqualTo(1);
 
         // After starting approval for v2: revisionStatus is IN_REVIEW
         Integer secondInstance = startApproval(owner, docId, v2Id, reviewer("effrev5@doccontrol.test"));
@@ -267,7 +268,7 @@ class WorkflowEffectivityTests {
         var item3 = objectMapper.readTree(res3.getResponse().getContentAsString()).path("content").get(0);
         assertThat(item3.path("status").asText()).isEqualTo("released");
         assertThat(item3.path("revisionStatus").asText()).isEqualTo("IN_REVIEW");
-        assertThat(item3.path("revisionVersionNumber").asInt()).isEqualTo(2);
+        assertThat(item3.path("revisionVersionNumber").asInt()).isEqualTo(1);
     }
 
     private DocumentDto getDocument(Integer id, MockHttpSession session) throws Exception {

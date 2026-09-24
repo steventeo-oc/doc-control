@@ -134,7 +134,7 @@ class WorkflowNotificationServiceTests {
 
         verify(notificationSender).sendHtml(
                 eq(reviewer1),
-                eq("Action Required: Approval for SOP-QA-001 v1"),
+                eq("Action Required: Approval for SOP-QA-001 Rev 1"),
                 any(),
                 any()
         );
@@ -171,7 +171,7 @@ class WorkflowNotificationServiceTests {
 
         verify(notificationSender, times(1)).sendHtml(
                 eq(owner),
-                eq("Approved: SOP-QA-001 v1 - Equipment Calibration"),
+                eq("Approved: SOP-QA-001 Rev 1 - Equipment Calibration"),
                 any(),
                 any()
         );
@@ -195,13 +195,13 @@ class WorkflowNotificationServiceTests {
         // Both owner and starter notified
         verify(notificationSender).sendHtml(
                 eq(owner),
-                eq("Changes Requested / Rejected: SOP-QA-001 v1 - Equipment Calibration"),
+                eq("Changes Requested / Rejected: SOP-QA-001 Rev 1 - Equipment Calibration"),
                 any(),
                 any()
         );
         verify(notificationSender).sendHtml(
                 eq(starter),
-                eq("Changes Requested / Rejected: SOP-QA-001 v1 - Equipment Calibration"),
+                eq("Changes Requested / Rejected: SOP-QA-001 Rev 1 - Equipment Calibration"),
                 any(),
                 any()
         );
@@ -223,13 +223,13 @@ class WorkflowNotificationServiceTests {
 
         verify(notificationSender).sendHtml(
                 eq(reviewer1),
-                eq("Workflow Cancelled: SOP-QA-001 v1 - Equipment Calibration"),
+                eq("Workflow Cancelled: SOP-QA-001 Rev 1 - Equipment Calibration"),
                 any(),
                 any()
         );
         verify(notificationSender).sendHtml(
                 eq(reviewer2),
-                eq("Workflow Cancelled: SOP-QA-001 v1 - Equipment Calibration"),
+                eq("Workflow Cancelled: SOP-QA-001 Rev 1 - Equipment Calibration"),
                 any(),
                 any()
         );

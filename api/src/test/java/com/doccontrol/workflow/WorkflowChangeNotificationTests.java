@@ -139,6 +139,14 @@ class WorkflowChangeNotificationTests {
             sentBodies.add(invocation.getArgument(2));
             return null;
         }).when(notificationSender).send(any(), any(), any());
+        doAnswer(invocation -> {
+            User recipient = invocation.getArgument(0);
+            if (blockRecipientSends && recipient.getEmail().startsWith("chgblock")) {
+                throw new IllegalStateException("simulated Graph outage");
+            }
+            sentBodies.add(invocation.getArgument(2));
+            return null;
+        }).when(notificationSender).sendHtml(any(), any(), any(), any());
     }
 
     @Test
@@ -266,7 +274,7 @@ class WorkflowChangeNotificationTests {
         // the captured v2 body carries the change reference (§2 content)
         String v2Subject = "Document changed: "
                 + documentRepository.findById(docId).orElseThrow().getDocumentNumber()
-                + " v2 now in effect";
+                + " Rev 1 now in effect";
         List<NotificationLog> v2Rows = changeNoticesFor(ownerId, v2Id);
         assertThat(v2Rows.get(0).getSubject()).isEqualTo(v2Subject);
         assertThat(sentBodies).anyMatch(body -> body.contains("Change reference: CR-042"));

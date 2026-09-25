@@ -113,7 +113,7 @@ public class WatermarkService {
     private String markTextFor(DocumentVersionStatus status) {
         return switch (status) {
             case CURRENT -> properties.text().current();
-            case SUPERSEDED -> properties.text().superseded();
+            case OBSOLETE -> properties.text().obsolete();
             case DRAFT -> properties.text().draft();
             case APPROVED -> properties.text().approved();
         };

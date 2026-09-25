@@ -41,7 +41,7 @@ class WatermarkServiceTests {
     private static final WatermarkProperties PROPS = new WatermarkProperties(
             true, "http://gotenberg:3000", 30,
             new WatermarkProperties.MarkTexts(
-                    "RELEASED — UNCONTROLLED IF PRINTED", "SUPERSEDED — DO NOT USE",
+                    "RELEASED — UNCONTROLLED IF PRINTED", "OBSOLETE — DO NOT USE",
                     "DRAFT — UNCONTROLLED", "APPROVED — NOT YET IN EFFECT"));
 
     private RenditionClient renditionClient;
@@ -76,7 +76,7 @@ class WatermarkServiceTests {
     @Test
     void markTextFollowsTheVersionStatusMatrix() throws Exception {
         assertMark(DocumentVersionStatus.CURRENT, "RELEASED — UNCONTROLLED IF PRINTED");
-        assertMark(DocumentVersionStatus.SUPERSEDED, "SUPERSEDED — DO NOT USE");
+        assertMark(DocumentVersionStatus.OBSOLETE, "OBSOLETE — DO NOT USE");
         assertMark(DocumentVersionStatus.DRAFT, "DRAFT — UNCONTROLLED");
         assertMark(DocumentVersionStatus.APPROVED, "APPROVED — NOT YET IN EFFECT");
     }

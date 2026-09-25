@@ -6,7 +6,7 @@ export type StatusBadgeKind =
   | 'released' | 'approved' | 'current'
   | 'draft'
   | 'in_review'
-  | 'superseded' | 'obsolete'
+  | 'obsolete'
   | 'reapproval'
   | 'overdue'
   | 'kind-approval' | 'kind-acknowledgment'
@@ -18,7 +18,6 @@ const STATUS_CLASSES: Record<Exclude<StatusBadgeKind, 'dept'>, string> = {
   current: 'bg-success/15 text-success',
   draft: 'bg-warning/15 text-warning',
   in_review: 'bg-info/15 text-info',
-  superseded: 'bg-destructive/10 text-destructive/70',
   obsolete: 'bg-destructive/10 text-destructive/70',
   reapproval: 'bg-violet-100 text-violet-700',
   overdue: 'bg-destructive/15 text-destructive',

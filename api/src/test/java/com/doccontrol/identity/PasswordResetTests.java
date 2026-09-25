@@ -110,7 +110,7 @@ class PasswordResetTests {
 
         List<PasswordResetToken> tokens = tokenRepository.findByUserIdAndUsedAtIsNull(user.getId());
         assertThat(tokens).hasSize(1);
-        assertThat(tokens.get(0).getTokenHash()).isEqualTo(firstHash); // unchanged, not superseded
+        assertThat(tokens.get(0).getTokenHash()).isEqualTo(firstHash); // unchanged, not replaced
     }
 
     @Test

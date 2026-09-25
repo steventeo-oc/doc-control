@@ -100,6 +100,9 @@ export interface DocumentVersion {
   uploadedByUserId: number;
   uploadedByName: string;
   uploadedAt: string;
+  approvedByUserId?: number | null;
+  approvedByName?: string | null;
+  approvedAt?: string | null;
 }
 
 export interface ReviewerCandidate {

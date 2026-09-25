@@ -56,7 +56,7 @@
   **implemented 2026-09-11 exactly per the approved plan-back**
   (`Phase2e_Watermarking_Design_PlanBack.md`): downloads of renditionable
   versions return a stamped PDF rendition — mark text by version status
-  (current → "RELEASED — UNCONTROLLED IF PRINTED", plus SUPERSEDED / DRAFT / APPROVED
+  (current → "RELEASED — UNCONTROLLED IF PRINTED", plus OBSOLETE / DRAFT / APPROVED
   marks), applied per request and never stored. PDF originals stamp
   directly via PDFBox 3.x; office types convert in the **Gotenberg
   sidecar** (`gotenberg/gotenberg:8-libreoffice`, added to compose,
@@ -922,7 +922,7 @@
     1. Migration V11 (`V11__user_document_favorites.sql`) and `UserDocumentFavorite` entity/repo added. Users can star/favorite documents (`POST/DELETE /documents/{id}/favorite`), with `isFavorite` flag on summaries and detail DTOs.
     2. `GET /documents/next-number-preview?typeId=...&departmentId=...` (`DocumentNumberPreviewDto`) provides real-time preview of the calculated next sequence number directly inside the New Document creation drawer.
     **Version Restore & Draft Discard (2026-09-17)**:
-    1. `POST /documents/{id}/versions/{versionId}/restore` (`restoreAsDraft`) allows reverting to prior superseded versions by creating a new draft copy carrying over the previous file content with an audited revision record.
+    1. `POST /documents/{id}/versions/{versionId}/restore` (`restoreAsDraft`) allows reverting to prior obsolete versions by creating a new draft copy carrying over the previous file content with an audited revision record.
     2. `DELETE /documents/{id}/versions/{versionId}` (`discardDraft`) safely deletes unapproved draft versions, cleaning associated workflow instances and notification logs without touching released versions.
     **Document Status vs. Progress Separation (2026-09-17)**:
     Clarified document lifecycle by separating the overloaded Status column into life-cycle **Status** (`Draft`, `Approved`, `Effective`, `Obsolete`) and an explicit **Undergoing Task / Progress** column (`In Approval Workflow`, `Pending My Review`, `Pending My Acknowledgment`, `Locked (Draft vN)`). Cleaned obsolete "superseded" dropdown filter.
@@ -1234,7 +1234,7 @@ the data model doc — resolved here so they're answered once, not re-asked.
   now moves via exactly two paths: an immediate approval completion, and
   the scheduled flip. On each release the newly-current version's status
   becomes `current` and the previously-current version becomes
-  `superseded`; an approved-not-yet-effective version is `approved`;
+  `obsolete`; an approved-not-yet-effective version is `approved`;
   versions never pointed to stay `draft`. (This deliberately deviates from
   the API spec's create-document example, which shows current_version_id
   set on a draft; that example predates this decision.)
@@ -1298,7 +1298,7 @@ flags F1–F8 as proposed). Key points:
   distinct from released; the pending version stays invisible to normal
   users because it is not the current version); the daily job flips it on
   the date. At most one pending-effective version per document (a newer
-  outcome retires the older one, audited `superseded_before_effective`).
+  outcome retires the older one, audited `obsoleted_before_effective`).
 - **Change/CAPA reference** (#12): Should priority — optional free-text
   `change_reference` on version upload, no validation.
 - **Acknowledgment (2d)**: department-scoped via live `user_department`
@@ -1319,7 +1319,7 @@ flags F1–F8 as proposed). Key points:
 - **Config**: `doccontrol.review.*` (12-month interval, 5/2 reminder and
   escalation thresholds) and `doccontrol.acknowledgment.*` (7/2/2), all
   env-overridable. Notifications: REVIEW_DUE, REVIEW_OVERDUE,
-  ACK_REMINDER, ACK_OVERDUE, PENDING_SUPERSEDED — all still via the
+  ACK_REMINDER, ACK_OVERDUE, PENDING_OBSOLETE — all still via the
   log-only sender until the Graph sender lands.
 
 Items discovered during implementation that must be resolved before a real

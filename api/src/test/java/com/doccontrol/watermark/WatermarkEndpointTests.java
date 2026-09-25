@@ -232,17 +232,17 @@ class WatermarkEndpointTests {
     }
 
     @Test
-    void supersededVersionDownloadsStampedAsSuperseded() throws Exception {
+    void obsoleteVersionDownloadsStampedAsObsolete() throws Exception {
         Department dept = tempDepartment("M6");
         createUser("wmowner6@doccontrol.test", dept);
         Integer docId = createDocumentWithFile("wmowner6@doccontrol.test", dept.getId(),
-                "Superseded SOP",
+                "Obsolete SOP",
                 new MockMultipartFile("file", "v1.pdf", "application/pdf",
                         onePagePdf("version one")));
         Integer v1Id = firstVersionId(docId);
         makeCurrentVersion(docId);
 
-        // v2 uploaded and approved immediately: v1 becomes superseded
+        // v2 uploaded and approved immediately: v1 becomes obsolete
         MvcResult upload = mockMvc.perform(multipart("/documents/{id}/versions", docId)
                         .file(new MockMultipartFile("file", "v2.pdf", "application/pdf",
                                 onePagePdf("version two")))
@@ -253,7 +253,7 @@ class WatermarkEndpointTests {
         Integer v2Id = objectMapper.readValue(upload.getResponse().getContentAsString(),
                 DocumentVersionDto.class).id();
         Document document = documentRepository.findById(docId).orElseThrow();
-        documentVersionRepository.findById(v1Id).orElseThrow().setStatus(DocumentVersionStatus.SUPERSEDED);
+        documentVersionRepository.findById(v1Id).orElseThrow().setStatus(DocumentVersionStatus.OBSOLETE);
         DocumentVersion v2 = documentVersionRepository.findById(v2Id).orElseThrow();
         v2.setStatus(DocumentVersionStatus.CURRENT);
         document.setCurrentVersion(v2);
@@ -264,7 +264,7 @@ class WatermarkEndpointTests {
                 .andExpect(status().isOk())
                 .andExpect(header().string(HttpHeaders.CONTENT_TYPE, "application/pdf"))
                 .andReturn().getResponse().getContentAsByteArray();
-        assertThat(pdfText(body)).contains("SUPERSEDED — DO NOT USE");
+        assertThat(pdfText(body)).contains("OBSOLETE — DO NOT USE");
         verifyNoInteractions(renditionClient);
     }
 

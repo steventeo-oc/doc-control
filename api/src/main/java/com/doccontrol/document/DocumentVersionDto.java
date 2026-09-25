@@ -15,7 +15,10 @@ public record DocumentVersionDto(
         String fileName,
         Integer uploadedByUserId,
         String uploadedByName,
-        LocalDateTime uploadedAt) {
+        LocalDateTime uploadedAt,
+        Integer approvedByUserId,
+        String approvedByName,
+        LocalDateTime approvedAt) {
 
     public static DocumentVersionDto from(DocumentVersion version) {
         String reference = version.getFileReference();
@@ -31,6 +34,9 @@ public record DocumentVersionDto(
                 fileName,
                 version.getUploadedBy().getId(),
                 version.getUploadedBy().getName(),
-                version.getUploadedAt());
+                version.getUploadedAt(),
+                version.getApprovedBy() != null ? version.getApprovedBy().getId() : null,
+                version.getApprovedBy() != null ? version.getApprovedBy().getName() : null,
+                version.getApprovedAt());
     }
 }

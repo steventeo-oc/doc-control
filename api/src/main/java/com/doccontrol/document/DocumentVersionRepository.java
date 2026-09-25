@@ -14,7 +14,11 @@ public interface DocumentVersionRepository extends JpaRepository<DocumentVersion
     @Query("SELECT MAX(v.versionNumber) FROM DocumentVersion v WHERE v.document.id = :documentId")
     Integer findMaxVersionNumber(@Param("documentId") Integer documentId);
 
-    List<DocumentVersion> findAllByDocumentIdOrderByVersionNumberAsc(Integer documentId);
+    @Query("SELECT v FROM DocumentVersion v " +
+            "JOIN FETCH v.uploadedBy " +
+            "LEFT JOIN FETCH v.approvedBy " +
+            "WHERE v.document.id = :documentId ORDER BY v.versionNumber ASC")
+    List<DocumentVersion> findAllByDocumentIdOrderByVersionNumberAsc(@Param("documentId") Integer documentId);
 
     List<DocumentVersion> findAllByDocumentIdAndStatus(Integer documentId, DocumentVersionStatus status);
 

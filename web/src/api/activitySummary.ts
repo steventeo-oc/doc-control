@@ -119,8 +119,9 @@ export function activitySummary(entry: AuditLogEntry): string {
     }
     case 'document_version/original_downloaded':
       return at('Downloaded original of');
+    case 'document_version/obsoleted_before_effective':
     case 'document_version/superseded_before_effective':
-      return at('Superseded a pending version of');
+      return at('Obsoleted a pending version of');
     case 'document_version/draft_discarded': {
       const ver = detail(entry, 'version_number');
       const label = doc ? `${doc}${ver ? ` v${ver}` : ''}` : (ver ? `v${ver}` : 'draft');

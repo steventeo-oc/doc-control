@@ -177,7 +177,7 @@ class WorkflowEffectivityTests {
         assertThat(document.getStatus()).isEqualTo(DocumentStatus.APPROVED);
         assertThat(document.getCurrentVersion().getId()).isEqualTo(v1Id);   // still the released v1
         assertThat(documentVersionRepository.findById(v2Id).orElseThrow().getStatus())
-                .isEqualTo(DocumentVersionStatus.SUPERSEDED);                // retired, never took effect
+                .isEqualTo(DocumentVersionStatus.OBSOLETE);                // retired, never took effect
         DocumentVersion v3 = documentVersionRepository.findById(v3Id).orElseThrow();
         assertThat(v3.getStatus()).isEqualTo(DocumentVersionStatus.APPROVED); // the only pending one
         assertThat(v3.getEffectiveAt()).isEqualTo(LocalDate.now().plusDays(20));

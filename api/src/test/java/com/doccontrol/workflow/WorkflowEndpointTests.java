@@ -170,7 +170,10 @@ class WorkflowEndpointTests {
                 .andExpect(jsonPath("$.status").value("released"))
                 .andExpect(jsonPath("$.currentVersionId").value(v1Id));
         mockMvc.perform(get("/documents/{id}/versions", docId).session(owner))
-                .andExpect(jsonPath("$[0].status").value("current"));
+                .andExpect(jsonPath("$[0].status").value("current"))
+                .andExpect(jsonPath("$[0].approvedByUserId").value(r2Id))
+                .andExpect(jsonPath("$[0].approvedByName").value("wfr2@doccontrol.test"))
+                .andExpect(jsonPath("$[0].approvedAt").isNotEmpty());
 
         assertThat(auditLogRepository.findAll())
                 .anyMatch(entry -> "workflow_instance".equals(entry.getEntityType())

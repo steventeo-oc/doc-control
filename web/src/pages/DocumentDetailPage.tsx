@@ -633,7 +633,7 @@ export default function DocumentDetailPage() {
               Locked (Draft Rev {draft.versionNumber} in progress)
             </span>
           ) : null}
-          {doc.deletedAt && <StatusBadge status="superseded">trashed</StatusBadge>}
+          {doc.deletedAt && <StatusBadge status="obsolete">trashed</StatusBadge>}
           {!doc.deletedAt && (
             <button
               type="button"
@@ -914,7 +914,7 @@ export default function DocumentDetailPage() {
                       Retire document
                     </Button>
                   )}
-                  {canManage && doc.status === 'draft' && !versions.some((v) => v.status === 'current' || v.status === 'superseded') && (
+                  {canManage && doc.status === 'draft' && !versions.some((v) => v.status === 'current' || v.status === 'obsolete') && (
                     <Button
                       type="button"
                       variant="destructive"
@@ -998,6 +998,7 @@ export default function DocumentDetailPage() {
                       <TableHead>Change reference</TableHead>
                       <TableHead>Uploaded by</TableHead>
                       <TableHead>At</TableHead>
+                      <TableHead>Approved by</TableHead>
                       <TableHead />
                     </TableRow>
                   </TableHeader>
@@ -1015,6 +1016,20 @@ export default function DocumentDetailPage() {
                         <TableCell>{version.uploadedByName}</TableCell>
                         <TableCell className="whitespace-nowrap text-muted-foreground">
                           {new Date(version.uploadedAt).toLocaleString()}
+                        </TableCell>
+                        <TableCell>
+                          {version.approvedByName ? (
+                            <div>
+                              <span className="font-medium text-foreground">{version.approvedByName}</span>
+                              {version.approvedAt && (
+                                <div className="text-xs text-muted-foreground whitespace-nowrap">
+                                  {new Date(version.approvedAt).toLocaleString()}
+                                </div>
+                              )}
+                            </div>
+                          ) : (
+                            <span className="text-muted-foreground">—</span>
+                          )}
                         </TableCell>
                         <TableCell className="text-right whitespace-nowrap">
                           <div className="inline-flex items-center gap-1.5">
@@ -1947,7 +1962,7 @@ export default function DocumentDetailPage() {
             <Label htmlFor="retire-reason">Reason for retirement / obsolescence *</Label>
             <Input
               id="retire-reason"
-              placeholder="e.g. Superseded by new global SOP-ENG-0002"
+              placeholder="e.g. Replaced by new global SOP-ENG-0002"
               value={retireReason}
               onChange={(e) => setRetireReason(e.target.value)}
               disabled={retiring}

@@ -1544,9 +1544,9 @@ function StartedStatusBadge({ status }: { status: string | null }) {
     case 'completed':
       return <StatusBadge status="released">approved</StatusBadge>;
     case 'rejected':
-      return <StatusBadge status="superseded">rejected</StatusBadge>;
+      return <StatusBadge status="obsolete">rejected</StatusBadge>;
     case 'cancelled':
-      return <StatusBadge status="superseded">cancelled</StatusBadge>;
+      return <StatusBadge status="obsolete">cancelled</StatusBadge>;
     default:
       return status ? <StatusBadge status="dept">{status}</StatusBadge> : <span>—</span>;
   }

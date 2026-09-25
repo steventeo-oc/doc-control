@@ -92,7 +92,7 @@ doccontrol:
     rendition-timeout-seconds: 60
     text:
       current: "RELEASED — UNCONTROLLED IF PRINTED"
-      superseded: "SUPERSEDED — DO NOT USE"
+      obsolete: "OBSOLETE — DO NOT USE"
       draft: "DRAFT — UNCONTROLLED"
       approved: "APPROVED — NOT YET IN EFFECT"
 

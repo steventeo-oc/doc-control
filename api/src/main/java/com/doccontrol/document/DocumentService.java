@@ -577,7 +577,7 @@ public class DocumentService {
         }
 
         boolean hasReleased = documentVersionRepository.findAllByDocumentIdOrderByVersionNumberAsc(id)
-                .stream().anyMatch(v -> v.getStatus() == DocumentVersionStatus.CURRENT || v.getStatus() == DocumentVersionStatus.SUPERSEDED);
+                .stream().anyMatch(v -> v.getStatus() == DocumentVersionStatus.CURRENT || v.getStatus() == DocumentVersionStatus.OBSOLETE);
         if (hasReleased) {
             throw new ConflictException("Cannot discard a document that has released revision history.");
         }
@@ -666,10 +666,14 @@ public class DocumentService {
             version.setStatus(DocumentVersionStatus.CURRENT);
         }
         if (previous != null && !previous.equals(version)
-                && previous.getStatus() != DocumentVersionStatus.SUPERSEDED) {
-            previous.setStatus(DocumentVersionStatus.SUPERSEDED);
+                && previous.getStatus() != DocumentVersionStatus.OBSOLETE) {
+            previous.setStatus(DocumentVersionStatus.OBSOLETE);
         }
         version.setEffectiveAt(effectiveDate);
+        if (version.getApprovedBy() == null && actor != null) {
+            version.setApprovedBy(actor);
+            version.setApprovedAt(LocalDateTime.now());
+        }
 
         if (document.getStatus() != DocumentStatus.RELEASED) {
             DocumentStatus previousStatus = document.getStatus();
@@ -706,9 +710,9 @@ public class DocumentService {
         for (DocumentVersion stale : documentVersionRepository
                 .findAllByDocumentIdAndStatus(document.getId(), DocumentVersionStatus.APPROVED)) {
             if (!stale.getId().equals(version.getId())) {
-                stale.setStatus(DocumentVersionStatus.SUPERSEDED);
+                stale.setStatus(DocumentVersionStatus.OBSOLETE);
                 auditService.recordAs(actor, "document_version", stale.getId(),
-                        "superseded_before_effective", Map.of(
+                        "obsoleted_before_effective", Map.of(
                                 "document_number", document.getDocumentNumber(),
                                 "version_number", stale.getVersionNumber(),
                                 "effective_at", String.valueOf(stale.getEffectiveAt())),
@@ -720,6 +724,10 @@ public class DocumentService {
         DocumentStatus previousStatus = document.getStatus();
         version.setStatus(DocumentVersionStatus.APPROVED);
         version.setEffectiveAt(effectiveDate);
+        if (version.getApprovedBy() == null && actor != null) {
+            version.setApprovedBy(actor);
+            version.setApprovedAt(LocalDateTime.now());
+        }
         document.setStatus(DocumentStatus.APPROVED);
 
         // LinkedHashMap, not Map.of: current_version_id is legitimately null

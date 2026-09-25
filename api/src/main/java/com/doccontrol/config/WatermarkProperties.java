@@ -19,6 +19,6 @@ public record WatermarkProperties(
         int renditionTimeoutSeconds,
         MarkTexts text) {
 
-    public record MarkTexts(String current, String superseded, String draft, String approved) {
+    public record MarkTexts(String current, String obsolete, String draft, String approved) {
     }
 }

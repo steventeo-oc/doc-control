@@ -137,7 +137,7 @@ final class AssistantCorpusFixtures {
         return versions.save(version);
     }
 
-    /** The engine's own promotion: moves the pointer, marks the old version superseded, releases the document. */
+    /** The engine's own promotion: moves the pointer, marks the old version obsolete, releases the document. */
     void promote(DocumentVersion version) {
         documentService.promoteVersion(version, today, actor);
     }

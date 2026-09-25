@@ -201,7 +201,7 @@ public class DocumentVersionService {
             throw new ConflictException("The specified revision does not belong to this document.");
         }
         if (document.getCurrentVersion() != null && source.getId().equals(document.getCurrentVersion().getId())) {
-            throw new ConflictException("Cannot restore the currently active revision. Reversion is only applicable to prior, superseded revisions.");
+            throw new ConflictException("Cannot restore the currently active revision. Reversion is only applicable to prior, obsolete revisions.");
         }
 
         FileStorageService.DownloadedFile downloaded = fileStorageService.open(source.getFileReference());

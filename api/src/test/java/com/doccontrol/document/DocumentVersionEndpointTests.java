@@ -397,7 +397,7 @@ class DocumentVersionEndpointTests {
                 .andExpect(jsonPath("$.length()").value(2));
 
         // re-release v2 via a second approval — now the draft publishes:
-        // v2 becomes current, v1 becomes superseded
+        // v2 becomes current, v1 becomes obsolete
         MvcResult started2 = mockMvc.perform(
                         post("/documents/{id}/versions/{versionId}/workflow/start", doc.id(), v2Id)
                                 .with(csrf()).session(ownerSession)
@@ -417,7 +417,7 @@ class DocumentVersionEndpointTests {
         mockMvc.perform(get("/documents/{id}", doc.id()).session(ownerSession))
                 .andExpect(jsonPath("$.currentVersionId").value(v2Id));
         mockMvc.perform(get("/documents/{id}/versions", doc.id()).session(ownerSession))
-                .andExpect(jsonPath("$[0].status").value("superseded"))
+                .andExpect(jsonPath("$[0].status").value("obsolete"))
                 .andExpect(jsonPath("$[1].status").value("current"));
 
         // the normal user now sees v2 as current, with its content
